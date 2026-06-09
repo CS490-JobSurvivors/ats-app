@@ -1,14 +1,5 @@
 # Data and Security Guardrails Context Document
 
-## Ground Rules
-1. AI models must follow the rules in this document when generating code or recommendations
-2. All authorization and ownership rules must be enforced server-side
-
-## Canonical Business Rules to be enforced throughout:
-1. S1-BR-001: User authentication is required for all protected application routes
-2. S1-BR-006: All user-scoped records must be isolated by owner identity
-3. S1-BR-008: Ownership enforcement must be implemented server-side (frontend checks are not sufficient)
-
 ## Per-User Data Ownership
 1. Every record should be linked to the user who made it
 2. All records should store owner's user ID
