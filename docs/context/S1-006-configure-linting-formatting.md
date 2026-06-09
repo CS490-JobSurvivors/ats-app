@@ -4,7 +4,7 @@
 1. S1-BR-001: User authentication is required for all protected application routes.
 2. S1-BR-006: All user-scoped records must be isolated by owner identity.
 ## Frontend Lint
--    ESLint
+- ESLint
     - ESLint will be used as the project's linting tool.
     - Purpose:
     1. Detect coding errors
@@ -29,10 +29,10 @@
         - Helper Functions
         - Exports
 ## Linting Standards
-Unused Variables: Unused variables should be removed before code is merged.
-Unused Imports: Remove unused imports before code is merged.
+- Unused Variables: Unused variables should be removed before code is merged.
+- Unused Imports: Remove unused imports before code is merged.
 ## Credentials
-API keys and passwords must not be hardcoded into source files. Environment variables must be used instead.
+- API keys and passwords must not be hardcoded into source files. Environment variables must be used instead.
 ## Commented-Out Code
 - Commented-out production code should not be committed. Unused code should be removed.
 ## AI-Generated Code Requirements
