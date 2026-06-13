@@ -1,1 +1,1 @@
-#Placeholder for database connection logic
+# Placeholder for database connection logic
