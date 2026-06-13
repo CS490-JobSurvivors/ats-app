@@ -28,7 +28,13 @@ npm test
 cd ats-app/backend
 pip install -r requirements.txt
 
-# Backend Tests
+# Auto-fix lint issues
+ruff check . --fix
+
+# Verify linting passes
+ruff check .
+
+# Run Backend Tests
 pytest
 ```
 
