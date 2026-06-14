@@ -3,7 +3,7 @@
 ## Tech Stack
 - Frontend: React + TypeScript
 - Backend: Python, FastAPI, Pydantic
-- Auth: Supabase AUth with JWT verification in FastAPI
+- Auth: Supabase Auth with JWT verification in FastAPI
 - Database: Supabase PostgreSQL
 - ORM: SQLAlchemy
 - AI: Ollama (planned for future sprint)
