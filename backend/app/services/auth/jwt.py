@@ -15,10 +15,10 @@ def verify_supabase_jwt(token: str) -> dict:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Missing token key ID",
             )
-        #Fetch supabase JWKS
+        # Fetch supabase JWKS
         jwks = requests.get(SUPABASE_JWKS_URL, timeout=5).json()
 
-        #find matching public key by kid
+        # Find matching public key by kid
         public_key = None
         for key in jwks["keys"]:
             if key.get("kid") == kid:
@@ -35,6 +35,7 @@ def verify_supabase_jwt(token: str) -> dict:
         payload = jwt.decode(token, public_key, algorithms=["ES256"], audience="authenticated")
 
         return payload
+
     except jwt.ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
