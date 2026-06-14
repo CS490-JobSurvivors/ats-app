@@ -1,18 +1,35 @@
 import { Button, TextField, Container, Stack } from '@mui/material';
 import { useState } from 'react';
+import { supabase } from '../utils/supabaseClient';
+import { signupApi } from '../api/signup';
 
 const SignupPage = () => {
-  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmedPassword] = useState('');
 
-  const handleSignup = () => {
+  const handleSignup = async () => {
     if (password != confirmPassword) {
       console.log('Passwords Dont Match');
       return;
     }
-    console.log(`${username} -> ${email} -> ${password}`);
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+    });
+
+    if (error) {
+      console.log(error.message);
+      return;
+    }
+
+    if (!data.session) {
+      return;
+    }
+
+    const userData = await signupApi(data.session?.access_token);
+    return userData;
   };
 
   return (
@@ -24,14 +41,6 @@ const SignupPage = () => {
         }}
       >
         <Stack>
-          <TextField
-            required
-            placeholder="Enter Username"
-            label="username"
-            onChange={(e) => {
-              setUsername(e.target.value);
-            }}
-          />
           <TextField
             required
             placeholder="Enter Email"
