@@ -1,35 +1,35 @@
 import { Button, TextField, Container, Stack } from '@mui/material';
 import { useState } from 'react';
-import {supabase} from '../utils/supabaseClient';
-import {signupApi} from '../api/signup';
+import { supabase } from '../utils/supabaseClient';
+import { signupApi } from '../api/signup';
 
 const SignupPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmedPassword] = useState('');
 
-  const handleSignup = async() => {
+  const handleSignup = async () => {
     if (password != confirmPassword) {
       console.log('Passwords Dont Match');
       return;
     }
 
     const { data, error } = await supabase.auth.signUp({
-        email, password
+      email,
+      password,
     });
 
-    if ( error ) {
-        console.log(error.message);
-        return;
+    if (error) {
+      console.log(error.message);
+      return;
     }
 
-    if ( !data.session ) {
-        return;
+    if (!data.session) {
+      return;
     }
 
     const userData = await signupApi(data.session?.access_token);
     return userData;
-
   };
 
   return (
