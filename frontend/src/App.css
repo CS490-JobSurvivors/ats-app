@@ -1,38 +1,118 @@
 .App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
   min-height: 100vh;
   display: flex;
-  flex-direction: column;
-  align-items: center;
   justify-content: center;
-  font-size: calc(10px + 2vmin);
+  align-items: center;
+  background: #f3f5f8;
+  padding: 32px 16px;
+}
+
+.profile-page {
+  width: 100%;
+  max-width: 740px;
+}
+
+.profile-card {
+  background: #ffffff;
+  border-radius: 24px;
+  box-shadow: 0 18px 48px rgba(21, 33, 64, 0.12);
+  padding: 32px;
+  border: 1px solid #e8ebf2;
+}
+
+.profile-card h1 {
+  margin: 0 0 20px;
+  font-size: 28px;
+  color: #102a43;
+}
+
+.profile-progress {
+  margin-bottom: 24px;
+}
+
+.profile-progress-label {
+  font-size: 0.95rem;
+  color: #556d8b;
+  margin-bottom: 8px;
+}
+
+.profile-progress-bar {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: #e9eef6;
+  overflow: hidden;
+}
+
+.profile-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4f75ff 0%, #7b9bff 100%);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.profile-summary-row {
+  margin-bottom: 24px;
+  font-size: 0.95rem;
+  color: #334e68;
+}
+
+.profile-fields {
+  display: grid;
+  gap: 18px;
+}
+
+.profile-field-row {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-field-row label {
+  font-size: 0.95rem;
+  color: #102a43;
+}
+
+.profile-field-input-row {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-field-input-row input,
+.profile-field-input-row textarea {
+  width: 100%;
+  border: 1px solid #d8e1eb;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 0.98rem;
+  color: #102a43;
+  background: #ffffff;
+}
+
+.profile-field-input-row input:disabled,
+.profile-field-input-row textarea:disabled {
+  background: #f3f5f8;
+  color: #7a8a9f;
+}
+
+.field-error {
+  color: #c53030;
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.save-field-button {
+  width: 120px;
+  justify-self: flex-end;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 10px;
+  background: #1942ff;
   color: white;
+  cursor: pointer;
+  font-weight: 600;
 }
 
-.App-link {
-  color: #61dafb;
-}
-
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.save-field-button:disabled {
+  background: #c4d0ff;
+  cursor: default;
 }
