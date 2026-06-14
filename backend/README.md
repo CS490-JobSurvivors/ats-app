@@ -48,6 +48,6 @@ graph LR
 - `testing/`
     - Houses all backend tests
 - `.env.example`
-    - Holds placeholder enviornment variables. Make a copy and fill out the relevant credentials
+    - Holds placeholder environment variables. Make a copy and fill out the relevant credentials
 - `requirements.txt`
     - Backend dependencies
