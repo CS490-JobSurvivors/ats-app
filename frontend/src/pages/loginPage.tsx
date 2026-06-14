@@ -1,12 +1,17 @@
 import { Button, TextField, Container, Stack } from '@mui/material';
+import { supabase } from '../utils/supabaseClient';
 import { useState } from 'react';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleLogin = () => {
-    console.log(`${email} -> ${password}`);
+  const handleLogin = async () => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      console.log(error.message);
+    }
+    console.log(data.user);
   };
 
   return (
