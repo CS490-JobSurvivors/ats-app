@@ -12,6 +12,7 @@ build/
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+backend/scratch/
 
 
 # Node / TypeScript
