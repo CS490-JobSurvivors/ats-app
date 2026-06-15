@@ -4,7 +4,7 @@ export interface ProfileFields {
   bio: string;
   firstName: string;
   lastName: string;
-  address: string;
+  city: string;
   phone: string;
 }
 
@@ -14,17 +14,17 @@ const initialProfile: ProfileFields = {
   bio: '',
   firstName: '',
   lastName: '',
-  address: '',
+  city: '',
   phone: '',
 };
 
-const profileFieldKeys: ProfileFieldKey[] = ['bio', 'firstName', 'lastName', 'address', 'phone'];
+const profileFieldKeys: ProfileFieldKey[] = ['bio', 'firstName', 'lastName', 'city', 'phone'];
 
 const fieldLabels: Record<ProfileFieldKey, string> = {
   bio: 'About',
   firstName: 'First name',
   lastName: 'Last name',
-  address: 'Address',
+  city: 'City',
   phone: 'Phone #',
 };
 
@@ -32,7 +32,7 @@ const fieldPlaceholders: Record<ProfileFieldKey, string> = {
   bio: 'Tell us about yourself',
   firstName: 'Enter your first name',
   lastName: 'Enter your last name',
-  address: 'Enter your address',
+  city: 'Enter your city',
   phone: 'Enter your phone number',
 };
 
@@ -40,7 +40,7 @@ const fieldTypes: Record<ProfileFieldKey, string> = {
   bio: 'text',
   firstName: 'text',
   lastName: 'text',
-  address: 'text',
+  city: 'text',
   phone: 'tel',
 };
 
