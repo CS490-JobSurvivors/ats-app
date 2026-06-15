@@ -140,4 +140,55 @@ describe('SignupPage', () => {
       });
     });
   });
+
+  describe('error messages', () => {
+    const PASSWORDS_DONT_MATCH_MESSAGE = 'Passwords Dont Match';
+    const VERIFY_ACCOUNT_MESSAGE = 'Verify Account';
+
+    it('should show the passwords do not match message when passwords differ', async () => {
+      // Arrange
+      render(<SignupPage />);
+      await fillForm(EMAIL, PASSWORD, 'different');
+
+      // Act
+      await submitForm();
+
+      // Assert
+      expect(await screen.findByText(PASSWORDS_DONT_MATCH_MESSAGE)).toBeInTheDocument();
+    });
+
+    it('should show the supabase error message when supabase returns an error for an existing email', async () => {
+      // Arrange
+      const existingEmail = 'existing@test.com';
+      const supabaseErrorMessage = 'User already registered';
+      mockSignUp.mockResolvedValue({
+        data: { session: null },
+        error: { message: supabaseErrorMessage },
+      });
+      render(<SignupPage />);
+      await fillForm(existingEmail, PASSWORD);
+
+      // Act
+      await submitForm();
+
+      // Assert
+      expect(await screen.findByText(supabaseErrorMessage)).toBeInTheDocument();
+    });
+
+    it('should show the verify account message when supabase returns no error but no session', async () => {
+      // Arrange
+      mockSignUp.mockResolvedValue({
+        data: { session: null },
+        error: null,
+      });
+      render(<SignupPage />);
+      await fillForm(EMAIL, PASSWORD);
+
+      // Act
+      await submitForm();
+
+      // Assert
+      expect(await screen.findByText(VERIFY_ACCOUNT_MESSAGE)).toBeInTheDocument();
+    });
+  });
 });

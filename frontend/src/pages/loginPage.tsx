@@ -1,4 +1,4 @@
-import { Button, TextField, Container, Stack } from '@mui/material';
+import { Button, TextField, Container, Stack, Alert } from '@mui/material';
 import { useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { loginApi } from '../api/login';
@@ -6,16 +6,17 @@ import { loginApi } from '../api/login';
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleLogin = async () => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      console.log(error.message);
+      setErrorMessage('Incorrect Email or Passowrd. Try again.');
       return;
     }
 
     if (!data.session) {
-      console.log('No token');
+      setErrorMessage('Verify Email');
       return;
     }
 
@@ -32,6 +33,7 @@ const LoginPage = () => {
         }}
       >
         <Stack>
+          {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
           <TextField
             required
             placeholder="Enter Email"

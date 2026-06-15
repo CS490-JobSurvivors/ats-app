@@ -115,4 +115,39 @@ describe('LoginPage', () => {
       });
     });
   });
+
+  describe('error messages', () => {
+    const INCORRECT_CREDENTIALS_MESSAGE = 'Incorrect Email or Passowrd. Try again.';
+    const VERIFY_EMAIL_MESSAGE = 'Verify Email';
+
+    it('should show the incorrect credentials message when supabase returns an error', async () => {
+      // Arrange
+      mockSignIn.mockResolvedValue({
+        data: { session: null },
+        error: { message: 'Invalid login credentials' },
+      });
+      render(<LoginPage />);
+
+      // Act
+      await fillAndSubmit(EMAIL, 'wrongpassword');
+
+      // Assert
+      expect(await screen.findByText(INCORRECT_CREDENTIALS_MESSAGE)).toBeInTheDocument();
+    });
+
+    it('should show the verify email message when supabase returns no error but no session', async () => {
+      // Arrange
+      mockSignIn.mockResolvedValue({
+        data: { session: null },
+        error: null,
+      });
+      render(<LoginPage />);
+
+      // Act
+      await fillAndSubmit(EMAIL, PASSWORD);
+
+      // Assert
+      expect(await screen.findByText(VERIFY_EMAIL_MESSAGE)).toBeInTheDocument();
+    });
+  });
 });

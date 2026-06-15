@@ -1,4 +1,4 @@
-import { Button, TextField, Container, Stack } from '@mui/material';
+import { Button, TextField, Container, Stack, Alert } from '@mui/material';
 import { useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { signupApi } from '../api/signup';
@@ -7,10 +7,11 @@ const SignupPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmedPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
   const handleSignup = async () => {
     if (password != confirmPassword) {
-      console.log('Passwords Dont Match');
+      setErrorMessage('Passwords Dont Match');
       return;
     }
 
@@ -20,11 +21,12 @@ const SignupPage = () => {
     });
 
     if (error) {
-      console.log(error.message);
+      setErrorMessage(error.message);
       return;
     }
 
     if (!data.session) {
+      setErrorMessage('Verify Account');
       return;
     }
 
@@ -41,6 +43,7 @@ const SignupPage = () => {
         }}
       >
         <Stack>
+          {errorMessage && <Alert severity="error">{errorMessage}</Alert>}
           <TextField
             required
             placeholder="Enter Email"
