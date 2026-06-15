@@ -4,12 +4,10 @@ import HomePage from './pages/homePage';
 import LoginPage from './pages/loginPage';
 import ErrorPage from './pages/errorPage';
 import SignupPage from './pages/signupPage';
-import NavigationBar from './components/navigationbar';
 
 function App() {
   return (
     <Router>
-      <NavigationBar />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />

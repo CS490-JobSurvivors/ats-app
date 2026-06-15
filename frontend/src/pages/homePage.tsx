@@ -1,5 +1,6 @@
-import { Button } from '@mui/material';
+import { Link, Typography, Button } from '@mui/material';
 import { logout } from '../api/logout';
+import NavigationBar from '../components/navigationbar';
 
 const handleLogout = async () => {
   await logout();
@@ -10,7 +11,9 @@ const handleLogout = async () => {
 const HomePage = () => {
   return (
     <div>
-      <h1>Welcome to the Home Page</h1>
+      <NavigationBar />
+      <Typography variant="h1">Welcome to the Home Page</Typography>
+      <Link href="/login">Login</Link>
       <Button onClick={handleLogout}>Log Out</Button>
     </div>
   );
