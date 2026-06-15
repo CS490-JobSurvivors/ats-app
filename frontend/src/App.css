@@ -1,38 +1,149 @@
 .App {
-  text-align: center;
-}
-
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
+  background: linear-gradient(180deg, #eef4ff 0%, #f8fafc 32%, #ffffff 100%);
+  color: #111827;
+}
+
+.profile-page {
+  min-height: 100vh;
+  padding: 48px clamp(24px, 6vw, 80px) 64px;
+}
+
+.profile-panel {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.profile-header {
+  margin-bottom: 32px;
+}
+
+.profile-header h1 {
+  margin: 0 0 12px;
+  font-size: clamp(2.25rem, 4vw, 3.5rem);
+  line-height: 1.05;
+}
+
+.profile-header p {
+  max-width: 680px;
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.6;
+  color: #4b5563;
+}
+
+.profile-progress {
+  max-width: 720px;
+  margin-bottom: 32px;
+}
+
+.profile-progress-label {
+  font-size: 0.95rem;
+  color: #475569;
+  margin-bottom: 10px;
+}
+
+.profile-progress-bar {
+  width: 100%;
+  height: 12px;
+  border-radius: 999px;
+  background: #dbe7fb;
+  overflow: hidden;
+}
+
+.profile-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.profile-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px 28px;
+  margin-bottom: 32px;
+}
+
+.profile-field-row {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-field-row:first-child {
+  grid-column: 1 / -1;
+}
+
+.profile-field-input-row {
+  display: block;
+}
+
+.profile-fields label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.profile-fields input,
+.profile-fields textarea {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 16px;
+  padding: 14px 16px;
+  font-size: 1rem;
+  color: #111827;
+  background: rgba(255, 255, 255, 0.92);
+  box-sizing: border-box;
+}
+
+.profile-fields input:focus,
+.profile-fields textarea:focus {
+  outline: 2px solid #93c5fd;
+  outline-offset: 0;
+  border-color: #60a5fa;
+}
+
+.profile-fields textarea {
+  min-height: 180px;
+  resize: none;
+}
+
+.field-error {
+  color: #c53030;
+  font-size: 0.9rem;
+  margin-top: 4px;
+}
+
+.save-profile-button {
+  min-width: 160px;
+  border: none;
+  border-radius: 999px;
+  background: #3b82f6;
   color: white;
+  padding: 14px 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease;
 }
 
-.App-link {
-  color: #61dafb;
+.save-profile-button:disabled {
+  background: #9ca3af;
+  cursor: default;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
+@media (max-width: 720px) {
+  .profile-page {
+    padding: 32px 20px 48px;
   }
-  to {
-    transform: rotate(360deg);
+
+  .profile-fields {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .profile-field-row:first-child {
+    grid-column: auto;
   }
 }
