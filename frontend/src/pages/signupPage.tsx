@@ -10,7 +10,7 @@ const SignupPage = () => {
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleSignup = async () => {
-    if (password != confirmPassword) {
+    if (password !== confirmPassword) {
       setErrorMessage('Passwords Dont Match');
       return;
     }
