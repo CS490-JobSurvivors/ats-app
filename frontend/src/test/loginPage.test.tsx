@@ -129,7 +129,7 @@ describe('LoginPage', () => {
 
       // Assert
       await waitFor(() => {
-        expect(window.location.href).toBe('/');
+        expect(window.location.href).toBe('http://localhost/');
       });
     });
   });
