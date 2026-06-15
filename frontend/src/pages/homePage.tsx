@@ -14,8 +14,11 @@ const HomePage = () => {
       <NavigationBar />
       <Typography variant="h1">Welcome to the Home Page</Typography>
       <Link href="/login">Login</Link>
-      <Button onClick={handleLogout}>Log Out</Button>
+      <Button onClick={handleLogout} sx={{ textTransform: 'none' }}>
+        Log Out
+      </Button>
     </div>
   );
 };
 export default HomePage;
+//Logout placed here for now, should be moved to the navigation bar in the future
