@@ -10,6 +10,8 @@ const NavigationBar = () => {
       <br />
       <Link href="/signup">Sign Up</Link>
       <br />
+      <Link href="/signup">Profile</Link>
+      <br />
     </div>
   );
 };
