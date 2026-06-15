@@ -118,6 +118,25 @@ describe('SignupPage', () => {
       });
     });
 
+    it('should redirect to home after successful signup', async () => {
+      // Arrange
+      mockSignUp.mockResolvedValue({
+        data: { session: { access_token: ACCESS_TOKEN } },
+        error: null,
+      });
+      mockSignupApi.mockResolvedValue({ user_id: '123', email: EMAIL });
+      render(<SignupPage />);
+      await fillForm(EMAIL, PASSWORD);
+
+      // Act
+      await submitForm();
+
+      // Assert
+      await waitFor(() => {
+        expect(window.location.href).toBe('http://localhost/');
+      });
+    });
+
     it('should not call signupApi when supabase returns an error for an existing email', async () => {
       // Arrange
       const existingEmail = 'existing@test.com';

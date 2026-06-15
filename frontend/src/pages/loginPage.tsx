@@ -1,4 +1,4 @@
-import { Button, TextField, Container, Stack, Alert } from '@mui/material';
+import { Button, TextField, Container, Stack, Alert, Typography, Link } from '@mui/material';
 import { useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { loginApi } from '../api/login';
@@ -55,6 +55,9 @@ const LoginPage = () => {
           <Button type="submit" onClick={() => {}}>
             Login
           </Button>
+          <Typography variant="body2" align="center">
+            Don't have an account? <Link href="/signup">Register</Link>
+          </Typography>
         </Stack>
       </form>
     </Container>
