@@ -1,4 +1,4 @@
-import { Link, Typography, Button } from '@mui/material';
+import { Typography, Button } from '@mui/material';
 import { logout } from '../api/logout';
 import NavigationBar from '../components/navigationbar';
 
@@ -12,8 +12,7 @@ const HomePage = () => {
   return (
     <div>
       <NavigationBar />
-      <Typography variant="h1">Welcome to the Home Page</Typography>
-      <Link href="/login">Login</Link>
+      <Typography variant="h1">Welcome to the Sample Dashboard</Typography>
       <Button onClick={handleLogout} sx={{ textTransform: 'none' }}>
         Log Out
       </Button>

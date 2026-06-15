@@ -31,6 +31,7 @@ const SignupPage = () => {
     }
 
     const userData = await signupApi(data.session?.access_token);
+    window.location.href = '/';
     return userData;
   };
 

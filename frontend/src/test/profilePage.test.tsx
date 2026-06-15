@@ -13,8 +13,8 @@ const fillProfileForm = () => {
   fireEvent.change(screen.getByLabelText(/last name/i), {
     target: { value: 'Morgan' },
   });
-  fireEvent.change(screen.getByLabelText(/address/i), {
-    target: { value: '123 Main Street' },
+  fireEvent.change(screen.getByLabelText(/city/i), {
+    target: { value: 'Newark' },
   });
   fireEvent.change(screen.getByLabelText(/phone/i), {
     target: { value: '5551234567' },
@@ -29,7 +29,7 @@ describe('ProfilePage', () => {
     expect(screen.getByLabelText(/about/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/first name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/last name/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/address/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/city/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/phone/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/user id/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument();
@@ -52,8 +52,8 @@ describe('ProfilePage', () => {
     fireEvent.change(screen.getByLabelText(/last name/i), {
       target: { value: 'Morgan' },
     });
-    fireEvent.change(screen.getByLabelText(/address/i), {
-      target: { value: '123 Main Street' },
+    fireEvent.change(screen.getByLabelText(/city/i), {
+      target: { value: 'Newark' },
     });
     fireEvent.change(screen.getByLabelText(/phone/i), {
       target: { value: '5551234567' },

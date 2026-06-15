@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 import jwt
 import requests
 from fastapi import HTTPException, status
@@ -32,7 +34,8 @@ def verify_supabase_jwt(token: str) -> dict:
             )
 
         #Verify token signature and claims
-        payload = jwt.decode(token, public_key, algorithms=["ES256"], audience="authenticated")
+        payload = jwt.decode(token, public_key, algorithms=["ES256"],
+                             audience="authenticated", leeway=timedelta(seconds=10))
 
         return payload
 
