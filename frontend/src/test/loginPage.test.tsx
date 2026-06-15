@@ -117,7 +117,7 @@ describe('LoginPage', () => {
   });
 
   describe('error messages', () => {
-    const INCORRECT_CREDENTIALS_MESSAGE = 'Incorrect Email or Passowrd. Try again.';
+    const INCORRECT_CREDENTIALS_MESSAGE = 'Incorrect Email or Password. Try again.';
     const VERIFY_EMAIL_MESSAGE = 'Verify Email';
 
     it('should show the incorrect credentials message when supabase returns an error', async () => {
