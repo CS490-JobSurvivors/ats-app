@@ -11,7 +11,7 @@ const LoginPage = () => {
   const handleLogin = async () => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setErrorMessage('Incorrect Email or Passowrd. Try again.');
+      setErrorMessage('Incorrect Email or Password. Try again.');
       return;
     }
 
