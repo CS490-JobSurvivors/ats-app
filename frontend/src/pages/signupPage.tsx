@@ -11,7 +11,7 @@ const SignupPage = () => {
 
   const handleSignup = async () => {
     if (password !== confirmPassword) {
-      setErrorMessage('Passwords Don\'t Match');
+      setErrorMessage("Passwords Don't Match");
       return;
     }
 
