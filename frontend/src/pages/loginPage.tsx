@@ -21,6 +21,7 @@ const LoginPage = () => {
     }
 
     const userData = await loginApi(data.session.access_token);
+    window.location.href = '/';
     return userData;
   };
 
