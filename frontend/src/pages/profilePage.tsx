@@ -1,13 +1,18 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   Box,
   Button,
   Card,
   CardContent,
+  Divider,
   LinearProgress,
   TextField,
   Typography,
 } from '@mui/material';
+import { supabase } from '../utils/supabaseClient';
+import { saveProfile, ProfileRecord } from '../api/profile';
+import { useProfile } from '../contexts/ProfileContext';
 
 export interface ProfileFields {
   bio: string;
@@ -19,7 +24,7 @@ export interface ProfileFields {
 
 type ProfileFieldKey = keyof ProfileFields;
 
-const initialProfile: ProfileFields = {
+const emptyProfile: ProfileFields = {
   bio: '',
   firstName: '',
   lastName: '',
@@ -47,38 +52,105 @@ const fieldPlaceholders: Record<ProfileFieldKey, string> = {
 
 const phoneRegex = /^[0-9]+$/;
 
+const recordToFields = (r: ProfileRecord): ProfileFields => ({
+  bio: r.summary,
+  firstName: r.first_name,
+  lastName: r.last_name,
+  city: r.city,
+  phone: r.phone_number,
+});
+
+// ---------------------------------------------------------------------------
+// View mode — shown after a successful save
+// ---------------------------------------------------------------------------
+
+const ProfileView = ({ profile, onEdit }: { profile: ProfileFields; onEdit: () => void }) => (
+  <Box sx={{ maxWidth: 900, mx: 'auto', px: 3, py: 5 }}>
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+      <Box>
+        <Typography variant="h4" fontWeight={700} mb={0.5} sx={{ wordBreak: 'break-word' }}>
+          {profile.firstName} {profile.lastName}
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          {profile.city}
+        </Typography>
+      </Box>
+      <Button variant="outlined" onClick={onEdit}>
+        Edit profile
+      </Button>
+    </Box>
+
+    <Card sx={{ mb: 3 }}>
+      <CardContent>
+        <Typography variant="h6" fontWeight={600} mb={1}>
+          About
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        <Typography variant="body1">{profile.bio}</Typography>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardContent>
+        <Typography variant="h6" fontWeight={600} mb={1}>
+          Contact
+        </Typography>
+        <Divider sx={{ mb: 2 }} />
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.5 }}>
+          <Box>
+            <Typography variant="caption" color="text.secondary">
+              Phone
+            </Typography>
+            <Typography variant="body1">{profile.phone}</Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary">
+              City
+            </Typography>
+            <Typography variant="body1">{profile.city}</Typography>
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  </Box>
+);
+
+// ---------------------------------------------------------------------------
+// Profile page
+// ---------------------------------------------------------------------------
+
 function ProfilePage() {
-  const [profile, setProfile] = useState<ProfileFields>(initialProfile);
+  const { profile: cachedProfile, loading, setProfile: setCachedProfile } = useProfile();
+  const [profile, setProfile] = useState<ProfileFields>(emptyProfile);
   const [fieldErrors, setFieldErrors] = useState<Record<ProfileFieldKey, string>>(
     profileFieldKeys.reduce(
-      (acc, key) => ({ ...acc, [key]: '' }),
+      (acc, k) => ({ ...acc, [k]: '' }),
       {} as Record<ProfileFieldKey, string>
     )
   );
-  const [isSaved, setIsSaved] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
+  const handleEdit = () => {
+    if (cachedProfile) setProfile(recordToFields(cachedProfile));
+    setIsEditing(true);
+  };
 
   const updateField = (field: ProfileFieldKey, value: string) => {
     let nextValue = value;
     let errorMessage = '';
-
     if (field === 'phone') {
       nextValue = value.replace(/\D/g, '');
       if (value !== nextValue) errorMessage = 'Phone may only contain numbers.';
     }
-
-    setProfile((current) => ({ ...current, [field]: nextValue }));
-    setFieldErrors((current) => ({ ...current, [field]: errorMessage }));
-    setIsSaved(false);
+    setProfile((c) => ({ ...c, [field]: nextValue }));
+    setFieldErrors((c) => ({ ...c, [field]: errorMessage }));
   };
 
   const completedCount = profileFieldKeys.filter((f) => profile[f].trim().length > 0).length;
   const progressPercent = Math.round((completedCount / profileFieldKeys.length) * 100);
-  const canSave =
-    completedCount === profileFieldKeys.length &&
-    phoneRegex.test(profile.phone.trim()) &&
-    profileFieldKeys.every((f) => fieldErrors[f].length === 0);
-
-  const saveProfile = () => {
+  const handleSave = async () => {
     const nextErrors = profileFieldKeys.reduce(
       (acc, field) => {
         const value = profile[field].trim();
@@ -90,13 +162,44 @@ function ProfilePage() {
       },
       {} as Record<ProfileFieldKey, string>
     );
+
     setFieldErrors(nextErrors);
-    if (!profileFieldKeys.some((f) => nextErrors[f])) setIsSaved(true);
+    if (profileFieldKeys.some((f) => nextErrors[f])) return;
+
+    setSaving(true);
+    setSaveError('');
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated.');
+
+      const saved = await saveProfile(session.access_token, {
+        first_name: profile.firstName.trim(),
+        last_name: profile.lastName.trim(),
+        city: profile.city.trim(),
+        phone_number: profile.phone.trim(),
+        summary: profile.bio.trim(),
+      });
+
+      setCachedProfile(saved);
+      setIsEditing(false);
+    } catch {
+      setSaveError('Failed to save profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (loading) return null;
+
+  if (cachedProfile && !isEditing) {
+    return <ProfileView profile={recordToFields(cachedProfile)} onEdit={handleEdit} />;
+  }
 
   return (
     <Box sx={{ maxWidth: 900, mx: 'auto', px: 3, py: 5 }}>
-      {/* Header */}
       <Typography variant="h4" fontWeight={700} mb={0.5}>
         Complete your profile
       </Typography>
@@ -104,7 +207,6 @@ function ProfilePage() {
         Fill in your details to finish setting up your account.
       </Typography>
 
-      {/* Progress card */}
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -128,7 +230,12 @@ function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* About card */}
+      {saveError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {saveError}
+        </Alert>
+      )}
+
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Typography variant="h6" fontWeight={600} mb={2}>
@@ -141,71 +248,100 @@ function ProfilePage() {
             value={profile.bio}
             onChange={(e) => updateField('bio', e.target.value)}
             error={!!fieldErrors.bio}
-            helperText={fieldErrors.bio}
             multiline
             rows={4}
             fullWidth
           />
+          {fieldErrors.bio && (
+            <Alert severity="error" sx={{ mt: 0.5 }}>
+              {fieldErrors.bio}
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
-      {/* Personal details card */}
       <Card sx={{ mb: 4 }}>
         <CardContent>
           <Typography variant="h6" fontWeight={600} mb={2}>
             Personal details
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <TextField
-              id="firstName"
-              label={fieldLabels.firstName}
-              placeholder={fieldPlaceholders.firstName}
-              value={profile.firstName}
-              onChange={(e) => updateField('firstName', e.target.value)}
-              error={!!fieldErrors.firstName}
-              helperText={fieldErrors.firstName}
-              fullWidth
-            />
-            <TextField
-              id="lastName"
-              label={fieldLabels.lastName}
-              placeholder={fieldPlaceholders.lastName}
-              value={profile.lastName}
-              onChange={(e) => updateField('lastName', e.target.value)}
-              error={!!fieldErrors.lastName}
-              helperText={fieldErrors.lastName}
-              fullWidth
-            />
-            <TextField
-              id="city"
-              label={fieldLabels.city}
-              placeholder={fieldPlaceholders.city}
-              value={profile.city}
-              onChange={(e) => updateField('city', e.target.value)}
-              error={!!fieldErrors.city}
-              helperText={fieldErrors.city}
-              fullWidth
-            />
-            <TextField
-              id="phone"
-              label={fieldLabels.phone}
-              placeholder={fieldPlaceholders.phone}
-              value={profile.phone}
-              onChange={(e) => updateField('phone', e.target.value)}
-              error={!!fieldErrors.phone}
-              helperText={fieldErrors.phone}
-              type="tel"
-              fullWidth
-            />
+            <Box>
+              <TextField
+                id="firstName"
+                label={fieldLabels.firstName}
+                placeholder={fieldPlaceholders.firstName}
+                value={profile.firstName}
+                onChange={(e) => updateField('firstName', e.target.value)}
+                error={!!fieldErrors.firstName}
+                inputProps={{ maxLength: 35 }}
+                fullWidth
+              />
+              {fieldErrors.firstName && (
+                <Alert severity="error" sx={{ mt: 0.5 }}>
+                  {fieldErrors.firstName}
+                </Alert>
+              )}
+            </Box>
+            <Box>
+              <TextField
+                id="lastName"
+                label={fieldLabels.lastName}
+                placeholder={fieldPlaceholders.lastName}
+                value={profile.lastName}
+                onChange={(e) => updateField('lastName', e.target.value)}
+                error={!!fieldErrors.lastName}
+                inputProps={{ maxLength: 35 }}
+                fullWidth
+              />
+              {fieldErrors.lastName && (
+                <Alert severity="error" sx={{ mt: 0.5 }}>
+                  {fieldErrors.lastName}
+                </Alert>
+              )}
+            </Box>
+            <Box>
+              <TextField
+                id="city"
+                label={fieldLabels.city}
+                placeholder={fieldPlaceholders.city}
+                value={profile.city}
+                onChange={(e) => updateField('city', e.target.value)}
+                error={!!fieldErrors.city}
+                fullWidth
+              />
+              {fieldErrors.city && (
+                <Alert severity="error" sx={{ mt: 0.5 }}>
+                  {fieldErrors.city}
+                </Alert>
+              )}
+            </Box>
+            <Box>
+              <TextField
+                id="phone"
+                label={fieldLabels.phone}
+                placeholder={fieldPlaceholders.phone}
+                value={profile.phone}
+                onChange={(e) => updateField('phone', e.target.value)}
+                error={!!fieldErrors.phone}
+                type="tel"
+                fullWidth
+              />
+              {fieldErrors.phone && (
+                <Alert severity="error" sx={{ mt: 0.5 }}>
+                  {fieldErrors.phone}
+                </Alert>
+              )}
+            </Box>
           </Box>
           <Button
             variant="contained"
-            onClick={saveProfile}
-            disabled={!canSave}
+            onClick={handleSave}
+            disabled={saving}
             fullWidth
             sx={{ mt: 3, py: 1.5 }}
           >
-            {isSaved ? 'Saved' : 'Save profile'}
+            {saving ? 'Saving…' : 'Save profile'}
           </Button>
         </CardContent>
       </Card>
