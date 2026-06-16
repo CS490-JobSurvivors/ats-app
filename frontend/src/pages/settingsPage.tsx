@@ -1,6 +1,28 @@
-import { Container, Typography, Box, Divider, Paper } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { Alert, Box, Button, Container, Divider, Paper, Typography } from '@mui/material';
+import { supabase } from '../utils/supabaseClient';
 
 const SettingsPage = () => {
+  const [email, setEmail] = useState('');
+  const [resetStatus, setResetStatus] = useState<'idle' | 'sent' | 'error'>('idle');
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setEmail(data.user?.email ?? '');
+    });
+  }, []);
+
+  const handleResetPassword = async () => {
+    if (!email) return;
+    setResetStatus('idle');
+
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    setResetStatus(error ? 'error' : 'sent');
+  };
+
   return (
     <Container maxWidth="md" sx={{ px: 3, py: 5 }}>
       <Typography variant="h4" fontWeight={700} mb={0.5}>
@@ -15,17 +37,31 @@ const SettingsPage = () => {
           Account
         </Typography>
         <Divider sx={{ mb: 2 }} />
-        <Box sx={{ mb: 2 }}>
+
+        <Box sx={{ mb: 3 }}>
           <Typography variant="body1">Email</Typography>
           <Typography variant="body2" color="text.secondary">
-            user@example.com
+            {email || '—'}
           </Typography>
         </Box>
+
         <Box>
-          <Typography variant="body1">Password</Typography>
-          <Typography variant="body2" color="text.secondary">
-            ••••••••
+          <Typography variant="body1" mb={1}>
+            Password
           </Typography>
+          <Button variant="outlined" size="small" onClick={handleResetPassword}>
+            Send Reset Link
+          </Button>
+          {resetStatus === 'sent' && (
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>
+              Reset link sent to {email}. Check your inbox.
+            </Typography>
+          )}
+          {resetStatus === 'error' && (
+            <Alert severity="error" sx={{ mt: 1.5 }}>
+              Failed to send reset link. Please try again.
+            </Alert>
+          )}
         </Box>
       </Paper>
 
