@@ -1,15 +1,8 @@
 import { Container, Typography, Box, Paper } from '@mui/material';
-import { Link } from 'react-router-dom';
 
 const DashboardPage = () => {
   return (
     <Container maxWidth="lg" sx={{ mt: 4 }}>
-      {/* Header with Settings link */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h4">My Dashboard</Typography>
-        <Link to="/settings">Settings</Link>
-      </Box>
-
       {/* Stats Row */}
       <Box sx={{ display: 'flex', gap: 3, mb: 4 }}>
         <Paper sx={{ p: 3, textAlign: 'center', flex: 1 }}>

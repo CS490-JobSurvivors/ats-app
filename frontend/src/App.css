@@ -1,12 +1,13 @@
 .App {
   min-height: 100vh;
-  background: linear-gradient(180deg, #eef4ff 0%, #f8fafc 32%, #ffffff 100%);
-  color: #111827;
+  background: #302442;
+  color: #c9bddb;
 }
 
 .profile-page {
   min-height: 100vh;
   padding: 48px clamp(24px, 6vw, 80px) 64px;
+  background: #302442;
 }
 
 .profile-panel {
@@ -24,6 +25,7 @@
   margin: 0 0 12px;
   font-size: clamp(2.25rem, 4vw, 3.5rem);
   line-height: 1.05;
+  color: #c9bddb;
 }
 
 .profile-header p {
@@ -31,7 +33,7 @@
   margin: 0;
   font-size: 1.05rem;
   line-height: 1.6;
-  color: #4b5563;
+  color: #937ab8;
 }
 
 .profile-progress {
@@ -41,7 +43,7 @@
 
 .profile-progress-label {
   font-size: 0.95rem;
-  color: #475569;
+  color: #ae9cc9;
   margin-bottom: 10px;
 }
 
@@ -49,13 +51,13 @@
   width: 100%;
   height: 12px;
   border-radius: 999px;
-  background: #dbe7fb;
+  background: #483663;
   overflow: hidden;
 }
 
 .profile-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #3b82f6 0%, #60a5fa 100%);
+  background: linear-gradient(90deg, #7859a6 0%, #ae9cc9 100%);
   border-radius: 999px;
   transition: width 0.3s ease;
 }
@@ -84,25 +86,26 @@
   display: block;
   font-weight: 600;
   margin-bottom: 8px;
+  color: #c9bddb;
 }
 
 .profile-fields input,
 .profile-fields textarea {
   width: 100%;
-  border: 1px solid #cbd5e1;
+  border: 1px solid #56486b;
   border-radius: 16px;
   padding: 14px 16px;
   font-size: 1rem;
-  color: #111827;
-  background: rgba(255, 255, 255, 0.92);
+  color: #c9bddb;
+  background: #483663;
   box-sizing: border-box;
 }
 
 .profile-fields input:focus,
 .profile-fields textarea:focus {
-  outline: 2px solid #93c5fd;
+  outline: 2px solid #7859a6;
   outline-offset: 0;
-  border-color: #60a5fa;
+  border-color: #7859a6;
 }
 
 .profile-fields textarea {
@@ -111,7 +114,7 @@
 }
 
 .field-error {
-  color: #c53030;
+  color: #f87171;
   font-size: 0.9rem;
   margin-top: 4px;
 }
@@ -120,16 +123,21 @@
   min-width: 160px;
   border: none;
   border-radius: 999px;
-  background: #3b82f6;
-  color: white;
+  background: #7859a6;
+  color: #c9bddb;
   padding: 14px 20px;
   font-weight: 600;
   cursor: pointer;
   transition: background 0.2s ease;
 }
 
+.save-profile-button:hover {
+  background: #604785;
+}
+
 .save-profile-button:disabled {
-  background: #9ca3af;
+  background: #483663;
+  color: #56486b;
   cursor: default;
 }
 
