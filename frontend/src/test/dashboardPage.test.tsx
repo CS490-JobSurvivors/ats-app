@@ -41,6 +41,6 @@ describe('DashboardPage', () => {
   it('renders the recent applications section with empty state', async () => {
     render(<DashboardPage />);
     expect(screen.getByText(/recent applications/i)).toBeInTheDocument();
-    expect(await screen.findByText(/no applications yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no recent applications/i)).toBeInTheDocument();
   });
 });
