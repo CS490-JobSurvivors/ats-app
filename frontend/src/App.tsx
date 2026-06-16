@@ -5,6 +5,7 @@ import LoginPage from './pages/loginPage';
 import ErrorPage from './pages/errorPage';
 import SignupPage from './pages/signupPage';
 import ProfilePage from './pages/profilePage';
+import SettingsPage from './pages/settingsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -29,6 +30,14 @@ function App() {
               <div className="App">
                 <ProfilePage />
               </div>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute>
+              <SettingsPage />
             </ProtectedRoute>
           }
         />
