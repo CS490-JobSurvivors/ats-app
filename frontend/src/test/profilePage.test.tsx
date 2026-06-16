@@ -1,27 +1,53 @@
 import React from 'react';
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProfilePage from '../pages/profilePage';
+
+jest.mock('../contexts/ProfileContext', () => ({
+  useProfile: jest.fn(),
+}));
+
+jest.mock('../utils/supabaseClient', () => ({
+  supabase: {
+    auth: {
+      getSession: jest.fn(),
+    },
+  },
+}));
+
+jest.mock('../api/profile', () => ({
+  saveProfile: jest.fn(),
+}));
+
+import { useProfile } from '../contexts/ProfileContext';
+import { supabase } from '../utils/supabaseClient';
+import { saveProfile } from '../api/profile';
+
+const mockUseProfile = useProfile as jest.Mock;
+const mockGetSession = supabase.auth.getSession as jest.Mock;
+const mockSaveProfile = saveProfile as jest.Mock;
+
+const emptyContext = { profile: null, loading: false, setProfile: jest.fn() };
 
 const fillProfileForm = () => {
   fireEvent.change(screen.getByLabelText(/about/i), {
     target: { value: 'I am preparing my profile.' },
   });
-  fireEvent.change(screen.getByLabelText(/first name/i), {
-    target: { value: 'Alex' },
-  });
-  fireEvent.change(screen.getByLabelText(/last name/i), {
-    target: { value: 'Morgan' },
-  });
-  fireEvent.change(screen.getByLabelText(/city/i), {
-    target: { value: 'Newark' },
-  });
-  fireEvent.change(screen.getByLabelText(/phone/i), {
-    target: { value: '5551234567' },
-  });
+  fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'Alex' } });
+  fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Morgan' } });
+  fireEvent.change(screen.getByLabelText(/city/i), { target: { value: 'Newark' } });
+  fireEvent.change(screen.getByLabelText(/phone/i), { target: { value: '5551234567' } });
 };
 
 describe('ProfilePage', () => {
+  beforeEach(() => {
+    mockUseProfile.mockReturnValue(emptyContext);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
   test('renders the profile fields without account identity fields', () => {
     render(<ProfilePage />);
 
@@ -47,40 +73,76 @@ describe('ProfilePage', () => {
     });
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '20');
 
-    fireEvent.change(screen.getByLabelText(/first name/i), {
-      target: { value: 'Alex' },
-    });
-    fireEvent.change(screen.getByLabelText(/last name/i), {
-      target: { value: 'Morgan' },
-    });
-    fireEvent.change(screen.getByLabelText(/city/i), {
-      target: { value: 'Newark' },
-    });
-    fireEvent.change(screen.getByLabelText(/phone/i), {
-      target: { value: '5551234567' },
-    });
+    fireEvent.change(screen.getByLabelText(/first name/i), { target: { value: 'Alex' } });
+    fireEvent.change(screen.getByLabelText(/last name/i), { target: { value: 'Morgan' } });
+    fireEvent.change(screen.getByLabelText(/city/i), { target: { value: 'Newark' } });
+    fireEvent.change(screen.getByLabelText(/phone/i), { target: { value: '5551234567' } });
 
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
   });
 
-  test('requires a fully valid profile before saving', () => {
+  test('strips non-digits from phone and shows required errors when saving an incomplete form', async () => {
     render(<ProfilePage />);
 
-    const saveButton = screen.getByRole('button', { name: /save profile/i });
-    expect(saveButton).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText(/phone/i), {
-      target: { value: '555-123' },
-    });
-
+    fireEvent.change(screen.getByLabelText(/phone/i), { target: { value: '555-123' } });
     expect(screen.getByLabelText(/phone/i)).toHaveValue('555123');
     expect(screen.getByText(/phone may only contain numbers/i)).toBeInTheDocument();
-    expect(saveButton).toBeDisabled();
 
+    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+    expect(await screen.findByText(/about is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/first name is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/last name is required/i)).toBeInTheDocument();
+    expect(screen.getByText(/city is required/i)).toBeInTheDocument();
+  });
+
+  test('shows profile view when context already has a saved profile', () => {
+    mockUseProfile.mockReturnValue({
+      profile: {
+        user_id: '1',
+        first_name: 'Alex',
+        last_name: 'Morgan',
+        city: 'Newark',
+        phone_number: '5551234567',
+        summary: 'I am preparing my profile.',
+        created_at: '2024-01-01T00:00:00Z',
+        updated_at: '2024-01-01T00:00:00Z',
+      },
+      loading: false,
+      setProfile: jest.fn(),
+    });
+
+    render(<ProfilePage />);
+
+    expect(screen.getByText('Alex Morgan')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /edit profile/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save profile/i })).not.toBeInTheDocument();
+  });
+
+  test('calls saveProfile with correct payload on valid form submission', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
+    mockSaveProfile.mockResolvedValue({
+      user_id: '1',
+      first_name: 'Alex',
+      last_name: 'Morgan',
+      city: 'Newark',
+      phone_number: '5551234567',
+      summary: 'I am preparing my profile.',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    });
+
+    render(<ProfilePage />);
     fillProfileForm();
+    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
 
-    expect(saveButton).toBeEnabled();
-    fireEvent.click(saveButton);
-    expect(screen.getByRole('button', { name: /saved/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(mockSaveProfile).toHaveBeenCalledWith('test-token', {
+        first_name: 'Alex',
+        last_name: 'Morgan',
+        city: 'Newark',
+        phone_number: '5551234567',
+        summary: 'I am preparing my profile.',
+      });
+    });
   });
 });

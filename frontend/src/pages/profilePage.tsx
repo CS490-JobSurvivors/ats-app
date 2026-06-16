@@ -248,11 +248,15 @@ function ProfilePage() {
             value={profile.bio}
             onChange={(e) => updateField('bio', e.target.value)}
             error={!!fieldErrors.bio}
-            helperText={fieldErrors.bio}
             multiline
             rows={4}
             fullWidth
           />
+          {fieldErrors.bio && (
+            <Alert severity="error" sx={{ mt: 0.5 }}>
+              {fieldErrors.bio}
+            </Alert>
+          )}
         </CardContent>
       </Card>
 
@@ -262,49 +266,73 @@ function ProfilePage() {
             Personal details
           </Typography>
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
-            <TextField
-              id="firstName"
-              label={fieldLabels.firstName}
-              placeholder={fieldPlaceholders.firstName}
-              value={profile.firstName}
-              onChange={(e) => updateField('firstName', e.target.value)}
-              error={!!fieldErrors.firstName}
-              helperText={fieldErrors.firstName}
-              inputProps={{ maxLength: 35 }}
-              fullWidth
-            />
-            <TextField
-              id="lastName"
-              label={fieldLabels.lastName}
-              placeholder={fieldPlaceholders.lastName}
-              value={profile.lastName}
-              onChange={(e) => updateField('lastName', e.target.value)}
-              error={!!fieldErrors.lastName}
-              helperText={fieldErrors.lastName}
-              inputProps={{ maxLength: 35 }}
-              fullWidth
-            />
-            <TextField
-              id="city"
-              label={fieldLabels.city}
-              placeholder={fieldPlaceholders.city}
-              value={profile.city}
-              onChange={(e) => updateField('city', e.target.value)}
-              error={!!fieldErrors.city}
-              helperText={fieldErrors.city}
-              fullWidth
-            />
-            <TextField
-              id="phone"
-              label={fieldLabels.phone}
-              placeholder={fieldPlaceholders.phone}
-              value={profile.phone}
-              onChange={(e) => updateField('phone', e.target.value)}
-              error={!!fieldErrors.phone}
-              helperText={fieldErrors.phone}
-              type="tel"
-              fullWidth
-            />
+            <Box>
+              <TextField
+                id="firstName"
+                label={fieldLabels.firstName}
+                placeholder={fieldPlaceholders.firstName}
+                value={profile.firstName}
+                onChange={(e) => updateField('firstName', e.target.value)}
+                error={!!fieldErrors.firstName}
+                inputProps={{ maxLength: 35 }}
+                fullWidth
+              />
+              {fieldErrors.firstName && (
+                <Alert severity="error" sx={{ mt: 0.5 }}>
+                  {fieldErrors.firstName}
+                </Alert>
+              )}
+            </Box>
+            <Box>
+              <TextField
+                id="lastName"
+                label={fieldLabels.lastName}
+                placeholder={fieldPlaceholders.lastName}
+                value={profile.lastName}
+                onChange={(e) => updateField('lastName', e.target.value)}
+                error={!!fieldErrors.lastName}
+                inputProps={{ maxLength: 35 }}
+                fullWidth
+              />
+              {fieldErrors.lastName && (
+                <Alert severity="error" sx={{ mt: 0.5 }}>
+                  {fieldErrors.lastName}
+                </Alert>
+              )}
+            </Box>
+            <Box>
+              <TextField
+                id="city"
+                label={fieldLabels.city}
+                placeholder={fieldPlaceholders.city}
+                value={profile.city}
+                onChange={(e) => updateField('city', e.target.value)}
+                error={!!fieldErrors.city}
+                fullWidth
+              />
+              {fieldErrors.city && (
+                <Alert severity="error" sx={{ mt: 0.5 }}>
+                  {fieldErrors.city}
+                </Alert>
+              )}
+            </Box>
+            <Box>
+              <TextField
+                id="phone"
+                label={fieldLabels.phone}
+                placeholder={fieldPlaceholders.phone}
+                value={profile.phone}
+                onChange={(e) => updateField('phone', e.target.value)}
+                error={!!fieldErrors.phone}
+                type="tel"
+                fullWidth
+              />
+              {fieldErrors.phone && (
+                <Alert severity="error" sx={{ mt: 0.5 }}>
+                  {fieldErrors.phone}
+                </Alert>
+              )}
+            </Box>
           </Box>
           <Button
             variant="contained"
