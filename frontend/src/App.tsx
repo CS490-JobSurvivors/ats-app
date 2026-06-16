@@ -9,6 +9,7 @@ import SignupPage from './pages/signupPage';
 import ProfilePage from './pages/profilePage';
 import SettingsPage from './pages/settingsPage';
 import { ProfileProvider } from './contexts/ProfileContext';
+import ResetPasswordPage from './pages/resetPasswordPage';
 import theme from './theme';
 import './App.css';
 
@@ -43,6 +44,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <SettingsPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/reset-password"
+                element={
+                  <ProtectedRoute>
+                    <ResetPasswordPage />
                   </ProtectedRoute>
                 }
               />
