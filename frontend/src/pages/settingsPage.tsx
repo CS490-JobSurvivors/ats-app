@@ -1,6 +1,23 @@
 import { Container, Typography, Box, Divider, Paper } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { supabase } from '../utils/supabaseClient';
 
 const SettingsPage = () => {
+  const [email, setEmail] = useState('');
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        return;
+      }
+      if (data.user?.email) {
+        setEmail(data.user.email);
+      }
+    };
+    fetchUser();
+  }, []);
+
   return (
     <Container maxWidth="md" sx={{ px: 3, py: 5 }}>
       <Typography variant="h4" fontWeight={700} mb={0.5}>
@@ -18,7 +35,7 @@ const SettingsPage = () => {
         <Box sx={{ mb: 2 }}>
           <Typography variant="body1">Email</Typography>
           <Typography variant="body2" color="text.secondary">
-            user@example.com
+            {email || 'Loading...'}
           </Typography>
         </Box>
         <Box>
