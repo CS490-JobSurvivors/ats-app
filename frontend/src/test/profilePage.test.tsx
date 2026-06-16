@@ -2,6 +2,9 @@ import React from 'react';
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ProfilePage from '../pages/profilePage';
+import { useProfile } from '../contexts/ProfileContext';
+import { supabase } from '../utils/supabaseClient';
+import { saveProfile } from '../api/profile';
 
 jest.mock('../contexts/ProfileContext', () => ({
   useProfile: jest.fn(),
@@ -18,10 +21,6 @@ jest.mock('../utils/supabaseClient', () => ({
 jest.mock('../api/profile', () => ({
   saveProfile: jest.fn(),
 }));
-
-import { useProfile } from '../contexts/ProfileContext';
-import { supabase } from '../utils/supabaseClient';
-import { saveProfile } from '../api/profile';
 
 const mockUseProfile = useProfile as jest.Mock;
 const mockGetSession = supabase.auth.getSession as jest.Mock;
