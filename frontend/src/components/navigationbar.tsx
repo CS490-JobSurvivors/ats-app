@@ -1,20 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Alert, AppBar, Box, Link, Toolbar, Typography } from '@mui/material';
+import { Alert, AppBar, Box, Link, Toolbar, Typography, useTheme } from '@mui/material';
 import { supabase } from '../utils/supabaseClient';
 import { logout } from '../api/logout';
 
-const navLinkSx = {
-  fontSize: '1rem',
-  fontWeight: 600,
-  color: '#a8a29e',
-  '&.active': { color: '#faf7f2' },
-  '&:hover': { color: '#f59e0b' },
-};
-
 const NavigationBar = () => {
+  const theme = useTheme();
   const [session, setSession] = useState<boolean>(false);
   const [signoutError, setSignoutError] = useState<boolean>(false);
+
+  const navLinkSx = {
+    fontSize: '1rem',
+    fontWeight: 600,
+    color: '#a8a29e', // no exact theme token; text.secondary (#78716c) is darker, may hurt readability on dark AppBar
+    '&.active': { color: theme.palette.background.default },
+    '&:hover': { color: theme.palette.primary.light },
+  };
 
   const handleLogout = async () => {
     try {
@@ -37,12 +38,14 @@ const NavigationBar = () => {
       <Toolbar sx={{ px: 4 }}>
         <Typography
           variant="h6"
-          sx={{ fontWeight: 700, letterSpacing: '0.05em', color: '#faf7f2' }}
+          sx={{
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            color: theme.palette.background.default, // matches old #faf7f2 exactly
+          }}
         >
           JobSurvivors
         </Typography>
-
-        {/* Centered nav links — auth only */}
         <Box
           sx={{
             display: 'flex',
@@ -67,8 +70,6 @@ const NavigationBar = () => {
             </>
           )}
         </Box>
-
-        {/* Right side */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
           {!session ? (
             <>
