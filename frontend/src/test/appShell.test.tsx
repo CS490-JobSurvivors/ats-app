@@ -32,8 +32,7 @@ describe('AppShell', () => {
   });
 
   it('wraps content in a full-height flex column container', () => {
-    const { container } = renderWithRoutes('/', <div>Inner</div>);
-    const wrapper = container.firstChild as HTMLElement;
-    expect(wrapper).toBeInTheDocument();
+    renderWithRoutes('/', <div>Inner</div>);
+    expect(screen.getByRole('main')).toBeInTheDocument();
   });
 });
