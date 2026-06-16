@@ -104,23 +104,11 @@ const LoginPage = () => {
                   ),
                 }}
               />
-              <Button
-                type="submit"
-                fullWidth
-                variant="contained"
-                disabled={isSubmitting}
-                sx={{
-                  bgcolor: '#B5651D',
-                  '&:hover': { bgcolor: '#9C5519' },
-                }}
-              >
+              <Button type="submit" fullWidth variant="contained" disabled={isSubmitting}>
                 {isSubmitting ? <CircularProgress size={24} color="inherit" /> : 'Login'}
               </Button>
               <Typography variant="body2" align="center">
-                Don't have an account?{' '}
-                <Link href="/signup" sx={{ color: '#B5651D' }}>
-                  Register
-                </Link>
+                Don't have an account? <Link href="/signup">Register</Link>
               </Typography>
             </Stack>
           </form>
