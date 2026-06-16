@@ -87,7 +87,7 @@ const DashboardPage = () => {
             textAlign: 'center',
           }}
         >
-          <Typography color="text.secondary">No applications yet.</Typography>
+          <Typography color="text.secondary">No recent applications.</Typography>
         </Box>
       ) : (
         jobs.map((job) => (
