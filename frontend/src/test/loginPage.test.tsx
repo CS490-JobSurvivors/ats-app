@@ -19,6 +19,7 @@ jest.mock('../utils/supabaseClient', () => ({
   supabase: {
     auth: {
       signInWithPassword: jest.fn(),
+      getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
     },
   },
 }));
@@ -38,7 +39,7 @@ const ACCESS_TOKEN = 'valid-token';
 /** Fills and submits the login form with the given credentials. */
 const fillAndSubmit = async (email: string, password: string) => {
   await userEvent.type(screen.getByLabelText(/email/i), email);
-  await userEvent.type(screen.getByLabelText(/password/i), password);
+  await userEvent.type(screen.getByLabelText(/^password/i), password);
   await userEvent.click(screen.getByRole('button', { name: /login/i }));
 };
 

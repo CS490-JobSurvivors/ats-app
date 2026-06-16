@@ -25,10 +25,14 @@ const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
-    const checkSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (data.session) {
-        window.location.href = '/';
+  const checkSession = async () => {
+    try {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          window.location.href = '/';
+        }
+      } catch {
+        // ignore session check failures; user just sees the login/signup form
       }
     };
     checkSession();
