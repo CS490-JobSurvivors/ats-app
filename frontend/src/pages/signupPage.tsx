@@ -27,8 +27,8 @@ const SignupPage = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
-  const checkSession = async () => {
-    try {
+    const checkSession = async () => {
+      try {
         const { data } = await supabase.auth.getSession();
         if (data.session) {
           window.location.href = '/';
