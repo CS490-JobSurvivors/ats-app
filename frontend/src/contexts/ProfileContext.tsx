@@ -16,8 +16,13 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const load = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setLoading(false); return; }
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setLoading(false);
+        return;
+      }
       const data = await getProfile(session.access_token);
       setProfile(data);
       setLoading(false);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import {
   Alert,
   Box,
@@ -64,17 +64,11 @@ const recordToFields = (r: ProfileRecord): ProfileFields => ({
 // View mode — shown after a successful save
 // ---------------------------------------------------------------------------
 
-const ProfileView = ({
-  profile,
-  onEdit,
-}: {
-  profile: ProfileFields;
-  onEdit: () => void;
-}) => (
+const ProfileView = ({ profile, onEdit }: { profile: ProfileFields; onEdit: () => void }) => (
   <Box sx={{ maxWidth: 900, mx: 'auto', px: 3, py: 5 }}>
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
       <Box>
-        <Typography variant="h4" fontWeight={700} mb={0.5}>
+        <Typography variant="h4" fontWeight={700} mb={0.5} sx={{ wordBreak: 'break-word' }}>
           {profile.firstName} {profile.lastName}
         </Typography>
         <Typography variant="body1" color="text.secondary">
@@ -127,23 +121,21 @@ const ProfileView = ({
 
 function ProfilePage() {
   const { profile: cachedProfile, loading, setProfile: setCachedProfile } = useProfile();
-  const [profile, setProfile] = useState<ProfileFields>(
-    cachedProfile ? recordToFields(cachedProfile) : emptyProfile
-  );
+  const [profile, setProfile] = useState<ProfileFields>(emptyProfile);
   const [fieldErrors, setFieldErrors] = useState<Record<ProfileFieldKey, string>>(
-    profileFieldKeys.reduce((acc, k) => ({ ...acc, [k]: '' }), {} as Record<ProfileFieldKey, string>)
+    profileFieldKeys.reduce(
+      (acc, k) => ({ ...acc, [k]: '' }),
+      {} as Record<ProfileFieldKey, string>
+    )
   );
-  const [viewMode, setViewMode] = useState(!!cachedProfile);
+  const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
-  // Handles the first-load case where context finishes fetching after mount
-  useEffect(() => {
-    if (cachedProfile && !viewMode) {
-      setProfile(recordToFields(cachedProfile));
-      setViewMode(true);
-    }
-  }, [cachedProfile]);
+  const handleEdit = () => {
+    if (cachedProfile) setProfile(recordToFields(cachedProfile));
+    setIsEditing(true);
+  };
 
   const updateField = (field: ProfileFieldKey, value: string) => {
     let nextValue = value;
@@ -159,14 +151,17 @@ function ProfilePage() {
   const completedCount = profileFieldKeys.filter((f) => profile[f].trim().length > 0).length;
   const progressPercent = Math.round((completedCount / profileFieldKeys.length) * 100);
   const handleSave = async () => {
-    const nextErrors = profileFieldKeys.reduce((acc, field) => {
-      const value = profile[field].trim();
-      if (!value) acc[field] = `${fieldLabels[field]} is required.`;
-      else if (field === 'phone' && !phoneRegex.test(value))
-        acc[field] = 'Phone may only contain numbers.';
-      else acc[field] = '';
-      return acc;
-    }, {} as Record<ProfileFieldKey, string>);
+    const nextErrors = profileFieldKeys.reduce(
+      (acc, field) => {
+        const value = profile[field].trim();
+        if (!value) acc[field] = `${fieldLabels[field]} is required.`;
+        else if (field === 'phone' && !phoneRegex.test(value))
+          acc[field] = 'Phone may only contain numbers.';
+        else acc[field] = '';
+        return acc;
+      },
+      {} as Record<ProfileFieldKey, string>
+    );
 
     setFieldErrors(nextErrors);
     if (profileFieldKeys.some((f) => nextErrors[f])) return;
@@ -175,7 +170,9 @@ function ProfilePage() {
     setSaveError('');
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated.');
 
       const saved = await saveProfile(session.access_token, {
@@ -187,7 +184,7 @@ function ProfilePage() {
       });
 
       setCachedProfile(saved);
-      setViewMode(true);
+      setIsEditing(false);
     } catch {
       setSaveError('Failed to save profile. Please try again.');
     } finally {
@@ -197,8 +194,8 @@ function ProfilePage() {
 
   if (loading) return null;
 
-  if (viewMode) {
-    return <ProfileView profile={profile} onEdit={() => setViewMode(false)} />;
+  if (cachedProfile && !isEditing) {
+    return <ProfileView profile={recordToFields(cachedProfile)} onEdit={handleEdit} />;
   }
 
   return (
@@ -273,6 +270,7 @@ function ProfilePage() {
               onChange={(e) => updateField('firstName', e.target.value)}
               error={!!fieldErrors.firstName}
               helperText={fieldErrors.firstName}
+              inputProps={{ maxLength: 35 }}
               fullWidth
             />
             <TextField
@@ -283,6 +281,7 @@ function ProfilePage() {
               onChange={(e) => updateField('lastName', e.target.value)}
               error={!!fieldErrors.lastName}
               helperText={fieldErrors.lastName}
+              inputProps={{ maxLength: 35 }}
               fullWidth
             />
             <TextField
