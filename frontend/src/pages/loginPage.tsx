@@ -1,4 +1,4 @@
-import { Button, TextField, Container, Stack, Alert, Typography, Link } from '@mui/material';
+import { Button, TextField, Container, Stack, Alert, Typography, Link, Box } from '@mui/material';
 import { useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { loginApi } from '../api/login';
@@ -27,6 +27,14 @@ const LoginPage = () => {
 
   return (
     <Container maxWidth="sm">
+      <Box mb={4}>
+        <Typography variant="h4" fontWeight={700} mb={0.5}>
+          Welcome back
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Sign in to your account to continue.
+        </Typography>
+      </Box>
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -52,7 +60,7 @@ const LoginPage = () => {
             label="password"
             type="password"
           />
-          <Button type="submit" onClick={() => {}}>
+          <Button type="submit" variant="contained" fullWidth sx={{ py: 1.5 }}>
             Login
           </Button>
           <Typography variant="body2" align="center">
