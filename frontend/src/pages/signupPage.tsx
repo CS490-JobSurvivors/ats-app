@@ -86,7 +86,7 @@ const SignupPage = () => {
                 required
                 fullWidth
                 placeholder="Retype Password"
-                label="passwordConfirmation"
+                label="Confirm Password"
                 type="password"
                 onChange={(e) => {
                   setConfirmedPassword(e.target.value);
