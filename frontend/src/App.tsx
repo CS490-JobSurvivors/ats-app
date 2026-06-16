@@ -8,6 +8,7 @@ import ProfilePage from './pages/profilePage';
 import SettingsPage from './pages/settingsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
+import ResetPasswordPage from './pages/resetPassword';
 
 function App() {
   return (
@@ -41,6 +42,13 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route 
+         path="/reset-password"
+         element={
+          <ProtectedRoute>
+            <ResetPasswordPage />
+          </ProtectedRoute>
+        } />
         <Route path="*" element={<ErrorPage />} />
       </Routes>
     </Router>

@@ -152,7 +152,7 @@ const DashboardPage = () => {
             onClick={handleSaveJob}
             sx={{ alignSelf: 'flex-start', backgroundColor: '#FF8C42' }}
           >
-            {editingJobId ? 'Update Job' : 'Save Job'}
+            {editingJobId ? 'Update Job' : 'Save Josb'}
           </Button>
           {editingJobId ? (
             <Button
