@@ -1,13 +1,30 @@
 import { Container, Typography, Box, Divider, Paper } from '@mui/material';
+import { useEffect, useState } from 'react';
+import { supabase } from '../utils/supabaseClient';
 
 const SettingsPage = () => {
+  const [email, setEmail] = useState('');
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.log(error.message);
+        return;
+      }
+      if (data.user?.email) {
+        setEmail(data.user.email);
+      }
+    };
+    fetchUser();
+  }, []);
+
   return (
     <Container maxWidth="md" sx={{ mt: 4 }}>
       <Typography variant="h4" gutterBottom>
         Settings
       </Typography>
 
-      {/* Account Settings */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           Account
@@ -16,7 +33,7 @@ const SettingsPage = () => {
         <Box sx={{ mb: 2 }}>
           <Typography variant="body1">Email</Typography>
           <Typography variant="body2" color="text.secondary">
-            user@example.com
+            {email || 'Loading...'}
           </Typography>
         </Box>
         <Box>
@@ -27,7 +44,6 @@ const SettingsPage = () => {
         </Box>
       </Paper>
 
-      {/* Preferences */}
       <Paper sx={{ p: 3 }}>
         <Typography variant="h6" gutterBottom>
           Preferences
