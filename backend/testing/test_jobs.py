@@ -14,11 +14,13 @@ active_user_id = ""
 
 
 class FakeScalarResult:
-    def __init__(self, user_id: str):
-        self.user_id = user_id
+    def __init__(self, query):
+        self.query = query
 
     def all(self):
-        return [job for job in jobs if str(job.job_poster_id) == self.user_id]
+        user_id = str(self.query.compile().params["job_poster_id_1"])
+
+        return [job for job in jobs if str(job.job_poster_id) == user_id]
 
 
 class FakeDb:
@@ -39,11 +41,15 @@ class FakeDb:
         job.updated_at = datetime.now(UTC)
 
     def scalars(self, _query):
-        return FakeScalarResult(active_user_id)
+        return FakeScalarResult(_query)
 
-    def scalar(self, _query):
+    def scalar(self, query):
+        params = query.compile().params
+
         for job in jobs:
-            if str(job.job_poster_id) == active_user_id:
+            if str(job.job_id) == str(params["job_id_1"]) and str(job.job_poster_id) == str(
+                params["job_poster_id_1"]
+            ):
                 return job
 
         return None
@@ -91,7 +97,19 @@ def test_create_job_assigns_authenticated_user_as_owner():
     assert response.status_code == 201
     body = response.json()
     assert body["company_name"] == "Acme"
+    assert body["job_stage"] == "Interested"
     assert body["job_poster_id"] == user_id
+
+
+def test_create_job_rejects_invalid_job_stage():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    payload = {**create_job_payload(), "job_stage": "Not a real stage"}
+
+    response = client.post("/jobs", json=payload)
+
+    assert response.status_code == 422
+    assert jobs == []
 
 
 def test_list_jobs_returns_only_authenticated_users_jobs():
@@ -112,6 +130,7 @@ def test_list_jobs_returns_only_authenticated_users_jobs():
     user_jobs = response.json()
     assert len(user_jobs) == 1
     assert user_jobs[0]["company_name"] == "Second User Company"
+    assert user_jobs[0]["job_stage"] == "Interested"
     assert user_jobs[0]["job_poster_id"] == second_user_id
 
 
@@ -133,8 +152,9 @@ def test_update_job_only_updates_owned_jobs():
     set_authenticated_user(owner_id)
     update_response = client.patch(
         f"/jobs/{job_id}",
-        json={"job_title": "Senior Software Engineer"},
+        json={"job_title": "Senior Software Engineer", "job_stage": "Interview"},
     )
 
     assert update_response.status_code == 200
     assert update_response.json()["job_title"] == "Senior Software Engineer"
+    assert update_response.json()["job_stage"] == "Interview"

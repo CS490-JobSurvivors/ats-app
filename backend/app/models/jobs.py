@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Text, Uuid
+from sqlalchemy import DateTime, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -27,3 +27,4 @@ class Job(Base):
         nullable=False,
     )
     job_poster_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
+    job_stage: Mapped[str] = mapped_column(String(20), default="Interested", nullable=False)
