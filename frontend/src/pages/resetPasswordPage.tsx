@@ -1,6 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Button, Container, Link, Stack, TextField, Typography } from '@mui/material';
+import {
+  Alert,
+  Box,
+  Button,
+  CircularProgress,
+  Container,
+  IconButton,
+  InputAdornment,
+  Link,
+  Paper,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { supabase } from '../utils/supabaseClient';
 
 const parseHashError = () => {
@@ -18,6 +32,8 @@ const ResetPasswordPage = () => {
   const [submitError, setSubmitError] = useState('');
   const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const navigate = useNavigate();
 
   const validate = () => {
@@ -49,52 +65,98 @@ const ResetPasswordPage = () => {
   };
 
   return (
-    <Container maxWidth="sm" sx={{ px: 3, py: 5 }}>
-      <Typography variant="h4" fontWeight={700} mb={0.5}>
-        Set New Password
-      </Typography>
-      <Typography variant="body1" color="text.secondary" mb={4}>
-        Enter your new password below.
-      </Typography>
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 'calc(100vh - 64px)',
+      }}
+    >
+      <Container maxWidth="sm">
+        <Paper elevation={3} sx={{ p: 5, borderRadius: 3 }}>
+          <Typography variant="h4" align="center" gutterBottom>
+            Set New Password
+          </Typography>
 
-      {hashError ? (
-        <Alert severity="error">
-          {hashError}{' '}
-          <Link href="/settings" underline="always">
-            Request a new link
-          </Link>
-        </Alert>
-      ) : success ? (
-        <Alert severity="success">Password updated. Redirecting to dashboard…</Alert>
-      ) : (
-        <form onSubmit={handleSubmit}>
-          <Stack spacing={2}>
-            {submitError && <Alert severity="error">{submitError}</Alert>}
-            <TextField
-              label="New Password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              error={!!errors.password}
-              helperText={errors.password}
-            />
-            <TextField
-              label="Confirm Password"
-              type="password"
-              required
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              error={!!errors.confirm}
-              helperText={errors.confirm}
-            />
-            <Button type="submit" variant="contained" disabled={loading}>
-              {loading ? 'Updating…' : 'Update Password'}
-            </Button>
-          </Stack>
-        </form>
-      )}
-    </Container>
+          {hashError ? (
+            <Stack spacing={2}>
+              <Alert severity="error">
+                {hashError}{' '}
+                <Link href="/settings" underline="always">
+                  Request a new link
+                </Link>
+              </Alert>
+              <Typography variant="body2" align="center">
+                <Link href="/login">Back to Login</Link>
+              </Typography>
+            </Stack>
+          ) : success ? (
+            <Alert severity="success">Password updated. Redirecting to dashboard…</Alert>
+          ) : (
+            <form onSubmit={handleSubmit}>
+              <Stack spacing={2}>
+                {submitError && <Alert severity="error">{submitError}</Alert>}
+                <TextField
+                  required
+                  fullWidth
+                  label="New Password"
+                  placeholder="Enter new password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  error={!!errors.password}
+                  helperText={errors.password}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={() => setShowPassword((prev) => !prev)}
+                          edge="end"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          {showPassword ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <TextField
+                  required
+                  fullWidth
+                  label="Confirm Password"
+                  placeholder="Retype new password"
+                  type={showConfirm ? 'text' : 'password'}
+                  value={confirm}
+                  onChange={(e) => setConfirm(e.target.value)}
+                  error={!!errors.confirm}
+                  helperText={errors.confirm}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          onClick={() => setShowConfirm((prev) => !prev)}
+                          edge="end"
+                          aria-label={showConfirm ? 'Hide password' : 'Show password'}
+                        >
+                          {showConfirm ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <Button type="submit" fullWidth variant="contained" disabled={loading}>
+                  {loading ? <CircularProgress size={24} color="inherit" /> : 'Update Password'}
+                </Button>
+                <Typography variant="body2" align="center">
+                  <Link href="/login">Back to Login</Link>
+                </Typography>
+              </Stack>
+            </form>
+          )}
+        </Paper>
+      </Container>
+    </Box>
   );
 };
 
