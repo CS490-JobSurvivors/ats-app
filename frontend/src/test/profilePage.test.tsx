@@ -39,12 +39,13 @@ describe('ProfilePage', () => {
   test('updates the completion bar as fields are completed', () => {
     render(<ProfilePage />);
 
-    expect(screen.getByText(/profile completion: 0%/i)).toBeInTheDocument();
+    expect(screen.getByText(/profile completion/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
 
     fireEvent.change(screen.getByLabelText(/about/i), {
       target: { value: 'I am preparing my profile.' },
     });
-    expect(screen.getByText(/profile completion: 20%/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '20');
 
     fireEvent.change(screen.getByLabelText(/first name/i), {
       target: { value: 'Alex' },
@@ -59,7 +60,7 @@ describe('ProfilePage', () => {
       target: { value: '5551234567' },
     });
 
-    expect(screen.getByText(/profile completion: 100%/i)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100');
   });
 
   test('requires a fully valid profile before saving', () => {
