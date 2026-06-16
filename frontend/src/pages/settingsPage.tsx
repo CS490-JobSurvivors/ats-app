@@ -9,7 +9,6 @@ const SettingsPage = () => {
     const fetchUser = async () => {
       const { data, error } = await supabase.auth.getUser();
       if (error) {
-        console.log(error.message);
         return;
       }
       if (data.user?.email) {
