@@ -59,7 +59,7 @@ const LoginPage = () => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        minHeight: '100vh',
+        minHeight: 'calc(100vh - 64px)',
       }}
     >
       <Container maxWidth="sm">
