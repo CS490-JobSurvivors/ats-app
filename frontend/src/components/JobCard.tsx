@@ -1,13 +1,15 @@
-import { Paper, Typography, Box, Chip } from '@mui/material';
+import { Paper, Typography, Box, Chip, IconButton } from '@mui/material';
+import EditIcon from '@mui/icons-material/Edit';
 
 interface JobCardProps {
   title: string;
   company: string;
   stage: string;
   lastActivity: string;
+  onEdit: () => void;
 }
 
-const JobCard = ({ title, company, stage, lastActivity }: JobCardProps) => {
+const JobCard = ({ title, company, stage, lastActivity, onEdit }: JobCardProps) => {
   return (
     <Paper sx={{ p: 2, mb: 2 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -17,7 +19,12 @@ const JobCard = ({ title, company, stage, lastActivity }: JobCardProps) => {
             {company}
           </Typography>
         </Box>
-        <Chip label={stage} size="small" />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Chip label={stage} size="small" />
+          <IconButton size="small" onClick={onEdit} aria-label={`Edit ${title}`}>
+            <EditIcon fontSize="small" />
+          </IconButton>
+        </Box>
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
         Last activity: {lastActivity}

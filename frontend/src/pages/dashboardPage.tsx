@@ -1,35 +1,68 @@
-import { useEffect, useState } from 'react';
-import { Container, Typography, Box, Paper, Alert } from '@mui/material';
+import { useCallback, useEffect, useState } from 'react';
+import { Container, Typography, Box, Paper, Alert, Button } from '@mui/material';
 import { supabase } from '../utils/supabaseClient';
-import { listJobs, JobRecord } from '../api/jobs';
+import { listJobs, createJob, updateJob, JobRecord, JobPayload } from '../api/jobs';
 import JobCard from '../components/JobCard';
+import JobFormDialog from '../components/JobFormDialog';
 
 const DashboardPage = () => {
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<JobRecord | null>(null);
+
+  const fetchJobs = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+    try {
+      const result = await listJobs(token);
+      setJobs(result);
+    } catch {
+      setErrorMessage('Unable to load your applications right now. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   // Fetches the logged-in user's jobs. Backend enforces auth (S1-BR-001)
   // and filters by owner_id server-side (S1-BR-006/008) — no client-side filtering needed.
   useEffect(() => {
-    const fetchJobs = async () => {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-      try {
-        const result = await listJobs(token);
-        setJobs(result);
-      } catch {
-        setErrorMessage('Unable to load your applications right now. Please try again later.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
     fetchJobs();
-  }, []);
+  }, [fetchJobs]);
+
+  const totalApplications = jobs.length;
+  const interviewCount = jobs.filter((job) => job.job_stage === 'Interview').length;
+  const offerCount = jobs.filter((job) => job.job_stage === 'Offer').length;
+
+  const openCreateDialog = () => {
+    setEditingJob(null);
+    setDialogOpen(true);
+  };
+
+  const openEditDialog = (job: JobRecord) => {
+    setEditingJob(job);
+    setDialogOpen(true);
+  };
+
+  const handleDialogSubmit = async (payload: JobPayload) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) {
+      throw new Error('No active session.');
+    }
+    if (editingJob) {
+      await updateJob(token, editingJob.job_id, payload);
+    } else {
+      await createJob(token, payload);
+    }
+    setDialogOpen(false);
+    await fetchJobs();
+  };
 
   return (
     <Container maxWidth="lg" sx={{ px: 3, py: 5 }}>
@@ -46,7 +79,7 @@ const DashboardPage = () => {
             Total Applications
           </Typography>
           <Typography variant="h3" fontWeight={700}>
-            0
+            {totalApplications}
           </Typography>
         </Paper>
         <Paper sx={{ p: 3, textAlign: 'center', flex: 1 }}>
@@ -54,7 +87,7 @@ const DashboardPage = () => {
             Interviews
           </Typography>
           <Typography variant="h3" fontWeight={700}>
-            0
+            {interviewCount}
           </Typography>
         </Paper>
         <Paper sx={{ p: 3, textAlign: 'center', flex: 1 }}>
@@ -62,14 +95,20 @@ const DashboardPage = () => {
             Offers
           </Typography>
           <Typography variant="h3" fontWeight={700}>
-            0
+            {offerCount}
           </Typography>
         </Paper>
       </Box>
 
-      <Typography variant="h6" fontWeight={600} mb={2}>
-        Recent Applications
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6" fontWeight={600}>
+          Recent Applications
+        </Typography>
+        <Button variant="contained" onClick={openCreateDialog}>
+          New Application
+        </Button>
+      </Box>
+
       {errorMessage && (
         <Alert severity="error" sx={{ mb: 2 }}>
           {errorMessage}
@@ -87,7 +126,7 @@ const DashboardPage = () => {
             textAlign: 'center',
           }}
         >
-          <Typography color="text.secondary">No applications yet.</Typography>
+          <Typography color="text.secondary">No recent applications.</Typography>
         </Box>
       ) : (
         jobs.map((job) => (
@@ -97,9 +136,17 @@ const DashboardPage = () => {
             company={job.company_name}
             stage={job.job_stage}
             lastActivity={new Date(job.updated_at).toLocaleDateString()}
+            onEdit={() => openEditDialog(job)}
           />
         ))
       )}
+
+      <JobFormDialog
+        open={dialogOpen}
+        job={editingJob}
+        onClose={() => setDialogOpen(false)}
+        onSubmit={handleDialogSubmit}
+      />
     </Container>
   );
 };

@@ -1,9 +1,10 @@
 import React from 'react';
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
-import { listJobs } from '../api/jobs';
+import { listJobs, createJob, updateJob } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -15,14 +16,32 @@ jest.mock('../utils/supabaseClient', () => ({
 
 jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
+  createJob: jest.fn(),
+  updateJob: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
+const mockCreateJob = createJob as jest.Mock;
+const mockUpdateJob = updateJob as jest.Mock;
+
+const sampleJob = {
+  job_id: 'job-1',
+  company_name: 'Test Co',
+  job_title: 'Software Engineer',
+  job_description: 'A test job',
+  application_link: null,
+  job_stage: 'Interested',
+  job_poster_id: 'user-1',
+  updated_at: '2026-06-16T00:00:00Z',
+  created_at: '2026-06-16T00:00:00Z',
+};
 
 beforeEach(() => {
   mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
   mockListJobs.mockResolvedValue([]);
+  mockCreateJob.mockReset();
+  mockUpdateJob.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -31,16 +50,86 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('heading', { name: /dashboard/i })).toBeInTheDocument();
     expect(screen.getByText(/track your applications and activity/i)).toBeInTheDocument();
   });
-  it('renders the three stat cards with zero counts', () => {
+
+  it('renders the three stat cards with zero counts when there are no jobs', () => {
     render(<DashboardPage />);
     expect(screen.getByText(/total applications/i)).toBeInTheDocument();
     expect(screen.getByText(/interviews/i)).toBeInTheDocument();
     expect(screen.getByText(/offers/i)).toBeInTheDocument();
     expect(screen.getAllByText('0')).toHaveLength(3);
   });
+
   it('renders the recent applications section with empty state', async () => {
     render(<DashboardPage />);
     expect(screen.getByText(/recent applications/i)).toBeInTheDocument();
-    expect(await screen.findByText(/no applications yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no recent applications/i)).toBeInTheDocument();
+  });
+
+  it('renders job cards and reflects accurate stat counts when jobs exist', async () => {
+    mockListJobs.mockResolvedValue([
+      sampleJob,
+      { ...sampleJob, job_id: 'job-2', job_stage: 'Interview' },
+      { ...sampleJob, job_id: 'job-3', job_stage: 'Offer' },
+    ]);
+    render(<DashboardPage />);
+    expect(await screen.findAllByText('Software Engineer')).toHaveLength(3);
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.getAllByText('1')).toHaveLength(2);
+  });
+
+  it('opens the create dialog when "New Application" is clicked', async () => {
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /new application/i }));
+    expect(screen.getByRole('heading', { name: /add job/i })).toBeInTheDocument();
+  });
+
+  it('shows a validation error and does not call createJob when required fields are empty', async () => {
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /new application/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(
+      await screen.findByText(/company, title, and description are required/i)
+    ).toBeInTheDocument();
+    expect(mockCreateJob).not.toHaveBeenCalled();
+  });
+
+  it('calls createJob and refreshes the list when the create form is submitted', async () => {
+    mockCreateJob.mockResolvedValue({ ...sampleJob, job_id: 'job-new' });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /new application/i }));
+    await userEvent.type(screen.getByLabelText(/company/i), 'New Co');
+    await userEvent.type(screen.getByLabelText(/job title/i), 'QA Engineer');
+    await userEvent.type(screen.getByLabelText(/description/i), 'A new role');
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitFor(() => {
+      expect(mockCreateJob).toHaveBeenCalledWith(
+        'test-token',
+        expect.objectContaining({
+          company_name: 'New Co',
+          job_title: 'QA Engineer',
+          job_description: 'A new role',
+        })
+      );
+    });
+    expect(mockListJobs).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens the edit dialog pre-filled and calls updateJob on save', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockUpdateJob.mockResolvedValue({ ...sampleJob, job_title: 'Senior Engineer' });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByLabelText(/edit software engineer/i));
+    expect(screen.getByRole('heading', { name: /edit job/i })).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Software Engineer')).toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText(/job title/i));
+    await userEvent.type(screen.getByLabelText(/job title/i), 'Senior Engineer');
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitFor(() => {
+      expect(mockUpdateJob).toHaveBeenCalledWith(
+        'test-token',
+        'job-1',
+        expect.objectContaining({ job_title: 'Senior Engineer' })
+      );
+    });
   });
 });
