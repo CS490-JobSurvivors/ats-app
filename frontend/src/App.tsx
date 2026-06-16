@@ -8,6 +8,7 @@ import ErrorPage from './pages/errorPage';
 import SignupPage from './pages/signupPage';
 import ProfilePage from './pages/profilePage';
 import SettingsPage from './pages/settingsPage';
+import ResetPasswordPage from './pages/resetPasswordPage';
 import theme from './theme';
 import './App.css';
 
@@ -41,6 +42,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/reset-password"
+              element={
+                <ProtectedRoute>
+                  <ResetPasswordPage />
                 </ProtectedRoute>
               }
             />
