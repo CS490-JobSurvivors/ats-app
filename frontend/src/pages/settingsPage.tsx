@@ -7,19 +7,24 @@ const SettingsPage = () => {
   const [resetStatus, setResetStatus] = useState<'idle' | 'sent' | 'error'>('idle');
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setEmail(data.user?.email ?? '');
-    });
+    const fetchUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        return;
+      }
+      if (data.user?.email) {
+        setEmail(data.user.email);
+      }
+    };
+    fetchUser();
   }, []);
 
   const handleResetPassword = async () => {
     if (!email) return;
     setResetStatus('idle');
-
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-
     setResetStatus(error ? 'error' : 'sent');
   };
 
@@ -37,14 +42,12 @@ const SettingsPage = () => {
           Account
         </Typography>
         <Divider sx={{ mb: 2 }} />
-
-        <Box sx={{ mb: 3 }}>
+        <Box sx={{ mb: 2 }}>
           <Typography variant="body1">Email</Typography>
           <Typography variant="body2" color="text.secondary">
-            {email || '—'}
+            {email || 'Loading...'}
           </Typography>
         </Box>
-
         <Box>
           <Typography variant="body1" mb={1}>
             Password
