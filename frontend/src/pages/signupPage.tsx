@@ -93,7 +93,7 @@ const SignupPage = () => {
                 fullWidth
                 type="email"
                 placeholder="Enter Email"
-                label="email"
+                label="Email"
                 onChange={(e) => {
                   setEmail(e.target.value.trim());
                 }}
@@ -103,7 +103,7 @@ const SignupPage = () => {
                 fullWidth
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Enter Password"
-                label="password"
+                label="Password"
                 onChange={(e) => {
                   setPassword(e.target.value);
                 }}
@@ -126,7 +126,7 @@ const SignupPage = () => {
                 fullWidth
                 type={showConfirmPassword ? 'text' : 'password'}
                 placeholder="Retype Password"
-                label="Confirm Password"
+                label="Confirm password"
                 onChange={(e) => {
                   setConfirmedPassword(e.target.value);
                 }}
