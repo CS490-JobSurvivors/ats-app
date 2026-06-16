@@ -8,6 +8,7 @@ import ErrorPage from './pages/errorPage';
 import SignupPage from './pages/signupPage';
 import ProfilePage from './pages/profilePage';
 import SettingsPage from './pages/settingsPage';
+import { ProfileProvider } from './contexts/ProfileContext';
 import theme from './theme';
 import './App.css';
 
@@ -15,6 +16,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <ProfileProvider>
       <Router>
         <Routes>
           <Route element={<AppShell />}>
@@ -48,6 +50,7 @@ function App() {
           </Route>
         </Routes>
       </Router>
+      </ProfileProvider>
     </ThemeProvider>
   );
 }
