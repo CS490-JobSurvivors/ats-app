@@ -1,4 +1,13 @@
 import React, { useState } from 'react';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  LinearProgress,
+  TextField,
+  Typography,
+} from '@mui/material';
 
 export interface ProfileFields {
   bio: string;
@@ -36,14 +45,6 @@ const fieldPlaceholders: Record<ProfileFieldKey, string> = {
   phone: 'Enter your phone number',
 };
 
-const fieldTypes: Record<ProfileFieldKey, string> = {
-  bio: 'text',
-  firstName: 'text',
-  lastName: 'text',
-  city: 'text',
-  phone: 'tel',
-};
-
 const phoneRegex = /^[0-9]+$/;
 
 function ProfilePage() {
@@ -62,9 +63,7 @@ function ProfilePage() {
 
     if (field === 'phone') {
       nextValue = value.replace(/\D/g, '');
-      if (value !== nextValue) {
-        errorMessage = 'Phone may only contain numbers.';
-      }
+      if (value !== nextValue) errorMessage = 'Phone may only contain numbers.';
     }
 
     setProfile((current) => ({ ...current, [field]: nextValue }));
@@ -72,96 +71,145 @@ function ProfilePage() {
     setIsSaved(false);
   };
 
-  const completedCount = profileFieldKeys.filter(
-    (field) => profile[field].trim().length > 0
-  ).length;
+  const completedCount = profileFieldKeys.filter((f) => profile[f].trim().length > 0).length;
   const progressPercent = Math.round((completedCount / profileFieldKeys.length) * 100);
   const canSave =
     completedCount === profileFieldKeys.length &&
-    profile.phone.trim().length > 0 &&
     phoneRegex.test(profile.phone.trim()) &&
-    profileFieldKeys.every((field) => fieldErrors[field].length === 0);
+    profileFieldKeys.every((f) => fieldErrors[f].length === 0);
 
   const saveProfile = () => {
     const nextErrors = profileFieldKeys.reduce(
       (acc, field) => {
         const value = profile[field].trim();
-
-        if (value.length === 0) {
-          acc[field] = `${fieldLabels[field]} is required.`;
-        } else if (field === 'phone' && !phoneRegex.test(value)) {
+        if (!value) acc[field] = `${fieldLabels[field]} is required.`;
+        else if (field === 'phone' && !phoneRegex.test(value))
           acc[field] = 'Phone may only contain numbers.';
-        } else {
-          acc[field] = '';
-        }
-
+        else acc[field] = '';
         return acc;
       },
       {} as Record<ProfileFieldKey, string>
     );
-
     setFieldErrors(nextErrors);
-
-    const hasErrors = profileFieldKeys.some((field) => nextErrors[field].length > 0);
-    if (!hasErrors) {
-      setIsSaved(true);
-    }
+    if (!profileFieldKeys.some((f) => nextErrors[f])) setIsSaved(true);
   };
 
   return (
-    <main className="profile-page">
-      <section className="profile-panel">
-        <div className="profile-header">
-          <h1>Complete your profile</h1>
-          <p>Fill in your details to finish setting up your account.</p>
-        </div>
+    <Box sx={{ maxWidth: 900, mx: 'auto', px: 3, py: 5 }}>
+      {/* Header */}
+      <Typography variant="h4" fontWeight={700} mb={0.5}>
+        Complete your profile
+      </Typography>
+      <Typography variant="body1" color="text.secondary" mb={3}>
+        Fill in your details to finish setting up your account.
+      </Typography>
 
-        <div className="profile-progress">
-          <div className="profile-progress-label">Profile completion: {progressPercent}%</div>
-          <div className="profile-progress-bar" aria-hidden="true">
-            <div className="profile-progress-fill" style={{ width: `${progressPercent}%` }} />
-          </div>
-        </div>
+      {/* Progress card */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Profile completion
+            </Typography>
+            <Typography variant="body2" fontWeight={600}>
+              {progressPercent}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            sx={{
+              height: 10,
+              borderRadius: 999,
+              backgroundColor: 'divider',
+              '& .MuiLinearProgress-bar': { borderRadius: 999 },
+            }}
+          />
+        </CardContent>
+      </Card>
 
-        <div className="profile-fields">
-          {profileFieldKeys.map((field) => (
-            <div key={field} className="profile-field-row">
-              <label htmlFor={field}>{fieldLabels[field]}</label>
-              <div className="profile-field-input-row">
-                {field === 'bio' ? (
-                  <textarea
-                    id={field}
-                    name={field}
-                    value={profile[field]}
-                    onChange={(e) => updateField(field, e.target.value)}
-                    placeholder={fieldPlaceholders[field]}
-                    rows={4}
-                  />
-                ) : (
-                  <input
-                    id={field}
-                    name={field}
-                    type={fieldTypes[field]}
-                    value={profile[field]}
-                    onChange={(e) => updateField(field, e.target.value)}
-                    placeholder={fieldPlaceholders[field]}
-                  />
-                )}
-              </div>
-              {fieldErrors[field] ? <div className="field-error">{fieldErrors[field]}</div> : null}
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="save-profile-button"
-          onClick={saveProfile}
-          disabled={!canSave}
-        >
-          {isSaved ? 'Saved' : 'Save profile'}
-        </button>
-      </section>
-    </main>
+      {/* About card */}
+      <Card sx={{ mb: 3 }}>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} mb={2}>
+            About you
+          </Typography>
+          <TextField
+            id="bio"
+            label={fieldLabels.bio}
+            placeholder={fieldPlaceholders.bio}
+            value={profile.bio}
+            onChange={(e) => updateField('bio', e.target.value)}
+            error={!!fieldErrors.bio}
+            helperText={fieldErrors.bio}
+            multiline
+            rows={4}
+            fullWidth
+          />
+        </CardContent>
+      </Card>
+
+      {/* Personal details card */}
+      <Card sx={{ mb: 4 }}>
+        <CardContent>
+          <Typography variant="h6" fontWeight={600} mb={2}>
+            Personal details
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <TextField
+              id="firstName"
+              label={fieldLabels.firstName}
+              placeholder={fieldPlaceholders.firstName}
+              value={profile.firstName}
+              onChange={(e) => updateField('firstName', e.target.value)}
+              error={!!fieldErrors.firstName}
+              helperText={fieldErrors.firstName}
+              fullWidth
+            />
+            <TextField
+              id="lastName"
+              label={fieldLabels.lastName}
+              placeholder={fieldPlaceholders.lastName}
+              value={profile.lastName}
+              onChange={(e) => updateField('lastName', e.target.value)}
+              error={!!fieldErrors.lastName}
+              helperText={fieldErrors.lastName}
+              fullWidth
+            />
+            <TextField
+              id="city"
+              label={fieldLabels.city}
+              placeholder={fieldPlaceholders.city}
+              value={profile.city}
+              onChange={(e) => updateField('city', e.target.value)}
+              error={!!fieldErrors.city}
+              helperText={fieldErrors.city}
+              fullWidth
+            />
+            <TextField
+              id="phone"
+              label={fieldLabels.phone}
+              placeholder={fieldPlaceholders.phone}
+              value={profile.phone}
+              onChange={(e) => updateField('phone', e.target.value)}
+              error={!!fieldErrors.phone}
+              helperText={fieldErrors.phone}
+              type="tel"
+              fullWidth
+            />
+          </Box>
+          <Button
+            variant="contained"
+            onClick={saveProfile}
+            disabled={!canSave}
+            fullWidth
+            sx={{ mt: 3, py: 1.5 }}
+          >
+            {isSaved ? 'Saved' : 'Save profile'}
+          </Button>
+        </CardContent>
+      </Card>
+    </Box>
   );
 }
 

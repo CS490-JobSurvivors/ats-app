@@ -1,21 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Alert, AppBar, Box, Link, Toolbar, Typography } from '@mui/material';
+import { Alert, AppBar, Box, Link, Toolbar, Typography, useTheme } from '@mui/material';
 import { supabase } from '../utils/supabaseClient';
 import { logout } from '../api/logout';
 
-const navLinkSx = {
-  fontSize: '1.75rem',
-  fontWeight: 700,
-  textDecoration: 'underline',
-  color: '#937ab8',
-  '&.active': { color: '#c9bddb' },
-  '&:hover': { color: '#ae9cc9' },
-};
-
 const NavigationBar = () => {
+  const theme = useTheme();
   const [session, setSession] = useState<boolean>(false);
   const [signoutError, setSignoutError] = useState<boolean>(false);
+
+  const navLinkSx = {
+    fontSize: '1rem',
+    fontWeight: 600,
+    color: '#a8a29e', // no exact theme token; text.secondary (#78716c) is darker, may hurt readability on dark AppBar
+    '&.active': { color: theme.palette.background.default },
+    '&:hover': { color: theme.palette.primary.light },
+  };
 
   const handleLogout = async () => {
     try {
@@ -34,16 +34,18 @@ const NavigationBar = () => {
   }, []);
 
   return (
-    <AppBar position="static" sx={{ backgroundColor: '#302442', boxShadow: 'none' }}>
+    <AppBar position="static">
       <Toolbar sx={{ px: 4 }}>
         <Typography
-          variant="h5"
-          sx={{ fontWeight: 700, color: '#c9bddb', letterSpacing: '0.05em' }}
+          variant="h6"
+          sx={{
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+            color: theme.palette.background.default, // matches old #faf7f2 exactly
+          }}
         >
-          ATS
+          JobSurvivors
         </Typography>
-
-        {/* Centered nav links — auth only */}
         <Box
           sx={{
             display: 'flex',
@@ -54,30 +56,27 @@ const NavigationBar = () => {
           }}
         >
           {signoutError && <Alert severity="error">Error during signing out</Alert>}
-
           {session && (
             <>
-              <Link component={NavLink} to="/" underline="always" sx={navLinkSx}>
+              <Link component={NavLink} to="/" sx={navLinkSx}>
                 Dashboard
               </Link>
-              <Link component={NavLink} to="/profile" underline="always" sx={navLinkSx}>
+              <Link component={NavLink} to="/profile" sx={navLinkSx}>
                 Profile
               </Link>
-              <Link component={NavLink} to="/settings" underline="always" sx={navLinkSx}>
+              <Link component={NavLink} to="/settings" sx={navLinkSx}>
                 Settings
               </Link>
             </>
           )}
         </Box>
-
-        {/* Right side */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
           {!session ? (
             <>
-              <Link component={NavLink} to="/login" underline="always" sx={navLinkSx}>
+              <Link component={NavLink} to="/login" sx={navLinkSx}>
                 Login
               </Link>
-              <Link component={NavLink} to="/signup" underline="always" sx={navLinkSx}>
+              <Link component={NavLink} to="/signup" sx={navLinkSx}>
                 Sign Up
               </Link>
             </>
@@ -85,7 +84,6 @@ const NavigationBar = () => {
             <Link
               component="button"
               onClick={handleLogout}
-              underline="always"
               sx={{ ...navLinkSx, background: 'none', border: 'none', cursor: 'pointer' }}
             >
               Sign Out
