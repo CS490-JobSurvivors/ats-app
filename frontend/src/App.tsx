@@ -8,11 +8,17 @@ import ProfilePage from './pages/profilePage';
 import SettingsPage from './pages/settingsPage';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
+import AppShell from './components/appShell';
 
 function App() {
   return (
     <Router>
+      <AppShell />
       <Routes>
+        <Route path="*" element={<ErrorPage />} />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/signup" element={<SignupPage />} />
+
         <Route
           path="/"
           element={
@@ -21,8 +27,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
         <Route
           path="/profile"
           element={
@@ -41,7 +45,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="*" element={<ErrorPage />} />
       </Routes>
     </Router>
   );
