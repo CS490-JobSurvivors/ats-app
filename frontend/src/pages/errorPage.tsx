@@ -14,10 +14,7 @@ const ErrorPage = () => {
           textAlign: 'center',
         }}
       >
-        <Typography variant="overline" color="text.secondary" fontWeight={700}>
-          404
-        </Typography>
-        <Typography variant="h3" fontWeight={700} mt={1} mb={2}>
+        <Typography variant="h3" fontWeight={700} mb={2}>
           Page not found
         </Typography>
         <Typography color="text.secondary" mb={4}>
