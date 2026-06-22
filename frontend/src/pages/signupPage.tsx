@@ -16,6 +16,7 @@ import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { signupApi } from '../api/signup';
+import { validatePassword } from '../components/validatePassword';
 
 const SignupPage = () => {
   const [email, setEmail] = useState('');
@@ -45,6 +46,13 @@ const SignupPage = () => {
       setErrorMessage('Passwords Dont Match');
       return;
     }
+    if (!validatePassword(password)) {
+      setErrorMessage(
+        'Invalid Password. Must be 8–20 characters and include an uppercase letter, lowercase letter, number, and special character.'
+      );
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage('');
     const { data, error } = await supabase.auth.signUp({

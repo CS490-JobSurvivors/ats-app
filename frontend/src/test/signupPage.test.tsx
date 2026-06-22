@@ -32,7 +32,8 @@ const mockSignupApi = signupApi as jest.Mock;
 
 // Named test data to avoid magic values scattered across tests.
 const EMAIL = 'test@test.com';
-const PASSWORD = 'password123';
+// Must satisfy validatePassword: 8–20 chars with upper, lower, digit, and special char.
+const PASSWORD = 'Password123!';
 const ACCESS_TOKEN = 'test-token';
 
 /** Fills the signup form fields. Pass an explicit confirm value to mismatch. */
