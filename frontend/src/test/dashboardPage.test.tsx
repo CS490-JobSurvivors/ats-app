@@ -77,6 +77,54 @@ describe('DashboardPage', () => {
     expect(screen.getAllByText('1')).toHaveLength(2);
   });
 
+  it('filters jobs by title, company, and description as the user searches', async () => {
+    mockListJobs.mockResolvedValue([
+      sampleJob,
+      {
+        ...sampleJob,
+        job_id: 'job-2',
+        company_name: 'Design Co',
+        job_title: 'Product Designer',
+        job_description: 'Own the mobile experience',
+      },
+      {
+        ...sampleJob,
+        job_id: 'job-3',
+        company_name: 'DataWorks',
+        job_title: 'Analytics Engineer',
+        job_description: 'Build warehouse models',
+      },
+    ]);
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('Software Engineer')).toBeInTheDocument();
+    const searchInput = screen.getByLabelText(/search jobs/i);
+
+    await userEvent.type(searchInput, 'design');
+    expect(screen.getByText('Product Designer')).toBeInTheDocument();
+    expect(screen.queryByText('Software Engineer')).not.toBeInTheDocument();
+
+    await userEvent.clear(searchInput);
+    await userEvent.type(searchInput, 'dataworks');
+    expect(screen.getByText('Analytics Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Product Designer')).not.toBeInTheDocument();
+
+    await userEvent.clear(searchInput);
+    await userEvent.type(searchInput, 'warehouse');
+    expect(screen.getByText('Analytics Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Software Engineer')).not.toBeInTheDocument();
+  });
+
+  it('shows a search empty state when no jobs match the query', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    render(<DashboardPage />);
+
+    await userEvent.type(await screen.findByLabelText(/search jobs/i), 'nomatch');
+
+    expect(screen.getByText(/no applications match your search/i)).toBeInTheDocument();
+    expect(screen.queryByText('Software Engineer')).not.toBeInTheDocument();
+  });
+
   it('opens the create dialog when "New Application" is clicked', async () => {
     render(<DashboardPage />);
     await userEvent.click(await screen.findByRole('button', { name: /new application/i }));
