@@ -8,6 +8,8 @@ export interface JobRecord {
   job_title: string;
   job_description: string;
   application_link?: string | null;
+  job_location?: string | null;
+  deadline?: string | null;
   job_stage: JobStage;
   job_poster_id: string;
   updated_at: string;
@@ -19,6 +21,8 @@ export interface JobPayload {
   job_title: string;
   job_description: string;
   application_link?: string | null;
+  job_location?: string | null;
+  deadline?: string | null;
   job_stage?: JobStage;
 }
 

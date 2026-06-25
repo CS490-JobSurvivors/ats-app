@@ -33,6 +33,8 @@ const emptyForm: JobPayload = {
   job_title: '',
   job_description: '',
   application_link: '',
+  job_location: '',
+  deadline: '',
   job_stage: 'Interested',
 };
 
@@ -50,6 +52,8 @@ const JobFormDialog = ({ open, job, onClose, onSubmit }: JobFormDialogProps) => 
               job_title: job.job_title,
               job_description: job.job_description,
               application_link: job.application_link || '',
+              job_location: job.job_location || '',
+              deadline: job.deadline || '',
               job_stage: job.job_stage,
             }
           : emptyForm
@@ -112,6 +116,20 @@ const JobFormDialog = ({ open, job, onClose, onSubmit }: JobFormDialogProps) => 
             value={form.application_link || ''}
             onChange={(e) => updateField('application_link', e.target.value)}
             fullWidth
+          />
+          <TextField
+            label="Location"
+            value={form.job_location || ''}
+            onChange={(e) => updateField('job_location', e.target.value)}
+            fullWidth
+          />
+          <TextField
+            label="Application deadline"
+            type="date"
+            value={form.deadline || ''}
+            onChange={(e) => updateField('deadline', e.target.value)}
+            fullWidth
+            InputLabelProps={{ shrink: true }}
           />
           <TextField
             select

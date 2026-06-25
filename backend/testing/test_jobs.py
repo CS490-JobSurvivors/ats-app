@@ -76,6 +76,8 @@ def create_job_payload(company: str = "Acme"):
         "job_title": "Software Engineer",
         "job_description": "Build and maintain product features.",
         "application_link": "https://example.com/jobs/software-engineer",
+        "job_location": "Remote",
+        "deadline": "2026-07-15",
     }
 
 
@@ -97,6 +99,8 @@ def test_create_job_assigns_authenticated_user_as_owner():
     assert response.status_code == 201
     body = response.json()
     assert body["company_name"] == "Acme"
+    assert body["job_location"] == "Remote"
+    assert body["deadline"] == "2026-07-15"
     assert body["job_stage"] == "Interested"
     assert body["job_poster_id"] == user_id
 
@@ -152,9 +156,16 @@ def test_update_job_only_updates_owned_jobs():
     set_authenticated_user(owner_id)
     update_response = client.patch(
         f"/jobs/{job_id}",
-        json={"job_title": "Senior Software Engineer", "job_stage": "Interview"},
+        json={
+            "job_title": "Senior Software Engineer",
+            "job_stage": "Interview",
+            "job_location": "New York",
+            "deadline": "2026-08-01",
+        },
     )
 
     assert update_response.status_code == 200
     assert update_response.json()["job_title"] == "Senior Software Engineer"
     assert update_response.json()["job_stage"] == "Interview"
+    assert update_response.json()["job_location"] == "New York"
+    assert update_response.json()["deadline"] == "2026-08-01"
