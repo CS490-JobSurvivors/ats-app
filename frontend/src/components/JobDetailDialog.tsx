@@ -85,10 +85,10 @@ const JobDetailDialog = ({ open, job, onClose, onEdit, onDelete }: JobDetailDial
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-        <Button onClick={onDelete} color="error">
+        <Button onClick={onDelete} color="error" sx={{ mr: 'auto' }}>
           Delete
         </Button>
+        <Button onClick={onClose}>Close</Button>
         <Button onClick={onEdit} variant="contained">
           Edit
         </Button>

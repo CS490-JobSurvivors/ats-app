@@ -135,6 +135,8 @@ describe('DashboardPage', () => {
     await userEvent.click(deleteButtons[deleteButtons.length - 1]);
     await waitFor(() => {
       expect(mockDeleteJob).toHaveBeenCalledWith('test-token', 'job-1');
+    });
+    await waitFor(() => {
       expect(screen.queryByRole('heading', { name: 'Software Engineer' })).not.toBeInTheDocument();
     });
   });
