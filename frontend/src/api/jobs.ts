@@ -62,6 +62,17 @@ export const createJob = async (accessToken: string, job: JobPayload): Promise<J
   return await response.json();
 };
 
+export const deleteJob = async (accessToken: string, jobId: string): Promise<void> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}`, {
+    method: 'DELETE',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to delete job.');
+  }
+};
+
 export const updateJob = async (
   accessToken: string,
   jobId: string,
