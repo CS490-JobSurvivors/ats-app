@@ -390,6 +390,14 @@ const DashboardPage = () => {
           openEditDialog(selectedJob!);
         }}
         onDelete={() => setConfirmDeleteOpen(true)}
+        onStageChange={async (newStage) => {
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.access_token;
+          if (!token || !selectedJob) return;
+          const updated = await updateJob(token, selectedJob.job_id, { job_stage: newStage });
+          setJobs((prev) => prev.map((j) => (j.job_id === updated.job_id ? updated : j)));
+          setSelectedJob(updated);
+        }}
       />
 
       <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
