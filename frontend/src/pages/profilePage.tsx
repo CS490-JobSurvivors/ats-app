@@ -50,7 +50,7 @@ const fieldPlaceholders: Record<ProfileFieldKey, string> = {
   phone: 'Enter your phone number',
 };
 
-const phoneRegex = /^[0-9]+$/;
+const phoneRegex = /^[0-9]{7,15}$/;
 
 const recordToFields = (r: ProfileRecord): ProfileFields => ({
   bio: r.summary,
@@ -141,8 +141,8 @@ function ProfilePage() {
     let nextValue = value;
     let errorMessage = '';
     if (field === 'phone') {
-      nextValue = value.replace(/\D/g, '');
-      if (value !== nextValue) errorMessage = 'Phone may only contain numbers.';
+      nextValue = value.replace(/\D/g, '').slice(0, 15);
+      if (value !== nextValue) errorMessage = 'Phone may only contain numbers (max 15 digits).';
     }
     setProfile((c) => ({ ...c, [field]: nextValue }));
     setFieldErrors((c) => ({ ...c, [field]: errorMessage }));
@@ -156,7 +156,7 @@ function ProfilePage() {
         const value = profile[field].trim();
         if (!value) acc[field] = `${fieldLabels[field]} is required.`;
         else if (field === 'phone' && !phoneRegex.test(value))
-          acc[field] = 'Phone may only contain numbers.';
+          acc[field] = 'Phone must be between 7 and 15 digits.';
         else acc[field] = '';
         return acc;
       },
