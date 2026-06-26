@@ -5,19 +5,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.jobs import Job
 from app.models.job_stage_history import JobStageHistory
+from app.models.jobs import Job
 from app.schemas.jobs import JobCreate, JobRead, JobUpdate
 from app.services.auth.dependencies import get_current_user
-
-FORWARD_TRANSITIONS: dict[str, set[str]] = {
-    "Interested": {"Applied", "Rejected"},
-    "Applied": {"Interview", "Rejected"},
-    "Interview": {"Offer", "Rejected"},
-    "Offer": {"Archived", "Rejected"},
-    "Rejected": set(),
-    "Archived": set(),
-}
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
@@ -98,13 +89,11 @@ def update_job(
     updates = job_update.model_dump(exclude_unset=True)
     new_stage = updates.get("job_stage")
     if new_stage and new_stage != db_job.job_stage:
-        is_override = new_stage not in FORWARD_TRANSITIONS.get(db_job.job_stage, set())
         db.add(JobStageHistory(
             job_id=db_job.job_id,
             from_stage=db_job.job_stage,
             to_stage=new_stage,
             changed_by=owner_id,
-            is_override=is_override,
         ))
 
     for field, value in updates.items():

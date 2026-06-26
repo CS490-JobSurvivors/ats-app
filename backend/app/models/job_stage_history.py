@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, String, Text, Uuid, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -10,8 +10,10 @@ from app.database import Base
 class JobStageHistory(Base):
     __tablename__ = "job_stage_histories"
 
-    history_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    job_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False)
+    job_history_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    job_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("jobs.job_id", ondelete="CASCADE"), nullable=False
+    )
     from_stage: Mapped[str] = mapped_column(String(20), nullable=False)
     to_stage: Mapped[str] = mapped_column(String(20), nullable=False)
     changed_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
@@ -20,4 +22,3 @@ class JobStageHistory(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
-    is_override: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
