@@ -16,6 +16,7 @@ import { supabase } from '../utils/supabaseClient';
 import { listJobs, createJob, updateJob, JobRecord, JobPayload, JobStage } from '../api/jobs';
 import JobCard from '../components/JobCard';
 import JobFormDialog from '../components/JobFormDialog';
+import JobDetailDialog from '../components/JobDetailDialog';
 
 const stageFilterOptions: Array<JobStage | 'All'> = [
   'All',
@@ -35,12 +36,10 @@ const toStartOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(
 
 const getDeadlineState = (deadline?: string | null): DeadlineState => {
   if (!deadline) return 'No deadline';
-
   const deadlineDate = toStartOfDay(new Date(`${deadline}T00:00:00`));
   const today = toStartOfDay(new Date());
   const dueSoonEnd = new Date(today);
   dueSoonEnd.setDate(today.getDate() + 7);
-
   if (deadlineDate < today) return 'Expired';
   if (deadlineDate <= dueSoonEnd) return 'Due soon';
   return 'Upcoming';
@@ -57,6 +56,8 @@ const DashboardPage = () => {
   const [stageFilter, setStageFilter] = useState<JobStage | 'All'>('All');
   const [locationFilter, setLocationFilter] = useState('All');
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('All');
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedJob, setSelectedJob] = useState<JobRecord | null>(null);
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -75,8 +76,6 @@ const DashboardPage = () => {
     }
   }, []);
 
-  // Fetches the logged-in user's jobs. Backend enforces auth (S1-BR-001)
-  // and filters by owner_id server-side (S1-BR-006/008) — no client-side filtering needed.
   useEffect(() => {
     fetchJobs();
   }, [fetchJobs]);
@@ -84,17 +83,17 @@ const DashboardPage = () => {
   const totalApplications = jobs.length;
   const interviewCount = jobs.filter((job) => job.job_stage === 'Interview').length;
   const offerCount = jobs.filter((job) => job.job_stage === 'Offer').length;
+
   const locationOptions = useMemo<string[]>(() => {
     const locations = jobs
       .map((job) => job.job_location?.trim())
       .filter((location): location is string => !!location);
-
     return ['All', ...Array.from(new Set(locations)).sort()];
   }, [jobs]);
+
   const deadlineFilterOptions = useMemo<DeadlineFilter[]>(() => {
     const availableStates = new Set(jobs.map((job) => getDeadlineState(job.deadline)));
     const orderedStates = deadlineStateOrder.filter((state) => availableStates.has(state));
-
     return ['All', ...orderedStates];
   }, [jobs]);
 
@@ -109,11 +108,12 @@ const DashboardPage = () => {
       setDeadlineFilter('All');
     }
   }, [deadlineFilter, deadlineFilterOptions]);
+
   const hasActiveFilters =
     stageFilter !== 'All' || locationFilter !== 'All' || deadlineFilter !== 'All';
+
   const filteredJobs = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-
     return jobs.filter(
       (job) =>
         (!normalizedQuery ||
@@ -140,6 +140,11 @@ const DashboardPage = () => {
     setStageFilter('All');
     setLocationFilter('All');
     setDeadlineFilter('All');
+  };
+
+  const openDetailDialog = (job: JobRecord) => {
+    setSelectedJob(job);
+    setDetailOpen(true);
   };
 
   const handleDialogSubmit = async (payload: JobPayload) => {
@@ -340,6 +345,7 @@ const DashboardPage = () => {
             stage={job.job_stage}
             lastActivity={new Date(job.updated_at).toLocaleDateString()}
             onEdit={() => openEditDialog(job)}
+            onClick={() => openDetailDialog(job)}
           />
         ))
       )}
@@ -349,6 +355,16 @@ const DashboardPage = () => {
         job={editingJob}
         onClose={() => setDialogOpen(false)}
         onSubmit={handleDialogSubmit}
+      />
+
+      <JobDetailDialog
+        open={detailOpen}
+        job={selectedJob}
+        onClose={() => setDetailOpen(false)}
+        onEdit={() => {
+          setDetailOpen(false);
+          openEditDialog(selectedJob!);
+        }}
       />
     </Container>
   );
