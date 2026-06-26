@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import DateTime, String, Text, Uuid
+from sqlalchemy import Date, DateTime, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -15,6 +15,8 @@ class Job(Base):
     job_title: Mapped[str] = mapped_column(Text, nullable=False)
     job_description: Mapped[str] = mapped_column(Text, nullable=False)
     application_link: Mapped[str | None] = mapped_column(Text, nullable=True)
+    job_location: Mapped[str | None] = mapped_column(Text, nullable=True)
+    deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

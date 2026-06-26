@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import SearchIcon from '@mui/icons-material/Search';
 import {
   Container,
@@ -9,11 +10,41 @@ import {
   Button,
   TextField,
   InputAdornment,
+  MenuItem,
 } from '@mui/material';
 import { supabase } from '../utils/supabaseClient';
-import { listJobs, createJob, updateJob, JobRecord, JobPayload } from '../api/jobs';
+import { listJobs, createJob, updateJob, JobRecord, JobPayload, JobStage } from '../api/jobs';
 import JobCard from '../components/JobCard';
 import JobFormDialog from '../components/JobFormDialog';
+
+const stageFilterOptions: Array<JobStage | 'All'> = [
+  'All',
+  'Interested',
+  'Applied',
+  'Interview',
+  'Offer',
+  'Rejected',
+  'Archived',
+];
+
+const deadlineStateOrder = ['No deadline', 'Due soon', 'Upcoming', 'Expired'] as const;
+type DeadlineState = (typeof deadlineStateOrder)[number];
+type DeadlineFilter = DeadlineState | 'All';
+
+const toStartOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+const getDeadlineState = (deadline?: string | null): DeadlineState => {
+  if (!deadline) return 'No deadline';
+
+  const deadlineDate = toStartOfDay(new Date(`${deadline}T00:00:00`));
+  const today = toStartOfDay(new Date());
+  const dueSoonEnd = new Date(today);
+  dueSoonEnd.setDate(today.getDate() + 7);
+
+  if (deadlineDate < today) return 'Expired';
+  if (deadlineDate <= dueSoonEnd) return 'Due soon';
+  return 'Upcoming';
+};
 
 const DashboardPage = () => {
   const [jobs, setJobs] = useState<JobRecord[]>([]);
@@ -22,6 +53,10 @@ const DashboardPage = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<JobRecord | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [stageFilter, setStageFilter] = useState<JobStage | 'All'>('All');
+  const [locationFilter, setLocationFilter] = useState('All');
+  const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('All');
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -49,16 +84,47 @@ const DashboardPage = () => {
   const totalApplications = jobs.length;
   const interviewCount = jobs.filter((job) => job.job_stage === 'Interview').length;
   const offerCount = jobs.filter((job) => job.job_stage === 'Offer').length;
+  const locationOptions = useMemo<string[]>(() => {
+    const locations = jobs
+      .map((job) => job.job_location?.trim())
+      .filter((location): location is string => !!location);
+
+    return ['All', ...Array.from(new Set(locations)).sort()];
+  }, [jobs]);
+  const deadlineFilterOptions = useMemo<DeadlineFilter[]>(() => {
+    const availableStates = new Set(jobs.map((job) => getDeadlineState(job.deadline)));
+    const orderedStates = deadlineStateOrder.filter((state) => availableStates.has(state));
+
+    return ['All', ...orderedStates];
+  }, [jobs]);
+
+  useEffect(() => {
+    if (!locationOptions.includes(locationFilter)) {
+      setLocationFilter('All');
+    }
+  }, [locationFilter, locationOptions]);
+
+  useEffect(() => {
+    if (!deadlineFilterOptions.includes(deadlineFilter)) {
+      setDeadlineFilter('All');
+    }
+  }, [deadlineFilter, deadlineFilterOptions]);
+  const hasActiveFilters =
+    stageFilter !== 'All' || locationFilter !== 'All' || deadlineFilter !== 'All';
   const filteredJobs = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
-    if (!normalizedQuery) return jobs;
 
-    return jobs.filter((job) =>
-      [job.job_title, job.company_name, job.job_description].some((value) =>
-        (value ?? '').toLowerCase().includes(normalizedQuery)
-      )
+    return jobs.filter(
+      (job) =>
+        (!normalizedQuery ||
+          [job.job_title, job.company_name, job.job_description].some((value) =>
+            (value ?? '').toLowerCase().includes(normalizedQuery)
+          )) &&
+        (stageFilter === 'All' || job.job_stage === stageFilter) &&
+        (locationFilter === 'All' || job.job_location?.trim() === locationFilter) &&
+        (deadlineFilter === 'All' || getDeadlineState(job.deadline) === deadlineFilter)
     );
-  }, [jobs, searchQuery]);
+  }, [deadlineFilter, jobs, locationFilter, searchQuery, stageFilter]);
 
   const openCreateDialog = () => {
     setEditingJob(null);
@@ -68,6 +134,12 @@ const DashboardPage = () => {
   const openEditDialog = (job: JobRecord) => {
     setEditingJob(job);
     setDialogOpen(true);
+  };
+
+  const clearFilters = () => {
+    setStageFilter('All');
+    setLocationFilter('All');
+    setDeadlineFilter('All');
   };
 
   const handleDialogSubmit = async (payload: JobPayload) => {
@@ -149,11 +221,80 @@ const DashboardPage = () => {
               ),
             }}
           />
+          <Button
+            variant="outlined"
+            startIcon={<FilterListIcon />}
+            onClick={() => setFiltersOpen((open) => !open)}
+          >
+            Filters
+          </Button>
         </Box>
         <Button variant="contained" onClick={openCreateDialog}>
           New Application
         </Button>
       </Box>
+
+      {filtersOpen && (
+        <Paper
+          elevation={0}
+          sx={{
+            p: 2,
+            mb: 3,
+            border: '1px solid',
+            borderColor: 'divider',
+            display: 'flex',
+            gap: 2,
+            flexWrap: 'wrap',
+            alignItems: 'center',
+          }}
+        >
+          <TextField
+            select
+            label="Stage"
+            size="small"
+            value={stageFilter}
+            onChange={(event) => setStageFilter(event.target.value as JobStage | 'All')}
+            sx={{ minWidth: 180 }}
+          >
+            {stageFilterOptions.map((stage) => (
+              <MenuItem key={stage} value={stage}>
+                {stage === 'All' ? 'All stages' : stage}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Location"
+            size="small"
+            value={locationFilter}
+            onChange={(event) => setLocationFilter(event.target.value)}
+            sx={{ minWidth: 180 }}
+          >
+            {locationOptions.map((location) => (
+              <MenuItem key={location} value={location}>
+                {location === 'All' ? 'All locations' : location}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label="Deadline"
+            size="small"
+            value={deadlineFilter}
+            onChange={(event) => setDeadlineFilter(event.target.value as DeadlineFilter)}
+            sx={{ minWidth: 180 }}
+          >
+            {deadlineFilterOptions.map((deadline) => (
+              <MenuItem key={deadline} value={deadline}>
+                {deadline === 'All' ? 'All deadlines' : deadline}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Button variant="text" onClick={clearFilters} disabled={!hasActiveFilters}>
+            Clear filters
+          </Button>
+        </Paper>
+      )}
 
       {errorMessage && (
         <Alert severity="error" sx={{ mb: 2 }}>
@@ -184,7 +325,11 @@ const DashboardPage = () => {
             textAlign: 'center',
           }}
         >
-          <Typography color="text.secondary">No applications match your search.</Typography>
+          <Typography color="text.secondary">
+            {hasActiveFilters
+              ? 'No applications match your filters.'
+              : 'No applications match your search.'}
+          </Typography>
         </Box>
       ) : (
         filteredJobs.map((job) => (

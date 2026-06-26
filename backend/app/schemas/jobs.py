@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
@@ -12,6 +12,8 @@ class JobBase(BaseModel):
     job_title: str = Field(..., min_length=1)
     job_description: str = Field(..., min_length=1)
     application_link: str | None = None
+    job_location: str | None = None
+    deadline: date | None = None
     job_stage: JobStage = "Interested"
 
 
@@ -24,6 +26,8 @@ class JobUpdate(BaseModel):
     job_title: str | None = Field(default=None, min_length=1)
     job_description: str | None = Field(default=None, min_length=1)
     application_link: str | None = None
+    job_location: str | None = None
+    deadline: date | None = None
     job_stage: JobStage | None = None
 
 
