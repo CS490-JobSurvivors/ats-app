@@ -95,6 +95,15 @@ describe('ProfilePage', () => {
     expect(screen.getByText(/city is required/i)).toBeInTheDocument();
   });
 
+  test('caps bio input at 500 characters', () => {
+    render(<ProfilePage />);
+
+    const longText = 'a'.repeat(501);
+    fireEvent.change(screen.getByLabelText(/about/i), { target: { value: longText } });
+
+    expect(screen.getByLabelText(/about/i)).toHaveValue('a'.repeat(500));
+  });
+
   test('caps phone input at 15 digits', () => {
     render(<ProfilePage />);
 

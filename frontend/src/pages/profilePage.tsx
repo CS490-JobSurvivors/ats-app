@@ -140,7 +140,9 @@ function ProfilePage() {
   const updateField = (field: ProfileFieldKey, value: string) => {
     let nextValue = value;
     let errorMessage = '';
-    if (field === 'phone') {
+    if (field === 'bio') {
+      nextValue = value.slice(0, 500);
+    } else if (field === 'phone') {
       nextValue = value.replace(/\D/g, '').slice(0, 15);
       if (value !== nextValue) errorMessage = 'Phone may only contain numbers (max 15 digits).';
     }
@@ -251,6 +253,8 @@ function ProfilePage() {
             multiline
             rows={4}
             fullWidth
+            inputProps={{ maxLength: 500 }}
+            helperText={`${profile.bio.length}/500`}
           />
           {fieldErrors.bio && (
             <Alert severity="error" sx={{ mt: 0.5 }}>
