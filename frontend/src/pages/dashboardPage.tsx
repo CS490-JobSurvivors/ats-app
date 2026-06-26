@@ -209,12 +209,20 @@ const DashboardPage = () => {
     setDetailOpen(false);
   };
 
+  const handleDetailSave = async (payload: JobPayload) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error('No active session.');
+    const updated = await updateJob(token, selectedJob.job_id, payload);
+    setJobs((prev) => prev.map((j) => (j.job_id === updated.job_id ? updated : j)));
+    setSelectedJob(updated);
+  };
+
   const handleDialogSubmit = async (payload: JobPayload) => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) {
-      throw new Error('No active session.');
-    }
+    if (!token) throw new Error('No active session.');
     if (editingJob) {
       await updateJob(token, editingJob.job_id, payload);
     } else {
@@ -449,10 +457,7 @@ const DashboardPage = () => {
         open={detailOpen}
         job={selectedJob}
         onClose={() => setDetailOpen(false)}
-        onEdit={() => {
-          setDetailOpen(false);
-          openEditDialog(selectedJob!);
-        }}
+        onSave={handleDetailSave}
         onDelete={() => setConfirmDeleteOpen(true)}
         onStageChange={async (newStage) => {
           const { data } = await supabase.auth.getSession();

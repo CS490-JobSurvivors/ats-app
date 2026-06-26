@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -13,8 +13,9 @@ import {
   Select,
   FormControl,
   InputLabel,
+  TextField,
 } from '@mui/material';
-import { JobRecord, JobStage } from '../api/jobs';
+import { JobRecord, JobPayload, JobStage } from '../api/jobs';
 import { stageColors } from '../utils/stageColors';
 import { FORWARD_TRANSITIONS, isForwardTransition } from '../utils/stageTransitions';
 
@@ -31,8 +32,8 @@ interface JobDetailDialogProps {
   open: boolean;
   job: JobRecord | null;
   onClose: () => void;
-  onEdit: () => void;
   onDelete: () => void;
+  onSave: (payload: JobPayload) => Promise<void>;
   onStageChange: (newStage: JobStage) => void;
 }
 
@@ -40,11 +41,33 @@ const JobDetailDialog = ({
   open,
   job,
   onClose,
-  onEdit,
   onDelete,
+  onSave,
   onStageChange,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState({
+    job_title: '',
+    company_name: '',
+    job_description: '',
+    application_link: '',
+  });
+  const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    if (job) {
+      setForm({
+        job_title: job.job_title,
+        company_name: job.company_name,
+        job_description: job.job_description,
+        application_link: job.application_link || '',
+      });
+    }
+    setIsEditing(false);
+    setErrorMessage('');
+  }, [job, open]);
 
   if (!job) return null;
 
@@ -64,112 +87,199 @@ const JobDetailDialog = ({
     setPendingStage(null);
   };
 
+  const handleSave = async () => {
+    if (!form.job_title.trim() || !form.company_name.trim() || !form.job_description.trim()) {
+      setErrorMessage('Company, title, and description are required.');
+      return;
+    }
+    setIsSaving(true);
+    setErrorMessage('');
+    try {
+      await onSave({
+        job_title: form.job_title.trim(),
+        company_name: form.company_name.trim(),
+        job_description: form.job_description.trim(),
+        application_link: form.application_link.trim() || null,
+      });
+      setIsEditing(false);
+    } catch {
+      setErrorMessage('Unable to save. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6">{job.job_title}</Typography>
+            <Typography variant="h6">{isEditing ? 'Edit Job' : job.job_title}</Typography>
             <Chip
               label={job.job_stage}
               size="small"
               sx={{ color: stageStyle.color, bgcolor: stageStyle.bgcolor, fontWeight: 600 }}
             />
           </Box>
-          <Typography variant="body2" color="text.secondary">
-            {job.company_name}
-          </Typography>
+          {!isEditing && (
+            <Typography variant="body2" color="text.secondary">
+              {job.company_name}
+            </Typography>
+          )}
         </DialogTitle>
 
         <DialogContent>
           <Divider sx={{ mb: 2 }} />
 
-          <FormControl size="small" sx={{ mb: 2, minWidth: 180 }}>
-            <InputLabel>Stage</InputLabel>
-            <Select
-              value={job.job_stage}
-              label="Stage"
-              onChange={(e) => handleStageSelect(e.target.value as JobStage)}
-              renderValue={(value) => {
-                const s = stageColors[value] ?? { color: '#424242', bgcolor: '#F5F5F5' };
-                return (
-                  <Chip
-                    label={value}
-                    size="small"
-                    sx={{ color: s.color, bgcolor: s.bgcolor, fontWeight: 600 }}
-                  />
-                );
-              }}
-            >
-              {ALL_STAGES.map((stage) => {
-                const s = stageColors[stage] ?? { color: '#424242', bgcolor: '#F5F5F5' };
-                const isForward = FORWARD_TRANSITIONS[job.job_stage].includes(stage);
-                const isCurrent = stage === job.job_stage;
-                return (
-                  <MenuItem key={stage} value={stage} disabled={isCurrent}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: s.color }} />
-                      <Typography variant="body2">{stage}</Typography>
-                      {!isCurrent && !isForward && (
-                        <Typography variant="caption" color="warning.main">
-                          ⚠ non-standard
-                        </Typography>
-                      )}
-                    </Box>
-                  </MenuItem>
-                );
-              })}
-            </Select>
-          </FormControl>
+          {!isEditing && (
+            <FormControl size="small" sx={{ mb: 2, minWidth: 180 }}>
+              <InputLabel>Stage</InputLabel>
+              <Select
+                value={job.job_stage}
+                label="Stage"
+                onChange={(e) => handleStageSelect(e.target.value as JobStage)}
+                renderValue={(value) => {
+                  const s = stageColors[value] ?? { color: '#424242', bgcolor: '#F5F5F5' };
+                  return (
+                    <Chip
+                      label={value}
+                      size="small"
+                      sx={{ color: s.color, bgcolor: s.bgcolor, fontWeight: 600 }}
+                    />
+                  );
+                }}
+              >
+                {ALL_STAGES.map((stage) => {
+                  const s = stageColors[stage] ?? { color: '#424242', bgcolor: '#F5F5F5' };
+                  const isForward = FORWARD_TRANSITIONS[job.job_stage].includes(stage);
+                  const isCurrent = stage === job.job_stage;
+                  return (
+                    <MenuItem key={stage} value={stage} disabled={isCurrent}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box
+                          sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: s.color }}
+                        />
+                        <Typography variant="body2">{stage}</Typography>
+                        {!isCurrent && !isForward && (
+                          <Typography variant="caption" color="warning.main">
+                            ⚠ non-standard
+                          </Typography>
+                        )}
+                      </Box>
+                    </MenuItem>
+                  );
+                })}
+              </Select>
+            </FormControl>
+          )}
 
-          <Typography variant="subtitle2" gutterBottom>
-            Job Description
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2, whiteSpace: 'pre-wrap' }}>
-            {job.job_description}
-          </Typography>
+          {errorMessage && (
+            <Typography color="error" variant="body2" sx={{ mb: 2 }}>
+              {errorMessage}
+            </Typography>
+          )}
 
-          {job.application_link && (
-            <Box sx={{ mb: 2 }}>
+          {isEditing ? (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <TextField
+                label="Job Title"
+                value={form.job_title}
+                onChange={(e) => setForm((f) => ({ ...f, job_title: e.target.value }))}
+                fullWidth
+                required
+              />
+              <TextField
+                label="Company"
+                value={form.company_name}
+                onChange={(e) => setForm((f) => ({ ...f, company_name: e.target.value }))}
+                fullWidth
+                required
+              />
+              <TextField
+                label="Description"
+                value={form.job_description}
+                onChange={(e) => setForm((f) => ({ ...f, job_description: e.target.value }))}
+                fullWidth
+                required
+                multiline
+                rows={4}
+              />
+              <TextField
+                label="Application Link"
+                value={form.application_link}
+                onChange={(e) => setForm((f) => ({ ...f, application_link: e.target.value }))}
+                fullWidth
+              />
+            </Box>
+          ) : (
+            <>
               <Typography variant="subtitle2" gutterBottom>
-                Application Link
+                Job Description
               </Typography>
               <Typography
                 variant="body2"
-                component="a"
-                href={job.application_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                sx={{ color: '#1565C0' }}
+                color="text.secondary"
+                sx={{ mb: 2, whiteSpace: 'pre-wrap' }}
               >
-                {job.application_link}
+                {job.job_description}
               </Typography>
-            </Box>
+
+              {job.application_link && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Application Link
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    component="a"
+                    href={job.application_link}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    sx={{ color: '#1565C0' }}
+                  >
+                    {job.application_link}
+                  </Typography>
+                </Box>
+              )}
+
+              <Divider sx={{ mb: 2 }} />
+
+              <Typography variant="subtitle2" gutterBottom>
+                Activity
+              </Typography>
+              <Box sx={{ pl: 1 }}>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Created: {new Date(job.created_at).toLocaleDateString()}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" display="block">
+                  Last updated: {new Date(job.updated_at).toLocaleDateString()}
+                </Typography>
+              </Box>
+            </>
           )}
-
-          <Divider sx={{ mb: 2 }} />
-
-          <Typography variant="subtitle2" gutterBottom>
-            Activity
-          </Typography>
-          <Box sx={{ pl: 1 }}>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Created: {new Date(job.created_at).toLocaleDateString()}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block">
-              Last updated: {new Date(job.updated_at).toLocaleDateString()}
-            </Typography>
-          </Box>
         </DialogContent>
 
         <DialogActions>
           <Button onClick={onDelete} color="error" sx={{ mr: 'auto' }}>
             Delete
           </Button>
-          <Button onClick={onClose}>Close</Button>
-          <Button onClick={onEdit} variant="contained">
-            Edit
-          </Button>
+          {isEditing ? (
+            <>
+              <Button onClick={() => setIsEditing(false)} disabled={isSaving}>
+                Cancel
+              </Button>
+              <Button onClick={handleSave} variant="contained" disabled={isSaving}>
+                {isSaving ? 'Saving...' : 'Save'}
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={onClose}>Close</Button>
+              <Button onClick={() => setIsEditing(true)} variant="contained">
+                Edit
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
 
