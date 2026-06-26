@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.main import app
+from app.models.job_stage_history import JobStageHistory
 from app.models.jobs import Job
 from app.services.auth.dependencies import get_current_user
 
@@ -24,15 +25,16 @@ class FakeScalarResult:
 
 
 class FakeDb:
-    def add(self, job: Job):
-        if job.job_id is None:
-            job.job_id = uuid4()
-        if job.created_at is None:
-            job.created_at = datetime.now(UTC)
-        if job.updated_at is None:
-            job.updated_at = datetime.now(UTC)
-
-        jobs.append(job)
+    def add(self, obj: Job | JobStageHistory):
+        if isinstance(obj, JobStageHistory):
+            return
+        if obj.job_id is None:
+            obj.job_id = uuid4()
+        if obj.created_at is None:
+            obj.created_at = datetime.now(UTC)
+        if obj.updated_at is None:
+            obj.updated_at = datetime.now(UTC)
+        jobs.append(obj)
 
     def commit(self):
         return None
