@@ -40,3 +40,10 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+
+# Claude Code
+.claude/*
+
+# Project Runners
+.testProject.sh
+.testProject.ps1

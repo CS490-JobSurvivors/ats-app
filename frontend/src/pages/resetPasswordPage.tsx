@@ -16,6 +16,7 @@ import {
 } from '@mui/material';
 import { Visibility, VisibilityOff } from '@mui/icons-material';
 import { supabase } from '../utils/supabaseClient';
+import { validatePassword } from '../components/validatePassword';
 
 const parseHashError = () => {
   const params = new URLSearchParams(window.location.hash.substring(1));
@@ -38,7 +39,9 @@ const ResetPasswordPage = () => {
 
   const validate = () => {
     const next: Record<string, string> = {};
-    if (password.length < 8) next.password = 'Password must be at least 8 characters.';
+    if (!validatePassword(password))
+      next.password =
+        'Invalid Password. Must be 8–20 characters and include an uppercase letter, lowercase letter, number, and special character.';
     if (password !== confirm) next.confirm = 'Passwords do not match.';
     setErrors(next);
     return Object.keys(next).length === 0;

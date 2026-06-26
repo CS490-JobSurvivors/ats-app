@@ -24,7 +24,8 @@ jest.mock('../utils/supabaseClient', () => ({
 
 const mockUpdateUser = supabase.auth.updateUser as jest.Mock;
 
-const VALID_PASSWORD = 'newpassword123';
+// Must satisfy validatePassword: 8–20 chars with upper, lower, digit, and special char.
+const VALID_PASSWORD = 'Newpassword123!';
 
 const EXPIRED_HASH =
   '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired';
@@ -90,7 +91,7 @@ describe('ResetPasswordPage', () => {
 
       await fillAndSubmit('short');
 
-      expect(await screen.findByText(/at least 8 characters/i)).toBeInTheDocument();
+      expect(await screen.findByText(/invalid password/i)).toBeInTheDocument();
       expect(mockUpdateUser).not.toHaveBeenCalled();
     });
 
