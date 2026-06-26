@@ -95,6 +95,35 @@ describe('ProfilePage', () => {
     expect(screen.getByText(/city is required/i)).toBeInTheDocument();
   });
 
+  test('caps bio input at 500 characters', () => {
+    render(<ProfilePage />);
+
+    const longText = 'a'.repeat(501);
+    fireEvent.change(screen.getByLabelText(/about/i), { target: { value: longText } });
+
+    expect(screen.getByLabelText(/about/i)).toHaveValue('a'.repeat(500));
+  });
+
+  test('caps phone input at 15 digits', () => {
+    render(<ProfilePage />);
+
+    fireEvent.change(screen.getByLabelText(/phone/i), {
+      target: { value: '1234567890123456' },
+    });
+
+    expect(screen.getByLabelText(/phone/i)).toHaveValue('123456789012345');
+  });
+
+  test('shows error on save when phone is fewer than 7 digits', async () => {
+    render(<ProfilePage />);
+    fillProfileForm();
+
+    fireEvent.change(screen.getByLabelText(/phone/i), { target: { value: '123' } });
+    fireEvent.click(screen.getByRole('button', { name: /save profile/i }));
+
+    expect(await screen.findByText(/phone must be between 7 and 15 digits/i)).toBeInTheDocument();
+  });
+
   test('shows profile view when context already has a saved profile', () => {
     mockUseProfile.mockReturnValue({
       profile: {
