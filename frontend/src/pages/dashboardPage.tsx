@@ -1,5 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Container, Typography, Box, Paper, Alert, Button } from '@mui/material';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import SearchIcon from '@mui/icons-material/Search';
+import {
+  Container,
+  Typography,
+  Box,
+  Paper,
+  Alert,
+  Button,
+  TextField,
+  InputAdornment,
+} from '@mui/material';
 import { supabase } from '../utils/supabaseClient';
 import { listJobs, createJob, updateJob, JobRecord, JobPayload } from '../api/jobs';
 import JobCard from '../components/JobCard';
@@ -11,6 +21,7 @@ const DashboardPage = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<JobRecord | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -38,6 +49,16 @@ const DashboardPage = () => {
   const totalApplications = jobs.length;
   const interviewCount = jobs.filter((job) => job.job_stage === 'Interview').length;
   const offerCount = jobs.filter((job) => job.job_stage === 'Offer').length;
+  const filteredJobs = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    if (!normalizedQuery) return jobs;
+
+    return jobs.filter((job) =>
+      [job.job_title, job.company_name, job.job_description].some((value) =>
+        (value ?? '').toLowerCase().includes(normalizedQuery)
+      )
+    );
+  }, [jobs, searchQuery]);
 
   const openCreateDialog = () => {
     setEditingJob(null);
@@ -100,10 +121,35 @@ const DashboardPage = () => {
         </Paper>
       </Box>
 
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-        <Typography variant="h6" fontWeight={600}>
-          Recent Applications
-        </Typography>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: { xs: 'stretch', sm: 'center' },
+          gap: 2,
+          mb: 2,
+          flexDirection: { xs: 'column', sm: 'row' },
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+          <Typography variant="h6" fontWeight={600}>
+            Recent Applications
+          </Typography>
+          <TextField
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            label="Search jobs"
+            size="small"
+            sx={{ minWidth: { xs: '100%', sm: 280 } }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
+        </Box>
         <Button variant="contained" onClick={openCreateDialog}>
           New Application
         </Button>
@@ -128,8 +174,20 @@ const DashboardPage = () => {
         >
           <Typography color="text.secondary">No recent applications.</Typography>
         </Box>
+      ) : filteredJobs.length === 0 && !errorMessage ? (
+        <Box
+          sx={{
+            p: 3,
+            border: '1px dashed',
+            borderColor: 'divider',
+            borderRadius: 2,
+            textAlign: 'center',
+          }}
+        >
+          <Typography color="text.secondary">No applications match your search.</Typography>
+        </Box>
       ) : (
-        jobs.map((job) => (
+        filteredJobs.map((job) => (
           <JobCard
             key={job.job_id}
             title={job.job_title}
