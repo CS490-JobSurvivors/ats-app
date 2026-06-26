@@ -17,6 +17,7 @@ const mockJob: JobRecord = {
 
 const mockOnClose = jest.fn();
 const mockOnEdit = jest.fn();
+const mockOnDelete = jest.fn();
 
 describe('JobDetailDialog', () => {
   beforeEach(() => {
@@ -24,7 +25,15 @@ describe('JobDetailDialog', () => {
   });
 
   it('renders job details when open', () => {
-    render(<JobDetailDialog open={true} job={mockJob} onClose={mockOnClose} onEdit={mockOnEdit} />);
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
     expect(screen.getByText('Software Engineer')).toBeInTheDocument();
     expect(screen.getByText('Acme Corp')).toBeInTheDocument();
     expect(screen.getByText('Applied')).toBeInTheDocument();
@@ -32,33 +41,83 @@ describe('JobDetailDialog', () => {
   });
 
   it('renders application link when provided', () => {
-    render(<JobDetailDialog open={true} job={mockJob} onClose={mockOnClose} onEdit={mockOnEdit} />);
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
     expect(screen.getByText('https://acme.com/jobs/1')).toBeInTheDocument();
   });
 
   it('does not render application link when not provided', () => {
     const jobNoLink = { ...mockJob, application_link: null };
     render(
-      <JobDetailDialog open={true} job={jobNoLink} onClose={mockOnClose} onEdit={mockOnEdit} />
+      <JobDetailDialog
+        open={true}
+        job={jobNoLink}
+        onClose={mockOnClose}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
     );
     expect(screen.queryByText('Application Link')).not.toBeInTheDocument();
   });
 
   it('calls onClose when Close button is clicked', () => {
-    render(<JobDetailDialog open={true} job={mockJob} onClose={mockOnClose} onEdit={mockOnEdit} />);
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
     fireEvent.click(screen.getByText('Close'));
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
   it('calls onEdit when Edit button is clicked', () => {
-    render(<JobDetailDialog open={true} job={mockJob} onClose={mockOnClose} onEdit={mockOnEdit} />);
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
     fireEvent.click(screen.getByText('Edit'));
     expect(mockOnEdit).toHaveBeenCalledTimes(1);
   });
 
+  it('calls onDelete when Delete button is clicked', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
+    );
+    fireEvent.click(screen.getByText('Delete'));
+    expect(mockOnDelete).toHaveBeenCalledTimes(1);
+  });
+
   it('renders nothing when job is null', () => {
     const { container } = render(
-      <JobDetailDialog open={true} job={null} onClose={mockOnClose} onEdit={mockOnEdit} />
+      <JobDetailDialog
+        open={true}
+        job={null}
+        onClose={mockOnClose}
+        onEdit={mockOnEdit}
+        onDelete={mockOnDelete}
+      />
     );
     expect(container).toBeEmptyDOMElement();
   });

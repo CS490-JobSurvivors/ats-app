@@ -50,6 +50,25 @@ def list_jobs(
     ).all()
 
 
+@router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_job(
+    job_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_job = db.scalar(select(Job).where(Job.job_id == job_id, Job.job_poster_id == owner_id))
+
+    if db_job is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
+
+    db.delete(db_job)
+    db.commit()
+
+
 @router.patch("/{job_id}", response_model=JobRead)
 def update_job(
     job_id: UUID,

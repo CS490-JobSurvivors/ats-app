@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
-import { listJobs, createJob, updateJob } from '../api/jobs';
+import { listJobs, createJob, updateJob, deleteJob } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -18,12 +18,14 @@ jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
+  deleteJob: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
 const mockCreateJob = createJob as jest.Mock;
 const mockUpdateJob = updateJob as jest.Mock;
+const mockDeleteJob = deleteJob as jest.Mock;
 
 const sampleJob = {
   job_id: 'job-1',
@@ -42,6 +44,7 @@ beforeEach(() => {
   mockListJobs.mockResolvedValue([]);
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
+  mockDeleteJob.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -112,6 +115,42 @@ describe('DashboardPage', () => {
       );
     });
     expect(mockListJobs).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows confirmation dialog when Delete is clicked in job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument();
+  });
+
+  it('calls deleteJob and removes job from list when confirmed', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockDeleteJob.mockResolvedValue(undefined);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
+    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
+    await waitFor(() => {
+      expect(mockDeleteJob).toHaveBeenCalledWith('test-token', 'job-1');
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('heading', { name: 'Software Engineer' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('does not delete job when confirmation is cancelled', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(mockDeleteJob).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.queryByText(/are you sure/i)).not.toBeVisible();
+    });
   });
 
   it('opens the edit dialog pre-filled and calls updateJob on save', async () => {

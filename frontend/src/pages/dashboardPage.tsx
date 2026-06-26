@@ -11,9 +11,21 @@ import {
   TextField,
   InputAdornment,
   MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import { supabase } from '../utils/supabaseClient';
-import { listJobs, createJob, updateJob, JobRecord, JobPayload, JobStage } from '../api/jobs';
+import {
+  listJobs,
+  createJob,
+  updateJob,
+  deleteJob,
+  JobRecord,
+  JobPayload,
+  JobStage,
+} from '../api/jobs';
 import JobCard from '../components/JobCard';
 import JobFormDialog from '../components/JobFormDialog';
 import JobDetailDialog from '../components/JobDetailDialog';
@@ -58,6 +70,7 @@ const DashboardPage = () => {
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('All');
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobRecord | null>(null);
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -145,6 +158,17 @@ const DashboardPage = () => {
   const openDetailDialog = (job: JobRecord) => {
     setSelectedJob(job);
     setDetailOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    await deleteJob(token, selectedJob.job_id);
+    setJobs((prev) => prev.filter((j) => j.job_id !== selectedJob.job_id));
+    setConfirmDeleteOpen(false);
+    setDetailOpen(false);
   };
 
   const handleDialogSubmit = async (payload: JobPayload) => {
@@ -365,7 +389,24 @@ const DashboardPage = () => {
           setDetailOpen(false);
           openEditDialog(selectedJob!);
         }}
+        onDelete={() => setConfirmDeleteOpen(true)}
       />
+
+      <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
+        <DialogTitle>Delete job?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to delete <strong>{selectedJob?.job_title}</strong> at{' '}
+            <strong>{selectedJob?.company_name}</strong>? This cannot be undone.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteOpen(false)}>Cancel</Button>
+          <Button onClick={handleDelete} color="error" variant="contained">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

@@ -17,9 +17,10 @@ interface JobDetailDialogProps {
   job: JobRecord | null;
   onClose: () => void;
   onEdit: () => void;
+  onDelete: () => void;
 }
 
-const JobDetailDialog = ({ open, job, onClose, onEdit }: JobDetailDialogProps) => {
+const JobDetailDialog = ({ open, job, onClose, onEdit, onDelete }: JobDetailDialogProps) => {
   if (!job) return null;
 
   const stageStyle = stageColors[job.job_stage] ?? { color: '#424242', bgcolor: '#F5F5F5' };
@@ -84,6 +85,9 @@ const JobDetailDialog = ({ open, job, onClose, onEdit }: JobDetailDialogProps) =
       </DialogContent>
 
       <DialogActions>
+        <Button onClick={onDelete} color="error" sx={{ mr: 'auto' }}>
+          Delete
+        </Button>
         <Button onClick={onClose}>Close</Button>
         <Button onClick={onEdit} variant="contained">
           Edit
