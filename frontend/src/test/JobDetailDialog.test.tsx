@@ -174,4 +174,21 @@ describe('JobDetailDialog', () => {
     fireEvent.click(screen.getByText('Edit'));
     expect(screen.getByDisplayValue('New York, NY')).toBeInTheDocument();
   });
+
+  it('renders deadline when provided', () => {
+    renderDialog({ ...mockJob, deadline: '2026-07-15' });
+    expect(screen.getByText(/7\/15\/2026/)).toBeInTheDocument();
+  });
+
+  it('renders recruiter notes when provided', () => {
+    renderDialog({ ...mockJob, recruiter_notes: 'Spoke with Jane from HR.' });
+    expect(screen.getByText('Spoke with Jane from HR.')).toBeInTheDocument();
+  });
+
+  it('pre-fills deadline and recruiter notes in edit form', () => {
+    renderDialog({ ...mockJob, deadline: '2026-07-15', recruiter_notes: 'Follow up Monday.' });
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.getByDisplayValue('2026-07-15')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Follow up Monday.')).toBeInTheDocument();
+  });
 });

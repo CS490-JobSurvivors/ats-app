@@ -10,6 +10,7 @@ export interface JobRecord {
   application_link?: string | null;
   job_location?: string | null;
   deadline?: string | null;
+  recruiter_notes?: string | null;
   job_stage: JobStage;
   job_poster_id: string;
   updated_at: string;
@@ -23,6 +24,7 @@ export interface JobPayload {
   application_link?: string | null;
   job_location?: string | null;
   deadline?: string | null;
+  recruiter_notes?: string | null;
   job_stage?: JobStage;
 }
 
@@ -37,11 +39,9 @@ export const listJobs = async (accessToken: string): Promise<JobRecord[]> => {
     method: 'GET',
     headers: authHeaders(accessToken),
   });
-
   if (!response.ok) {
     throw new Error('Unable to load jobs.');
   }
-
   return await response.json();
 };
 
@@ -54,11 +54,9 @@ export const createJob = async (accessToken: string, job: JobPayload): Promise<J
     },
     body: JSON.stringify(job),
   });
-
   if (!response.ok) {
     throw new Error('Unable to save job.');
   }
-
   return await response.json();
 };
 
@@ -67,7 +65,6 @@ export const deleteJob = async (accessToken: string, jobId: string): Promise<voi
     method: 'DELETE',
     headers: authHeaders(accessToken),
   });
-
   if (!response.ok) {
     throw new Error('Unable to delete job.');
   }
@@ -86,10 +83,8 @@ export const updateJob = async (
     },
     body: JSON.stringify(job),
   });
-
   if (!response.ok) {
     throw new Error('Unable to update job.');
   }
-
   return await response.json();
 };
