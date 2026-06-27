@@ -9,6 +9,7 @@ export interface ExperienceRecord {
   end_date: string | null;
   experience_description: string | null;
   is_current: boolean;
+  position_number: number;
 }
 
 export interface ExperiencePayload {
@@ -70,4 +71,16 @@ export const deleteExperience = async (
     headers: authHeaders(accessToken),
   });
   if (!response.ok) throw new Error('Unable to delete experience.');
+};
+
+export const reorderExperiences = async (
+  accessToken: string,
+  entries: Array<{ experience_id: string; position_number: number }>
+): Promise<void> => {
+  const response = await fetch(`${API_URL}/experiences/reorder`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(accessToken), 'Content-Type': 'application/json' },
+    body: JSON.stringify(entries),
+  });
+  if (!response.ok) throw new Error('Unable to reorder experiences.');
 };

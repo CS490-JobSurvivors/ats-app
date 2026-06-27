@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Boolean, Date, Text, Uuid
+from sqlalchemy import Boolean, Date, Integer, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -18,3 +18,4 @@ class Experience(Base):
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     experience_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_current: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    position_number: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

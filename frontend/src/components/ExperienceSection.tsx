@@ -1,5 +1,15 @@
 import { useState } from 'react';
 import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import {
   Box,
   Button,
   Card,
@@ -16,6 +26,7 @@ import {
   Typography,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import EditIcon from '@mui/icons-material/Edit';
 import {
   ExperienceRecord,
@@ -23,7 +34,9 @@ import {
   createExperience,
   updateExperience,
   deleteExperience,
+  reorderExperiences,
 } from '../api/experiences';
+import { useSortableList } from '../hooks/useSortableList';
 
 interface ExperienceSectionProps {
   experiences: ExperienceRecord[];
@@ -40,6 +53,65 @@ const emptyForm: ExperiencePayload = {
   is_current: false,
 };
 
+interface SortableItemProps {
+  exp: ExperienceRecord;
+  onEdit: (exp: ExperienceRecord) => void;
+  onDelete: (id: string) => void;
+}
+
+const SortableExperienceItem = ({ exp, onEdit, onDelete }: SortableItemProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: exp.experience_id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <Box ref={setNodeRef} style={style}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, flex: 1, minWidth: 0 }}>
+          <IconButton
+            size="small"
+            {...attributes}
+            {...listeners}
+            sx={{ cursor: 'grab', mt: 0.5, color: 'text.secondary', flexShrink: 0 }}
+          >
+            <DragIndicatorIcon fontSize="small" />
+          </IconButton>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="subtitle1" fontWeight={600}>
+              {exp.title}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {exp.company}
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {exp.start_date} — {exp.is_current ? 'Present' : (exp.end_date ?? '')}
+            </Typography>
+            {exp.experience_description && (
+              <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
+                {exp.experience_description}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+        <Box sx={{ flexShrink: 0 }}>
+          <IconButton size="small" onClick={() => onEdit(exp)}>
+            <EditIcon fontSize="small" />
+          </IconButton>
+          <IconButton size="small" onClick={() => onDelete(exp.experience_id)}>
+            <DeleteIcon fontSize="small" />
+          </IconButton>
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
 const ExperienceSection = ({
   experiences,
   accessToken,
@@ -51,6 +123,29 @@ const ExperienceSection = ({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+
+  const sensors = useSensors(useSensor(PointerSensor));
+
+  const handleReorder = async (reordered: ExperienceRecord[]) => {
+    onExperiencesChange(reordered);
+    try {
+      await reorderExperiences(
+        accessToken,
+        reordered.map((e) => ({
+          experience_id: e.experience_id,
+          position_number: e.position_number,
+        }))
+      );
+    } catch {
+      onExperiencesChange(experiences);
+    }
+  };
+
+  const { ids, activeId, handleDragStart, handleDragEnd } = useSortableList({
+    items: experiences,
+    idKey: 'experience_id',
+    onReorder: handleReorder,
+  });
 
   const openAdd = () => {
     setEditingId(null);
@@ -141,43 +236,35 @@ const ExperienceSection = ({
               No experience entries yet.
             </Typography>
           ) : (
-            experiences.map((exp, index) => (
-              <Box key={exp.experience_id}>
-                {index > 0 && <Divider sx={{ my: 2 }} />}
-                <Box
-                  sx={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'flex-start',
-                  }}
-                >
-                  <Box>
-                    <Typography variant="subtitle1" fontWeight={600}>
-                      {exp.title}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {exp.company}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {exp.start_date} — {exp.is_current ? 'Present' : (exp.end_date ?? '')}
-                    </Typography>
-                    {exp.experience_description && (
-                      <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>
-                        {exp.experience_description}
-                      </Typography>
-                    )}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+                {experiences.map((exp, index) => (
+                  <Box key={exp.experience_id}>
+                    {index > 0 && <Divider sx={{ my: 2 }} />}
+                    <SortableExperienceItem exp={exp} onEdit={openEdit} onDelete={handleDelete} />
                   </Box>
-                  <Box>
-                    <IconButton size="small" onClick={() => openEdit(exp)}>
-                      <EditIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={() => handleDelete(exp.experience_id)}>
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                </Box>
-              </Box>
-            ))
+                ))}
+              </SortableContext>
+              <DragOverlay>
+                {activeId
+                  ? (() => {
+                      const exp = experiences.find((e) => e.experience_id === activeId);
+                      return exp ? (
+                        <SortableExperienceItem
+                          exp={exp}
+                          onEdit={openEdit}
+                          onDelete={handleDelete}
+                        />
+                      ) : null;
+                    })()
+                  : null}
+              </DragOverlay>
+            </DndContext>
           )}
         </CardContent>
       </Card>

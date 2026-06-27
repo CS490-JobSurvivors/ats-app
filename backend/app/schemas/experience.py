@@ -11,6 +11,7 @@ class ExperienceBase(BaseModel):
     end_date: date | None = None
     experience_description: str | None = None
     is_current: bool = False
+    position_number: int = 0
 
     @model_validator(mode="after")
     def validate_dates(self) -> "ExperienceBase":
@@ -41,6 +42,11 @@ class ExperienceUpdate(BaseModel):
         ):
             raise ValueError("end_date cannot be earlier than start_date")
         return self
+
+
+class ReorderEntry(BaseModel):
+    experience_id: UUID
+    position_number: int
 
 
 class ExperienceRead(ExperienceBase):

@@ -1,17 +1,14 @@
 import '@testing-library/jest-dom';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ExperienceSection from '../components/ExperienceSection';
-import {
-  createExperience,
-  updateExperience,
-  deleteExperience,
-} from '../api/experiences';
+import { createExperience, updateExperience, deleteExperience } from '../api/experiences';
 import { ExperienceRecord } from '../api/experiences';
 
 jest.mock('../api/experiences', () => ({
   createExperience: jest.fn(),
   updateExperience: jest.fn(),
   deleteExperience: jest.fn(),
+  reorderExperiences: jest.fn(),
   listExperiences: jest.fn(),
 }));
 
@@ -28,6 +25,7 @@ const mockExperience: ExperienceRecord = {
   end_date: '2023-01-01',
   experience_description: 'Built cool stuff.',
   is_current: false,
+  position_number: 0,
 };
 
 const mockOnChange = jest.fn();
@@ -115,7 +113,9 @@ describe('ExperienceSection', () => {
 
   it('opens edit dialog pre-filled with existing entry', () => {
     renderSection([mockExperience]);
-    fireEvent.click(screen.getAllByRole('button').find((b) => b.querySelector('[data-testid="EditIcon"]'))!);
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.querySelector('[data-testid="EditIcon"]'))!
+    );
     expect(screen.getByText('Edit Experience')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Acme Corp')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Software Engineer')).toBeInTheDocument();
@@ -126,7 +126,9 @@ describe('ExperienceSection', () => {
     mockUpdateExperience.mockResolvedValue(updated);
 
     renderSection([mockExperience]);
-    fireEvent.click(screen.getAllByRole('button').find((b) => b.querySelector('[data-testid="EditIcon"]'))!);
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.querySelector('[data-testid="EditIcon"]'))!
+    );
     fireEvent.change(screen.getByDisplayValue('Software Engineer'), {
       target: { value: 'Senior Engineer' },
     });
@@ -148,7 +150,9 @@ describe('ExperienceSection', () => {
     mockDeleteExperience.mockResolvedValue(undefined);
 
     renderSection([mockExperience]);
-    fireEvent.click(screen.getAllByRole('button').find((b) => b.querySelector('[data-testid="DeleteIcon"]'))!);
+    fireEvent.click(
+      screen.getAllByRole('button').find((b) => b.querySelector('[data-testid="DeleteIcon"]'))!
+    );
 
     await waitFor(() => {
       expect(mockDeleteExperience).toHaveBeenCalledWith(ACCESS_TOKEN, 'exp-1');
