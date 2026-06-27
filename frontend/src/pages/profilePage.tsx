@@ -15,6 +15,8 @@ import { saveProfile, ProfileRecord } from '../api/profile';
 import { useProfile } from '../contexts/ProfileContext';
 import { listExperiences, ExperienceRecord } from '../api/experiences';
 import { listSkills, SkillRecord } from '../api/skills';
+import { listEducation, EducationRecord } from '../api/education';
+import EducationSection from '../components/EducationSection';
 import ExperienceSection from '../components/ExperienceSection';
 import SkillsSection from '../components/SkillsSection';
 
@@ -73,17 +75,21 @@ const ProfileView = ({
   onEdit,
   experiences,
   skills,
+  educations,
   accessToken,
   onExperiencesChange,
   onSkillsChange,
+  onEducationsChange,
 }: {
   profile: ProfileFields;
   onEdit: () => void;
   experiences: ExperienceRecord[];
   skills: SkillRecord[];
+  educations: EducationRecord[];
   accessToken: string;
   onExperiencesChange: (updated: ExperienceRecord[]) => void;
   onSkillsChange: (updated: SkillRecord[]) => void;
+  onEducationsChange: (updated: EducationRecord[]) => void;
 }) => (
   <Box sx={{ maxWidth: 900, mx: 'auto', px: 3, py: 5 }}>
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
@@ -138,6 +144,11 @@ const ProfileView = ({
       accessToken={accessToken}
       onExperiencesChange={onExperiencesChange}
     />
+    <EducationSection
+      educations={educations}
+      accessToken={accessToken}
+      onEducationsChange={onEducationsChange}
+    />
     <SkillsSection skills={skills} accessToken={accessToken} onSkillsChange={onSkillsChange} />
   </Box>
 );
@@ -160,6 +171,7 @@ function ProfilePage() {
   const [saveError, setSaveError] = useState('');
   const [experiences, setExperiences] = useState<ExperienceRecord[]>([]);
   const [skills, setSkills] = useState<SkillRecord[]>([]);
+  const [educations, setEducations] = useState<EducationRecord[]>([]);
   const [accessToken, setAccessToken] = useState('');
 
   useEffect(() => {
@@ -172,6 +184,9 @@ function ProfilePage() {
         .catch(() => {});
       listSkills(token)
         .then(setSkills)
+        .catch(() => {});
+      listEducation(token)
+        .then(setEducations)
         .catch(() => {});
     });
   }, []);
@@ -247,9 +262,11 @@ function ProfilePage() {
         onEdit={handleEdit}
         experiences={experiences}
         skills={skills}
+        educations={educations}
         accessToken={accessToken}
         onExperiencesChange={setExperiences}
         onSkillsChange={setSkills}
+        onEducationsChange={setEducations}
       />
     );
   }
