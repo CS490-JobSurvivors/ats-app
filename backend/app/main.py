@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.auth import router as auth_router
+from app.routes.career_preferences import router as career_preferences_router
 from app.routes.experiences import router as experiences_router
 from app.routes.health import router as health_router
 from app.routes.jobs import router as jobs_router
@@ -25,4 +26,5 @@ app.include_router(protected_router)
 app.include_router(jobs_router)
 app.include_router(experiences_router)
 app.include_router(skills_router)
+app.include_router(career_preferences_router)
 app.include_router(profile_router)
