@@ -7,10 +7,13 @@ import { supabase } from '../utils/supabaseClient';
 import {
   listJobs,
   listJobActivity,
+  listJobInterviews,
   createJob,
   updateJob,
   deleteJob,
   deleteJobStageHistory,
+  createJobInterview,
+  updateJobInterview,
 } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
@@ -24,19 +27,25 @@ jest.mock('../utils/supabaseClient', () => ({
 jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
   listJobActivity: jest.fn(),
+  listJobInterviews: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
   deleteJob: jest.fn(),
   deleteJobStageHistory: jest.fn(),
+  createJobInterview: jest.fn(),
+  updateJobInterview: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
 const mockListJobActivity = listJobActivity as jest.Mock;
+const mockListJobInterviews = listJobInterviews as jest.Mock;
 const mockCreateJob = createJob as jest.Mock;
 const mockUpdateJob = updateJob as jest.Mock;
 const mockDeleteJob = deleteJob as jest.Mock;
 const mockDeleteJobStageHistory = deleteJobStageHistory as jest.Mock;
+const mockCreateJobInterview = createJobInterview as jest.Mock;
+const mockUpdateJobInterview = updateJobInterview as jest.Mock;
 
 const sampleJob = {
   job_id: 'job-1',
@@ -54,10 +63,13 @@ beforeEach(() => {
   mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
   mockListJobs.mockResolvedValue([]);
   mockListJobActivity.mockResolvedValue([]);
+  mockListJobInterviews.mockResolvedValue([]);
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
   mockDeleteJob.mockReset();
   mockDeleteJobStageHistory.mockReset();
+  mockCreateJobInterview.mockReset();
+  mockUpdateJobInterview.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -153,6 +165,118 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByText('Software Engineer'));
     expect(await screen.findByText('Applied')).toBeInTheDocument();
     expect(mockListJobActivity).toHaveBeenCalledWith('test-token', 'job-1');
+  });
+
+  it('adds an interview from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobInterviews.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        interview_id: 'interview-1',
+        job_id: 'job-1',
+        user_id: 'user-1',
+        round_type: 'Technical',
+        scheduled_at_date: '2026-07-08',
+        scheduled_at_time: '2026-07-08T15:30:00.000Z',
+        interview_notes: 'Review system design.',
+      },
+    ]);
+    mockCreateJobInterview.mockResolvedValue({
+      interview_id: 'interview-1',
+      job_id: 'job-1',
+      user_id: 'user-1',
+      round_type: 'Technical',
+      scheduled_at_date: '2026-07-08',
+      scheduled_at_time: '2026-07-08T15:30:00.000Z',
+      interview_notes: 'Review system design.',
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /add interview/i }));
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), {
+      target: { value: 'Review system design.' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockCreateJobInterview).toHaveBeenCalledWith(
+        'test-token',
+        'job-1',
+        expect.objectContaining({
+          round_type: 'Technical',
+          scheduled_at_date: '2026-07-08',
+          scheduled_at_time: new Date('2026-07-08T15:30').toISOString(),
+          interview_notes: 'Review system design.',
+        })
+      );
+    });
+    expect(await screen.findByText('Technical')).toBeInTheDocument();
+  });
+
+  it('edits an interview from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobInterviews
+      .mockResolvedValueOnce([
+        {
+          interview_id: 'interview-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          round_type: 'Phone screen',
+          scheduled_at_date: '2026-07-08',
+          scheduled_at_time: '2026-07-08T15:30:00.000Z',
+          interview_notes: 'Initial recruiter call.',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          interview_id: 'interview-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          round_type: 'Final',
+          scheduled_at_date: '2026-07-10',
+          scheduled_at_time: '2026-07-10T18:00:00.000Z',
+          interview_notes: 'Meet hiring manager.',
+        },
+      ]);
+    mockUpdateJobInterview.mockResolvedValue({
+      interview_id: 'interview-1',
+      job_id: 'job-1',
+      user_id: 'user-1',
+      round_type: 'Final',
+      scheduled_at_date: '2026-07-10',
+      scheduled_at_time: '2026-07-10T18:00:00.000Z',
+      interview_notes: 'Meet hiring manager.',
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Phone screen')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Final' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-10' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '18:00' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), {
+      target: { value: 'Meet hiring manager.' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateJobInterview).toHaveBeenCalledWith(
+        'test-token',
+        'job-1',
+        'interview-1',
+        expect.objectContaining({
+          round_type: 'Final',
+          scheduled_at_date: '2026-07-10',
+          scheduled_at_time: new Date('2026-07-10T18:00').toISOString(),
+          interview_notes: 'Meet hiring manager.',
+        })
+      );
+    });
+    expect(await screen.findByText('Final')).toBeInTheDocument();
   });
 
   it('deletes a stage history event from the activity timeline', async () => {

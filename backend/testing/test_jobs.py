@@ -28,13 +28,18 @@ class FakeScalarResult:
 
 
 class FakeDb:
-    def add(self, obj: Job | JobStageHistory):
+    def add(self, obj: Job | JobStageHistory | Interview):
         if isinstance(obj, JobStageHistory):
             if obj.job_history_id is None:
                 obj.job_history_id = uuid4()
             if obj.changed_at is None:
                 obj.changed_at = datetime.now(UTC)
             stage_histories.append(obj)
+            return
+        if isinstance(obj, Interview):
+            if obj.interview_id is None:
+                obj.interview_id = uuid4()
+            interviews.append(obj)
             return
         if obj.job_id is None:
             obj.job_id = uuid4()
@@ -107,6 +112,17 @@ class FakeDb:
                 return None
 
             return max(results, key=lambda history: history.changed_at)
+
+        if entity is Interview:
+            for interview in interviews:
+                if (
+                    str(interview.interview_id) == str(params["interview_id_1"])
+                    and str(interview.job_id) == str(params["job_id_1"])
+                    and str(interview.user_id) == str(params["user_id_1"])
+                ):
+                    return interview
+
+            return None
 
         for job in jobs:
             if str(job.job_id) == str(params["job_id_1"]) and str(job.job_poster_id) == str(
@@ -488,3 +504,75 @@ def test_delete_job_stage_history_rejects_unowned_job():
 
     assert response.status_code == 404
     assert stage_histories == [history]
+
+
+def test_create_and_list_job_interviews_for_owned_job():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    interview_response = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Technical",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+            "interview_notes": "Review system design.",
+        },
+    )
+    list_response = client.get(f"/jobs/{job_id}/interviews")
+
+    assert interview_response.status_code == 201
+    body = interview_response.json()
+    assert body["round_type"] == "Technical"
+    assert body["scheduled_at_date"] == "2026-07-08"
+    assert body["scheduled_at_time"] == "2026-07-08T15:30:00Z"
+    assert body["interview_notes"] == "Review system design."
+    assert body["job_id"] == job_id
+    assert body["user_id"] == owner_id
+    assert list_response.status_code == 200
+    assert [interview["round_type"] for interview in list_response.json()] == ["Technical"]
+
+
+def test_update_job_interview_only_updates_owned_interview():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    interview_response = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Phone screen",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+            "interview_notes": "Initial recruiter call.",
+        },
+    )
+    interview_id = interview_response.json()["interview_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.patch(
+        f"/jobs/{job_id}/interviews/{interview_id}",
+        json={"round_type": "Unauthorized"},
+    )
+
+    set_authenticated_user(owner_id)
+    update_response = client.patch(
+        f"/jobs/{job_id}/interviews/{interview_id}",
+        json={
+            "round_type": "Final",
+            "scheduled_at_date": "2026-07-10",
+            "scheduled_at_time": "2026-07-10T18:00:00Z",
+            "interview_notes": "Meet hiring manager.",
+        },
+    )
+
+    assert denied_response.status_code == 404
+    assert update_response.status_code == 200
+    body = update_response.json()
+    assert body["round_type"] == "Final"
+    assert body["scheduled_at_date"] == "2026-07-10"
+    assert body["scheduled_at_time"] == "2026-07-10T18:00:00Z"
+    assert body["interview_notes"] == "Meet hiring manager."
