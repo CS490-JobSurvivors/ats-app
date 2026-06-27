@@ -163,4 +163,15 @@ describe('JobDetailDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(mockOnStageChange).not.toHaveBeenCalled();
   });
+
+  it('renders location when provided', () => {
+    renderDialog({ ...mockJob, job_location: 'New York, NY' });
+    expect(screen.getByText('New York, NY')).toBeInTheDocument();
+  });
+
+  it('pre-fills location in edit form', () => {
+    renderDialog({ ...mockJob, job_location: 'New York, NY' });
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.getByDisplayValue('New York, NY')).toBeInTheDocument();
+  });
 });
