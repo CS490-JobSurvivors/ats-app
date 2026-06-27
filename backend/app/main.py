@@ -7,6 +7,7 @@ from app.routes.health import router as health_router
 from app.routes.jobs import router as jobs_router
 from app.routes.profile import router as profile_router
 from app.routes.protected import router as protected_router
+from app.routes.skills import router as skills_router
 
 app = FastAPI()
 
@@ -23,4 +24,5 @@ app.include_router(auth_router)
 app.include_router(protected_router)
 app.include_router(jobs_router)
 app.include_router(experiences_router)
+app.include_router(skills_router)
 app.include_router(profile_router)
