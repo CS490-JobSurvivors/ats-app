@@ -6,6 +6,7 @@ import ProfilePage from '../pages/profilePage';
 import { useProfile } from '../contexts/ProfileContext';
 import { supabase } from '../utils/supabaseClient';
 import { saveProfile } from '../api/profile';
+import { listExperiences } from '../api/experiences';
 
 jest.mock('../contexts/ProfileContext', () => ({
   useProfile: jest.fn(),
@@ -23,9 +24,17 @@ jest.mock('../api/profile', () => ({
   saveProfile: jest.fn(),
 }));
 
+jest.mock('../api/experiences', () => ({
+  listExperiences: jest.fn().mockResolvedValue([]),
+  createExperience: jest.fn(),
+  updateExperience: jest.fn(),
+  deleteExperience: jest.fn(),
+}));
+
 const mockUseProfile = useProfile as jest.Mock;
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockSaveProfile = saveProfile as jest.Mock;
+const mockListExperiences = listExperiences as jest.Mock;
 
 const emptyContext = { profile: null, loading: false, setProfile: jest.fn() };
 
@@ -42,6 +51,8 @@ const fillProfileForm = () => {
 describe('ProfilePage', () => {
   beforeEach(() => {
     mockUseProfile.mockReturnValue(emptyContext);
+    mockGetSession.mockResolvedValue({ data: { session: null } });
+    mockListExperiences.mockResolvedValue([]);
   });
 
   afterEach(() => {
