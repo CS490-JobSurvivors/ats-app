@@ -4,7 +4,14 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
-import { listJobs, createJob, updateJob, deleteJob } from '../api/jobs';
+import {
+  listJobs,
+  listJobActivity,
+  createJob,
+  updateJob,
+  deleteJob,
+  deleteJobStageHistory,
+} from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -16,16 +23,20 @@ jest.mock('../utils/supabaseClient', () => ({
 
 jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
+  listJobActivity: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
   deleteJob: jest.fn(),
+  deleteJobStageHistory: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
+const mockListJobActivity = listJobActivity as jest.Mock;
 const mockCreateJob = createJob as jest.Mock;
 const mockUpdateJob = updateJob as jest.Mock;
 const mockDeleteJob = deleteJob as jest.Mock;
+const mockDeleteJobStageHistory = deleteJobStageHistory as jest.Mock;
 
 const sampleJob = {
   job_id: 'job-1',
@@ -42,9 +53,11 @@ const sampleJob = {
 beforeEach(() => {
   mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
   mockListJobs.mockResolvedValue([]);
+  mockListJobActivity.mockResolvedValue([]);
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
   mockDeleteJob.mockReset();
+  mockDeleteJobStageHistory.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -123,6 +136,83 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByText('Software Engineer'));
     await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
     expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument();
+  });
+
+  it('loads activity timeline when a job detail is opened', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobActivity.mockResolvedValue([
+      {
+        event_id: 'activity-1',
+        event_type: 'applied',
+        title: 'Applied',
+        description: 'Software Engineer at Test Co',
+        occurred_at: '2026-06-16T00:00:00Z',
+      },
+    ]);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Applied')).toBeInTheDocument();
+    expect(mockListJobActivity).toHaveBeenCalledWith('test-token', 'job-1');
+  });
+
+  it('deletes a stage history event from the activity timeline', async () => {
+    mockListJobs
+      .mockResolvedValueOnce([{ ...sampleJob, job_stage: 'Rejected' }])
+      .mockResolvedValueOnce([{ ...sampleJob, job_stage: 'Offer' }]);
+    mockListJobActivity
+      .mockResolvedValueOnce([
+        {
+          event_id: 'history-1',
+          event_type: 'outcome',
+          title: 'Marked rejected',
+          description: 'Offer to Rejected',
+          occurred_at: '2026-06-16T00:00:00Z',
+          can_delete: true,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    mockDeleteJobStageHistory.mockResolvedValue(undefined);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Marked rejected')).toBeInTheDocument();
+    expect(screen.getAllByText('Rejected').length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: /delete marked rejected history/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+    await waitFor(() => {
+      expect(mockDeleteJobStageHistory).toHaveBeenCalledWith('test-token', 'job-1', 'history-1');
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Marked rejected')).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByText('Offer').length).toBeGreaterThan(0);
+  });
+
+  it('shows an error when deleting a stage history event fails', async () => {
+    mockListJobs.mockResolvedValue([{ ...sampleJob, job_stage: 'Rejected' }]);
+    mockListJobActivity.mockResolvedValue([
+      {
+        event_id: 'history-1',
+        event_type: 'outcome',
+        title: 'Marked rejected',
+        description: 'Offer to Rejected',
+        occurred_at: '2026-06-16T00:00:00Z',
+        can_delete: true,
+      },
+    ]);
+    mockDeleteJobStageHistory.mockRejectedValue(new Error('delete failed'));
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Marked rejected')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /delete marked rejected history/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+    expect(
+      await screen.findByText('Unable to delete that stage history. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Marked rejected')).toBeInTheDocument();
   });
 
   it('calls deleteJob and removes job from list when confirmed', async () => {

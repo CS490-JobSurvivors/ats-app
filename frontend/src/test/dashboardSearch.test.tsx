@@ -16,6 +16,7 @@ jest.mock('../utils/supabaseClient', () => ({
 
 jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
+  listJobActivity: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
 }));
