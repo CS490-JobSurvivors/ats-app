@@ -156,7 +156,9 @@ export default function CareerPreferencesSection({
       </Card>
 
       <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
-        <DialogTitle>{preferences ? 'Edit Career Preferences' : 'Add Career Preferences'}</DialogTitle>
+        <DialogTitle>
+          {preferences ? 'Edit Career Preferences' : 'Add Career Preferences'}
+        </DialogTitle>
         <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
           {saveError && (
             <Alert severity="error" sx={{ mt: 1 }}>
