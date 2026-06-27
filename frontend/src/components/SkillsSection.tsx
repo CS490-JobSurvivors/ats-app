@@ -10,6 +10,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -224,9 +225,9 @@ const SkillsSection = ({ skills, accessToken, onSkillsChange }: SkillsSectionPro
           <Divider sx={{ mb: 2 }} />
 
           {deleteError && (
-            <Typography color="error" variant="body2" sx={{ mb: 1 }}>
+            <Alert severity="error" sx={{ mb: 1 }}>
               {deleteError}
-            </Typography>
+            </Alert>
           )}
 
           {skills.length === 0 ? (
