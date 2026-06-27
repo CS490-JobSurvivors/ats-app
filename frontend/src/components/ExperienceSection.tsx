@@ -100,10 +100,14 @@ const SortableExperienceItem = ({ exp, onEdit, onDelete }: SortableItemProps) =>
           </Box>
         </Box>
         <Box sx={{ flexShrink: 0 }}>
-          <IconButton size="small" onClick={() => onEdit(exp)}>
+          <IconButton size="small" aria-label="edit experience" onClick={() => onEdit(exp)}>
             <EditIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" onClick={() => onDelete(exp.experience_id)}>
+          <IconButton
+            size="small"
+            aria-label="delete experience"
+            onClick={() => onDelete(exp.experience_id)}
+          >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Box>

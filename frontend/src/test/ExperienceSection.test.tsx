@@ -113,9 +113,7 @@ describe('ExperienceSection', () => {
 
   it('opens edit dialog pre-filled with existing entry', () => {
     renderSection([mockExperience]);
-    fireEvent.click(
-      screen.getAllByRole('button').find((b) => b.querySelector('[data-testid="EditIcon"]'))!
-    );
+    fireEvent.click(screen.getByRole('button', { name: /edit experience/i }));
     expect(screen.getByText('Edit Experience')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Acme Corp')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Software Engineer')).toBeInTheDocument();
@@ -126,9 +124,7 @@ describe('ExperienceSection', () => {
     mockUpdateExperience.mockResolvedValue(updated);
 
     renderSection([mockExperience]);
-    fireEvent.click(
-      screen.getAllByRole('button').find((b) => b.querySelector('[data-testid="EditIcon"]'))!
-    );
+    fireEvent.click(screen.getByRole('button', { name: /edit experience/i }));
     fireEvent.change(screen.getByDisplayValue('Software Engineer'), {
       target: { value: 'Senior Engineer' },
     });
@@ -150,9 +146,7 @@ describe('ExperienceSection', () => {
     mockDeleteExperience.mockResolvedValue(undefined);
 
     renderSection([mockExperience]);
-    fireEvent.click(
-      screen.getAllByRole('button').find((b) => b.querySelector('[data-testid="DeleteIcon"]'))!
-    );
+    fireEvent.click(screen.getByRole('button', { name: /delete experience/i }));
 
     await waitFor(() => {
       expect(mockDeleteExperience).toHaveBeenCalledWith(ACCESS_TOKEN, 'exp-1');
