@@ -76,7 +76,6 @@ const DashboardPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingJob, setEditingJob] = useState<JobRecord | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [stageFilter, setStageFilter] = useState<JobStage | 'All'>('All');
@@ -178,12 +177,6 @@ const DashboardPage = () => {
   }, [filteredJobs, sortBy, sortOrder]);
 
   const openCreateDialog = () => {
-    setEditingJob(null);
-    setDialogOpen(true);
-  };
-
-  const openEditDialog = (job: JobRecord) => {
-    setEditingJob(job);
     setDialogOpen(true);
   };
 
@@ -209,17 +202,21 @@ const DashboardPage = () => {
     setDetailOpen(false);
   };
 
+  const handleDetailSave = async (payload: JobPayload) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error('No active session.');
+    const updated = await updateJob(token, selectedJob.job_id, payload);
+    setJobs((prev) => prev.map((j) => (j.job_id === updated.job_id ? updated : j)));
+    setSelectedJob(updated);
+  };
+
   const handleDialogSubmit = async (payload: JobPayload) => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
-    if (!token) {
-      throw new Error('No active session.');
-    }
-    if (editingJob) {
-      await updateJob(token, editingJob.job_id, payload);
-    } else {
-      await createJob(token, payload);
-    }
+    if (!token) throw new Error('No active session.');
+    await createJob(token, payload);
     setDialogOpen(false);
     await fetchJobs();
   };
@@ -432,7 +429,6 @@ const DashboardPage = () => {
             company={job.company_name}
             stage={job.job_stage}
             lastActivity={new Date(job.updated_at).toLocaleDateString()}
-            onEdit={() => openEditDialog(job)}
             onClick={() => openDetailDialog(job)}
           />
         ))
@@ -440,7 +436,7 @@ const DashboardPage = () => {
 
       <JobFormDialog
         open={dialogOpen}
-        job={editingJob}
+        job={null}
         onClose={() => setDialogOpen(false)}
         onSubmit={handleDialogSubmit}
       />
@@ -449,10 +445,7 @@ const DashboardPage = () => {
         open={detailOpen}
         job={selectedJob}
         onClose={() => setDetailOpen(false)}
-        onEdit={() => {
-          setDetailOpen(false);
-          openEditDialog(selectedJob!);
-        }}
+        onSave={handleDetailSave}
         onDelete={() => setConfirmDeleteOpen(true)}
         onStageChange={async (newStage) => {
           const { data } = await supabase.auth.getSession();

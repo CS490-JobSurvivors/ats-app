@@ -1,5 +1,4 @@
-import { Paper, Typography, Box, Chip, IconButton } from '@mui/material';
-import EditIcon from '@mui/icons-material/Edit';
+import { Paper, Typography, Box, Chip } from '@mui/material';
 import { stageColors } from '../utils/stageColors';
 
 interface JobCardProps {
@@ -7,11 +6,10 @@ interface JobCardProps {
   company: string;
   stage: string;
   lastActivity: string;
-  onEdit: () => void;
   onClick: () => void;
 }
 
-const JobCard = ({ title, company, stage, lastActivity, onEdit, onClick }: JobCardProps) => {
+const JobCard = ({ title, company, stage, lastActivity, onClick }: JobCardProps) => {
   const stageStyle = stageColors[stage] ?? { color: '#424242', bgcolor: '#F5F5F5' };
 
   return (
@@ -23,27 +21,15 @@ const JobCard = ({ title, company, stage, lastActivity, onEdit, onClick }: JobCa
             {company}
           </Typography>
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Chip
-            label={stage}
-            size="small"
-            sx={{
-              color: stageStyle.color,
-              bgcolor: stageStyle.bgcolor,
-              fontWeight: 600,
-            }}
-          />
-          <IconButton
-            size="small"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit();
-            }}
-            aria-label={`Edit ${title}`}
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-        </Box>
+        <Chip
+          label={stage}
+          size="small"
+          sx={{
+            color: stageStyle.color,
+            bgcolor: stageStyle.bgcolor,
+            fontWeight: 600,
+          }}
+        />
       </Box>
       <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
         Last activity: {lastActivity}

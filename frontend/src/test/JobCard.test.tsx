@@ -7,7 +7,6 @@ const mockProps = {
   company: 'Acme Corp',
   stage: 'Applied',
   lastActivity: '6/25/2026',
-  onEdit: jest.fn(),
   onClick: jest.fn(),
 };
 
@@ -28,13 +27,6 @@ describe('JobCard', () => {
     render(<JobCard {...mockProps} />);
     fireEvent.click(screen.getByText('Software Engineer'));
     expect(mockProps.onClick).toHaveBeenCalledTimes(1);
-  });
-
-  it('calls onEdit when edit icon is clicked and does not trigger onClick', () => {
-    render(<JobCard {...mockProps} />);
-    fireEvent.click(screen.getByLabelText('Edit Software Engineer'));
-    expect(mockProps.onEdit).toHaveBeenCalledTimes(1);
-    expect(mockProps.onClick).not.toHaveBeenCalled();
   });
 
   it('renders correct stage chip for each canonical stage', () => {
