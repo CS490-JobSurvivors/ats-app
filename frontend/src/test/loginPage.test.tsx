@@ -4,7 +4,7 @@
 
 import React from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LoginPage from '../pages/loginPage';
 
@@ -36,10 +36,16 @@ const EMAIL = 'user@test.com';
 const PASSWORD = 'correctpassword';
 const ACCESS_TOKEN = 'valid-token';
 
-/** Fills and submits the login form with the given credentials. */
+/**
+ * Fills and submits the login form with the given credentials.
+ *
+ * Uses fireEvent.change for text entry (controlled inputs reading e.target.value)
+ * to avoid user-event v13's slow per-keystroke processing on this React 19 + MUI
+ * stack; userEvent.click is kept for the submit action.
+ */
 const fillAndSubmit = async (email: string, password: string) => {
-  await userEvent.type(screen.getByLabelText(/email/i), email);
-  await userEvent.type(screen.getByLabelText(/^password/i), password);
+  fireEvent.change(screen.getByLabelText(/email/i), { target: { value: email } });
+  fireEvent.change(screen.getByLabelText(/^password/i), { target: { value: password } });
   await userEvent.click(screen.getByRole('button', { name: /login/i }));
 };
 

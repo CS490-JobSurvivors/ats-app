@@ -4,7 +4,7 @@
 
 import React from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ResetPasswordPage from '../pages/resetPasswordPage';
@@ -42,9 +42,12 @@ const renderPage = () =>
     </MemoryRouter>
   );
 
+// fireEvent.change is used for text entry (controlled inputs reading
+// e.target.value) to avoid user-event v13's slow per-keystroke processing on
+// this React 19 + MUI stack; userEvent.click is kept for the submit action.
 const fillAndSubmit = async (password: string, confirm: string = password) => {
-  await userEvent.type(screen.getByLabelText(/new password/i), password);
-  await userEvent.type(screen.getByLabelText(/confirm password/i), confirm);
+  fireEvent.change(screen.getByLabelText(/new password/i), { target: { value: password } });
+  fireEvent.change(screen.getByLabelText(/confirm password/i), { target: { value: confirm } });
   await userEvent.click(screen.getByRole('button', { name: /update password/i }));
 };
 

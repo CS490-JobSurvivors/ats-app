@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import SearchIcon from '@mui/icons-material/Search';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import {
   Container,
   Typography,
@@ -15,6 +17,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  IconButton,
+  Tooltip,
 } from '@mui/material';
 import { supabase } from '../utils/supabaseClient';
 import {
@@ -29,6 +33,16 @@ import {
 import JobCard from '../components/JobCard';
 import JobFormDialog from '../components/JobFormDialog';
 import JobDetailDialog from '../components/JobDetailDialog';
+
+type SortBy = 'last_activity' | 'deadline' | 'company' | 'created_date';
+type SortOrder = 'asc' | 'desc';
+
+const sortOptions: Array<{ value: SortBy; label: string }> = [
+  { value: 'last_activity', label: 'Last Activity' },
+  { value: 'deadline', label: 'Deadline' },
+  { value: 'company', label: 'Company' },
+  { value: 'created_date', label: 'Created Date' },
+];
 
 const stageFilterOptions: Array<JobStage | 'All'> = [
   'All',
@@ -71,6 +85,8 @@ const DashboardPage = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobRecord | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<SortBy>('last_activity');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -138,6 +154,28 @@ const DashboardPage = () => {
         (deadlineFilter === 'All' || getDeadlineState(job.deadline) === deadlineFilter)
     );
   }, [deadlineFilter, jobs, locationFilter, searchQuery, stageFilter]);
+
+  const sortedJobs = useMemo(() => {
+    const multiplier = sortOrder === 'asc' ? 1 : -1;
+    return [...filteredJobs].sort((a, b) => {
+      switch (sortBy) {
+        case 'last_activity':
+          return multiplier * (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime());
+        case 'created_date':
+          return multiplier * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        case 'company':
+          return multiplier * a.company_name.localeCompare(b.company_name);
+        case 'deadline': {
+          if (!a.deadline && !b.deadline) return 0;
+          if (!a.deadline) return 1;
+          if (!b.deadline) return -1;
+          return multiplier * (new Date(a.deadline).getTime() - new Date(b.deadline).getTime());
+        }
+        default:
+          return 0;
+      }
+    });
+  }, [filteredJobs, sortBy, sortOrder]);
 
   const openCreateDialog = () => {
     setEditingJob(null);
@@ -257,6 +295,32 @@ const DashboardPage = () => {
           >
             Filters
           </Button>
+          <TextField
+            select
+            label="Sort by"
+            size="small"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortBy)}
+            sx={{ minWidth: 160 }}
+          >
+            {sortOptions.map((opt) => (
+              <MenuItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </MenuItem>
+            ))}
+          </TextField>
+          <Tooltip title={sortOrder === 'desc' ? 'Descending' : 'Ascending'}>
+            <IconButton
+              size="small"
+              onClick={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
+            >
+              {sortOrder === 'desc' ? (
+                <ArrowDownwardIcon fontSize="small" />
+              ) : (
+                <ArrowUpwardIcon fontSize="small" />
+              )}
+            </IconButton>
+          </Tooltip>
         </Box>
         <Button variant="contained" onClick={openCreateDialog}>
           New Application
@@ -361,7 +425,7 @@ const DashboardPage = () => {
           </Typography>
         </Box>
       ) : (
-        filteredJobs.map((job) => (
+        sortedJobs.map((job) => (
           <JobCard
             key={job.job_id}
             title={job.job_title}

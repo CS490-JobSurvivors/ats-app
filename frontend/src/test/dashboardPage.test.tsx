@@ -1,6 +1,6 @@
 import React from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
@@ -100,9 +100,11 @@ describe('DashboardPage', () => {
     mockCreateJob.mockResolvedValue({ ...sampleJob, job_id: 'job-new' });
     render(<DashboardPage />);
     await userEvent.click(await screen.findByRole('button', { name: /new application/i }));
-    await userEvent.type(screen.getByLabelText(/company/i), 'New Co');
-    await userEvent.type(screen.getByLabelText(/job title/i), 'QA Engineer');
-    await userEvent.type(screen.getByLabelText(/description/i), 'A new role');
+    // fireEvent.change for text entry (controlled inputs reading e.target.value)
+    // avoids user-event v13's slow per-keystroke processing.
+    fireEvent.change(screen.getByLabelText(/company/i), { target: { value: 'New Co' } });
+    fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: 'QA Engineer' } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: 'A new role' } });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
     await waitFor(() => {
       expect(mockCreateJob).toHaveBeenCalledWith(
@@ -160,8 +162,8 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByLabelText(/edit software engineer/i));
     expect(screen.getByRole('heading', { name: /edit job/i })).toBeInTheDocument();
     expect(screen.getByDisplayValue('Software Engineer')).toBeInTheDocument();
-    await userEvent.clear(screen.getByLabelText(/job title/i));
-    await userEvent.type(screen.getByLabelText(/job title/i), 'Senior Engineer');
+    // A single change event replaces the field value, covering clear + retype.
+    fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: 'Senior Engineer' } });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
     await waitFor(() => {
       expect(mockUpdateJob).toHaveBeenCalledWith(
