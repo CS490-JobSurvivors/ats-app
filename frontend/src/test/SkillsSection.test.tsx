@@ -149,4 +149,16 @@ describe('SkillsSection', () => {
     expect(screen.queryByText('Programming')).not.toBeInTheDocument();
     expect(screen.queryByText('Advanced')).not.toBeInTheDocument();
   });
+
+  it('shows error message when delete fails', async () => {
+    mockDeleteSkill.mockRejectedValue(new Error('Network error'));
+
+    renderSection([mockSkill]);
+    fireEvent.click(screen.getByRole('button', { name: /delete skill/i }));
+
+    expect(
+      await screen.findByText('Failed to delete skill. Please try again.')
+    ).toBeInTheDocument();
+    expect(mockOnChange).not.toHaveBeenCalled();
+  });
 });

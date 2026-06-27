@@ -122,6 +122,7 @@ const SkillsSection = ({ skills, accessToken, onSkillsChange }: SkillsSectionPro
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -197,11 +198,12 @@ const SkillsSection = ({ skills, accessToken, onSkillsChange }: SkillsSectionPro
   };
 
   const handleDelete = async (skillId: string) => {
+    setDeleteError('');
     try {
       await deleteSkill(accessToken, skillId);
       onSkillsChange(skills.filter((s) => s.skill_id !== skillId));
     } catch {
-      // silently fail
+      setDeleteError('Failed to delete skill. Please try again.');
     }
   };
 
@@ -220,6 +222,12 @@ const SkillsSection = ({ skills, accessToken, onSkillsChange }: SkillsSectionPro
             </Button>
           </Box>
           <Divider sx={{ mb: 2 }} />
+
+          {deleteError && (
+            <Typography color="error" variant="body2" sx={{ mb: 1 }}>
+              {deleteError}
+            </Typography>
+          )}
 
           {skills.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
