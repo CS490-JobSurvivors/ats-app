@@ -7,6 +7,7 @@ import { useProfile } from '../contexts/ProfileContext';
 import { supabase } from '../utils/supabaseClient';
 import { saveProfile } from '../api/profile';
 import { listExperiences } from '../api/experiences';
+import { listSkills } from '../api/skills';
 
 jest.mock('../contexts/ProfileContext', () => ({
   useProfile: jest.fn(),
@@ -31,10 +32,19 @@ jest.mock('../api/experiences', () => ({
   deleteExperience: jest.fn(),
 }));
 
+jest.mock('../api/skills', () => ({
+  listSkills: jest.fn().mockResolvedValue([]),
+  createSkill: jest.fn(),
+  updateSkill: jest.fn(),
+  deleteSkill: jest.fn(),
+  reorderSkills: jest.fn(),
+}));
+
 const mockUseProfile = useProfile as jest.Mock;
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockSaveProfile = saveProfile as jest.Mock;
 const mockListExperiences = listExperiences as jest.Mock;
+const mockListSkills = listSkills as jest.Mock;
 
 const emptyContext = { profile: null, loading: false, setProfile: jest.fn() };
 
@@ -53,6 +63,7 @@ describe('ProfilePage', () => {
     mockUseProfile.mockReturnValue(emptyContext);
     mockGetSession.mockResolvedValue({ data: { session: null } });
     mockListExperiences.mockResolvedValue([]);
+    mockListSkills.mockResolvedValue([]);
   });
 
   afterEach(() => {
