@@ -14,7 +14,9 @@ import { supabase } from '../utils/supabaseClient';
 import { saveProfile, ProfileRecord } from '../api/profile';
 import { useProfile } from '../contexts/ProfileContext';
 import { listExperiences, ExperienceRecord } from '../api/experiences';
+import { listSkills, SkillRecord } from '../api/skills';
 import ExperienceSection from '../components/ExperienceSection';
+import SkillsSection from '../components/SkillsSection';
 
 export interface ProfileFields {
   bio: string;
@@ -70,14 +72,18 @@ const ProfileView = ({
   profile,
   onEdit,
   experiences,
+  skills,
   accessToken,
   onExperiencesChange,
+  onSkillsChange,
 }: {
   profile: ProfileFields;
   onEdit: () => void;
   experiences: ExperienceRecord[];
+  skills: SkillRecord[];
   accessToken: string;
   onExperiencesChange: (updated: ExperienceRecord[]) => void;
+  onSkillsChange: (updated: SkillRecord[]) => void;
 }) => (
   <Box sx={{ maxWidth: 900, mx: 'auto', px: 3, py: 5 }}>
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
@@ -132,6 +138,7 @@ const ProfileView = ({
       accessToken={accessToken}
       onExperiencesChange={onExperiencesChange}
     />
+    <SkillsSection skills={skills} accessToken={accessToken} onSkillsChange={onSkillsChange} />
   </Box>
 );
 
@@ -152,6 +159,7 @@ function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [experiences, setExperiences] = useState<ExperienceRecord[]>([]);
+  const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [accessToken, setAccessToken] = useState('');
 
   useEffect(() => {
@@ -161,6 +169,9 @@ function ProfilePage() {
       setAccessToken(token);
       listExperiences(token)
         .then(setExperiences)
+        .catch(() => {});
+      listSkills(token)
+        .then(setSkills)
         .catch(() => {});
     });
   }, []);
@@ -235,8 +246,10 @@ function ProfilePage() {
         profile={recordToFields(cachedProfile)}
         onEdit={handleEdit}
         experiences={experiences}
+        skills={skills}
         accessToken={accessToken}
         onExperiencesChange={setExperiences}
+        onSkillsChange={setSkills}
       />
     );
   }
@@ -396,6 +409,7 @@ function ProfilePage() {
         accessToken={accessToken}
         onExperiencesChange={setExperiences}
       />
+      <SkillsSection skills={skills} accessToken={accessToken} onSkillsChange={setSkills} />
     </Box>
   );
 }
