@@ -52,6 +52,7 @@ const JobDetailDialog = ({
     company_name: '',
     job_description: '',
     application_link: '',
+    job_location: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -63,6 +64,7 @@ const JobDetailDialog = ({
         company_name: job.company_name,
         job_description: job.job_description,
         application_link: job.application_link || '',
+        job_location: job.job_location || '',
       });
     }
     setIsEditing(false);
@@ -100,6 +102,7 @@ const JobDetailDialog = ({
         company_name: form.company_name.trim(),
         job_description: form.job_description.trim(),
         application_link: form.application_link.trim() || null,
+        job_location: form.job_location.trim() || null,
       });
       setIsEditing(false);
     } catch {
@@ -210,6 +213,12 @@ const JobDetailDialog = ({
                 onChange={(e) => setForm((f) => ({ ...f, application_link: e.target.value }))}
                 fullWidth
               />
+              <TextField
+                label="Location"
+                value={form.job_location}
+                onChange={(e) => setForm((f) => ({ ...f, job_location: e.target.value }))}
+                fullWidth
+              />
             </Box>
           ) : (
             <>
@@ -238,6 +247,17 @@ const JobDetailDialog = ({
                     sx={{ color: '#1565C0' }}
                   >
                     {job.application_link}
+                  </Typography>
+                </Box>
+              )}
+
+              {job.job_location && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Location
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {job.job_location}
                   </Typography>
                 </Box>
               )}
