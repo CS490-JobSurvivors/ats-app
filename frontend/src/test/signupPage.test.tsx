@@ -4,7 +4,7 @@
 
 import React from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import SignupPage from '../pages/signupPage';
 
@@ -36,11 +36,20 @@ const EMAIL = 'test@test.com';
 const PASSWORD = 'Password123!';
 const ACCESS_TOKEN = 'test-token';
 
-/** Fills the signup form fields. Pass an explicit confirm value to mismatch. */
-const fillForm = async (email: string, password: string, confirmPassword: string = password) => {
-  await userEvent.type(screen.getByPlaceholderText('Enter Email'), email);
-  await userEvent.type(screen.getByPlaceholderText('Enter Password'), password);
-  await userEvent.type(screen.getByPlaceholderText('Retype Password'), confirmPassword);
+/**
+ * Fills the signup form fields. Pass an explicit confirm value to mismatch.
+ *
+ * Uses fireEvent.change rather than userEvent.type: the inputs are simple
+ * controlled fields whose onChange reads e.target.value, so a single change
+ * event is behavior-equivalent and avoids user-event v13's pathologically slow
+ * per-keystroke processing on this React 19 + MUI stack.
+ */
+const fillForm = (email: string, password: string, confirmPassword: string = password) => {
+  fireEvent.change(screen.getByPlaceholderText('Enter Email'), { target: { value: email } });
+  fireEvent.change(screen.getByPlaceholderText('Enter Password'), { target: { value: password } });
+  fireEvent.change(screen.getByPlaceholderText('Retype Password'), {
+    target: { value: confirmPassword },
+  });
 };
 
 const submitForm = async () => {
@@ -60,7 +69,7 @@ describe('SignupPage', () => {
     it('should not call supabase.auth.signUp when passwords do not match', async () => {
       // Arrange
       render(<SignupPage />);
-      await fillForm(EMAIL, PASSWORD, 'different');
+      fillForm(EMAIL, PASSWORD, 'different');
 
       // Act
       await submitForm();
@@ -82,7 +91,7 @@ describe('SignupPage', () => {
       });
       mockSignupApi.mockResolvedValue({ user_id: '123', email: EMAIL });
       render(<SignupPage />);
-      await fillForm(EMAIL, PASSWORD);
+      fillForm(EMAIL, PASSWORD);
 
       // Act
       await submitForm();
@@ -105,7 +114,7 @@ describe('SignupPage', () => {
       });
       mockSignupApi.mockResolvedValue({ user_id: '456', email: newEmail });
       render(<SignupPage />);
-      await fillForm(newEmail, PASSWORD);
+      fillForm(newEmail, PASSWORD);
 
       // Act
       await submitForm();
@@ -127,7 +136,7 @@ describe('SignupPage', () => {
       });
       mockSignupApi.mockResolvedValue({ user_id: '123', email: EMAIL });
       render(<SignupPage />);
-      await fillForm(EMAIL, PASSWORD);
+      fillForm(EMAIL, PASSWORD);
 
       // Act
       await submitForm();
@@ -146,7 +155,7 @@ describe('SignupPage', () => {
         error: { message: 'User already registered' },
       });
       render(<SignupPage />);
-      await fillForm(existingEmail, PASSWORD);
+      fillForm(existingEmail, PASSWORD);
 
       // Act
       await submitForm();
@@ -168,7 +177,7 @@ describe('SignupPage', () => {
     it('should show the passwords do not match message when passwords differ', async () => {
       // Arrange
       render(<SignupPage />);
-      await fillForm(EMAIL, PASSWORD, 'different');
+      fillForm(EMAIL, PASSWORD, 'different');
 
       // Act
       await submitForm();
@@ -186,7 +195,7 @@ describe('SignupPage', () => {
         error: { message: supabaseErrorMessage },
       });
       render(<SignupPage />);
-      await fillForm(existingEmail, PASSWORD);
+      fillForm(existingEmail, PASSWORD);
 
       // Act
       await submitForm();
@@ -202,7 +211,7 @@ describe('SignupPage', () => {
         error: null,
       });
       render(<SignupPage />);
-      await fillForm(EMAIL, PASSWORD);
+      fillForm(EMAIL, PASSWORD);
 
       // Act
       await submitForm();

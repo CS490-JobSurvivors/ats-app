@@ -1,6 +1,6 @@
 import React from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
@@ -177,7 +177,7 @@ describe('Dashboard job filters', () => {
     render(<DashboardPage />);
 
     expect(await screen.findByText('Frontend Engineer')).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText(/search jobs/i), 'developer');
+    fireEvent.change(screen.getByLabelText(/search jobs/i), { target: { value: 'developer' } });
     await openFilters();
     await chooseFilter(/stage/i, /interview/i);
     await chooseFilter(/location/i, /remote/i);
