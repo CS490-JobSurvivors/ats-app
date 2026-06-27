@@ -100,8 +100,6 @@ describe('DashboardPage', () => {
     mockCreateJob.mockResolvedValue({ ...sampleJob, job_id: 'job-new' });
     render(<DashboardPage />);
     await userEvent.click(await screen.findByRole('button', { name: /new application/i }));
-    // fireEvent.change for text entry (controlled inputs reading e.target.value)
-    // avoids user-event v13's slow per-keystroke processing.
     fireEvent.change(screen.getByLabelText(/company/i), { target: { value: 'New Co' } });
     fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: 'QA Engineer' } });
     fireEvent.change(screen.getByLabelText(/description/i), { target: { value: 'A new role' } });
@@ -155,15 +153,15 @@ describe('DashboardPage', () => {
     });
   });
 
-  it('opens the edit dialog pre-filled and calls updateJob on save', async () => {
+  it('opens inline edit mode and calls updateJob on save', async () => {
     mockListJobs.mockResolvedValue([sampleJob]);
     mockUpdateJob.mockResolvedValue({ ...sampleJob, job_title: 'Senior Engineer' });
     render(<DashboardPage />);
-    await userEvent.click(await screen.findByLabelText(/edit software engineer/i));
-    expect(screen.getByRole('heading', { name: /edit job/i })).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Software Engineer')).toBeInTheDocument();
-    // A single change event replaces the field value, covering clear + retype.
-    fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: 'Senior Engineer' } });
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    const titleInput = screen.getByDisplayValue('Software Engineer');
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, 'Senior Engineer');
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
     await waitFor(() => {
       expect(mockUpdateJob).toHaveBeenCalledWith(
