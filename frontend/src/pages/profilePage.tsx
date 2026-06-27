@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Box,
@@ -13,6 +13,8 @@ import {
 import { supabase } from '../utils/supabaseClient';
 import { saveProfile, ProfileRecord } from '../api/profile';
 import { useProfile } from '../contexts/ProfileContext';
+import { listExperiences, ExperienceRecord } from '../api/experiences';
+import ExperienceSection from '../components/ExperienceSection';
 
 export interface ProfileFields {
   bio: string;
@@ -64,7 +66,19 @@ const recordToFields = (r: ProfileRecord): ProfileFields => ({
 // View mode — shown after a successful save
 // ---------------------------------------------------------------------------
 
-const ProfileView = ({ profile, onEdit }: { profile: ProfileFields; onEdit: () => void }) => (
+const ProfileView = ({
+  profile,
+  onEdit,
+  experiences,
+  accessToken,
+  onExperiencesChange,
+}: {
+  profile: ProfileFields;
+  onEdit: () => void;
+  experiences: ExperienceRecord[];
+  accessToken: string;
+  onExperiencesChange: (updated: ExperienceRecord[]) => void;
+}) => (
   <Box sx={{ maxWidth: 900, mx: 'auto', px: 3, py: 5 }}>
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
       <Box>
@@ -90,7 +104,7 @@ const ProfileView = ({ profile, onEdit }: { profile: ProfileFields; onEdit: () =
       </CardContent>
     </Card>
 
-    <Card>
+    <Card sx={{ mb: 3 }}>
       <CardContent>
         <Typography variant="h6" fontWeight={600} mb={1}>
           Contact
@@ -112,6 +126,12 @@ const ProfileView = ({ profile, onEdit }: { profile: ProfileFields; onEdit: () =
         </Box>
       </CardContent>
     </Card>
+
+    <ExperienceSection
+      experiences={experiences}
+      accessToken={accessToken}
+      onExperiencesChange={onExperiencesChange}
+    />
   </Box>
 );
 
@@ -131,6 +151,19 @@ function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [experiences, setExperiences] = useState<ExperienceRecord[]>([]);
+  const [accessToken, setAccessToken] = useState('');
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const token = data.session?.access_token;
+      if (!token) return;
+      setAccessToken(token);
+      listExperiences(token)
+        .then(setExperiences)
+        .catch(() => {});
+    });
+  }, []);
 
   const handleEdit = () => {
     if (cachedProfile) setProfile(recordToFields(cachedProfile));
@@ -197,7 +230,15 @@ function ProfilePage() {
   if (loading) return null;
 
   if (cachedProfile && !isEditing) {
-    return <ProfileView profile={recordToFields(cachedProfile)} onEdit={handleEdit} />;
+    return (
+      <ProfileView
+        profile={recordToFields(cachedProfile)}
+        onEdit={handleEdit}
+        experiences={experiences}
+        accessToken={accessToken}
+        onExperiencesChange={setExperiences}
+      />
+    );
   }
 
   return (
@@ -349,6 +390,12 @@ function ProfilePage() {
           </Button>
         </CardContent>
       </Card>
+
+      <ExperienceSection
+        experiences={experiences}
+        accessToken={accessToken}
+        onExperiencesChange={setExperiences}
+      />
     </Box>
   );
 }
