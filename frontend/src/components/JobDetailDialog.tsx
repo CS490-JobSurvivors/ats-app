@@ -53,6 +53,8 @@ const JobDetailDialog = ({
     job_description: '',
     application_link: '',
     job_location: '',
+    deadline: '',
+    recruiter_notes: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -65,6 +67,8 @@ const JobDetailDialog = ({
         job_description: job.job_description,
         application_link: job.application_link || '',
         job_location: job.job_location || '',
+        deadline: job.deadline || '',
+        recruiter_notes: job.recruiter_notes || '',
       });
     }
     setIsEditing(false);
@@ -103,6 +107,8 @@ const JobDetailDialog = ({
         job_description: form.job_description.trim(),
         application_link: form.application_link.trim() || null,
         job_location: form.job_location.trim() || null,
+        deadline: form.deadline || null,
+        recruiter_notes: form.recruiter_notes.trim() || null,
       });
       setIsEditing(false);
     } catch {
@@ -219,6 +225,22 @@ const JobDetailDialog = ({
                 onChange={(e) => setForm((f) => ({ ...f, job_location: e.target.value }))}
                 fullWidth
               />
+              <TextField
+                label="Deadline"
+                value={form.deadline}
+                onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))}
+                fullWidth
+                type="date"
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                label="Recruiter / Contact Notes"
+                value={form.recruiter_notes}
+                onChange={(e) => setForm((f) => ({ ...f, recruiter_notes: e.target.value }))}
+                fullWidth
+                multiline
+                rows={3}
+              />
             </Box>
           ) : (
             <>
@@ -258,6 +280,32 @@ const JobDetailDialog = ({
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {job.job_location}
+                  </Typography>
+                </Box>
+              )}
+
+              {job.deadline && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Deadline
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {new Date(`${job.deadline}T00:00:00`).toLocaleDateString()}
+                  </Typography>
+                </Box>
+              )}
+
+              {job.recruiter_notes && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Recruiter / Contact Notes
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ whiteSpace: 'pre-wrap' }}
+                  >
+                    {job.recruiter_notes}
                   </Typography>
                 </Box>
               )}
