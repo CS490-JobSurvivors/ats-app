@@ -483,6 +483,48 @@ def test_delete_latest_stage_history_rolls_job_stage_back_before_next_transition
     ]
 
 
+def test_restoring_archived_job_preserves_interviews_and_followups():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    interview_response = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Technical",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+            "interview_notes": "Review system design.",
+        },
+    )
+    assert interview_response.status_code == 201
+
+    followups.append(
+        FollowUp(
+            followup_id=uuid4(),
+            job_id=job_id,
+            user_id=owner_id,
+            due_date=date(2026, 7, 2),
+            notes="Email recruiter",
+            is_completed=False,
+        )
+    )
+
+    archive_response = client.patch(f"/jobs/{job_id}", json={"job_stage": "Archived"})
+    assert archive_response.status_code == 200
+    assert archive_response.json()["job_stage"] == "Archived"
+
+    archived_history_id = stage_histories[-1].job_history_id
+    restore_response = client.delete(f"/jobs/{job_id}/stage-history/{archived_history_id}")
+    assert restore_response.status_code == 204
+    assert jobs[0].job_stage == "Interested"
+
+    list_response = client.get(f"/jobs/{job_id}/interviews")
+    assert [interview["round_type"] for interview in list_response.json()] == ["Technical"]
+    assert [followup.job_id for followup in followups] == [job_id]
+
+
 def test_delete_job_stage_history_rejects_unowned_job():
     owner_id = str(uuid4())
     other_user_id = str(uuid4())
