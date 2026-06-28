@@ -10,3 +10,4 @@ cryptography
 PyJWT
 psycopg==3.3.4
 psycopg-binary==3.3.4
+anthropic

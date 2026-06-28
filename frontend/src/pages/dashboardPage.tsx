@@ -86,6 +86,7 @@ const DashboardPage = () => {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('last_activity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [accessToken, setAccessToken] = useState('');
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -94,6 +95,7 @@ const DashboardPage = () => {
       setIsLoading(false);
       return;
     }
+    setAccessToken(token);
     try {
       const result = await listJobs(token);
       setJobs(result);
@@ -447,6 +449,7 @@ const DashboardPage = () => {
         onClose={() => setDetailOpen(false)}
         onSave={handleDetailSave}
         onDelete={() => setConfirmDeleteOpen(true)}
+        accessToken={accessToken}
         onStageChange={async (newStage) => {
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;

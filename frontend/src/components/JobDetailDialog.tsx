@@ -8,6 +8,7 @@ import {
   Typography,
   Box,
   Chip,
+  CircularProgress,
   Divider,
   MenuItem,
   Select,
@@ -16,6 +17,7 @@ import {
   TextField,
 } from '@mui/material';
 import { JobRecord, JobPayload, JobStage } from '../api/jobs';
+import { generateResume } from '../api/resume';
 import { stageColors } from '../utils/stageColors';
 import { FORWARD_TRANSITIONS, isForwardTransition } from '../utils/stageTransitions';
 
@@ -35,6 +37,7 @@ interface JobDetailDialogProps {
   onDelete: () => void;
   onSave: (payload: JobPayload) => Promise<void>;
   onStageChange: (newStage: JobStage) => void;
+  accessToken: string;
 }
 
 const JobDetailDialog = ({
@@ -44,9 +47,14 @@ const JobDetailDialog = ({
   onDelete,
   onSave,
   onStageChange,
+  accessToken,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [resumeOpen, setResumeOpen] = useState(false);
+  const [resumeText, setResumeText] = useState('');
+  const [resumeLoading, setResumeLoading] = useState(false);
+  const [resumeError, setResumeError] = useState('');
   const [form, setForm] = useState({
     job_title: '',
     company_name: '',
@@ -91,6 +99,21 @@ const JobDetailDialog = ({
   const confirmOverride = () => {
     if (pendingStage) onStageChange(pendingStage);
     setPendingStage(null);
+  };
+
+  const handleGenerateResume = async () => {
+    if (!job) return;
+    setResumeLoading(true);
+    setResumeError('');
+    try {
+      const text = await generateResume(accessToken, job.job_id);
+      setResumeText(text);
+      setResumeOpen(true);
+    } catch {
+      setResumeError('Failed to generate resume. Please try again.');
+    } finally {
+      setResumeLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -327,6 +350,11 @@ const JobDetailDialog = ({
           )}
         </DialogContent>
 
+        {resumeError && (
+          <Typography color="error" variant="body2" sx={{ px: 3, pb: 1 }}>
+            {resumeError}
+          </Typography>
+        )}
         <DialogActions>
           <Button onClick={onDelete} color="error" sx={{ mr: 'auto' }}>
             Delete
@@ -343,11 +371,42 @@ const JobDetailDialog = ({
           ) : (
             <>
               <Button onClick={onClose}>Close</Button>
+              <Button
+                variant="outlined"
+                onClick={handleGenerateResume}
+                disabled={resumeLoading}
+                startIcon={resumeLoading ? <CircularProgress size={16} /> : undefined}
+              >
+                {resumeLoading ? 'Generating...' : 'Generate Resume'}
+              </Button>
               <Button onClick={() => setIsEditing(true)} variant="contained">
                 Edit
               </Button>
             </>
           )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={resumeOpen} onClose={() => setResumeOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>Generated Resume</DialogTitle>
+        <DialogContent>
+          <TextField
+            value={resumeText}
+            multiline
+            rows={20}
+            fullWidth
+            InputProps={{ readOnly: true }}
+            sx={{ fontFamily: 'monospace' }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResumeOpen(false)}>Close</Button>
+          <Button
+            variant="contained"
+            onClick={() => navigator.clipboard.writeText(resumeText)}
+          >
+            Copy
+          </Button>
         </DialogActions>
       </Dialog>
 
