@@ -401,10 +401,7 @@ const JobDetailDialog = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setResumeOpen(false)}>Close</Button>
-          <Button
-            variant="contained"
-            onClick={() => navigator.clipboard.writeText(resumeText)}
-          >
+          <Button variant="contained" onClick={() => navigator.clipboard.writeText(resumeText)}>
             Copy
           </Button>
         </DialogActions>

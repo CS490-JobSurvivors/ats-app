@@ -95,7 +95,7 @@ def generate_resume(
             part += f" ({s.proficiency})"
         skill_parts.append(part)
 
-    prompt = f"""You are a professional resume writer. Generate a tailored resume for the following candidate applying to a specific job.
+    prompt = f"""You are a professional resume writer helping a real job seeker tailor their resume for a specific job. Your role is to rewrite, reorder, and reframe their actual information to best match the job — not to invent or fabricate anything. Use ONLY the information provided below.
 
 ## Candidate Profile
 Name: {profile.first_name} {profile.last_name}
@@ -117,7 +117,13 @@ Title: {job.job_title}
 Company: {job.company_name}
 Description: {job.job_description}
 
-Write a complete, professional resume tailored to this job. Include all sections: Summary, Experience, Education, Skills. Format it clearly in plain text."""
+Using only the candidate's real information above, write a tailored, optimized resume for this specific job. Your job is to:
+- Write a targeted summary that connects the candidate's background directly to what this role needs
+- Reorder and reframe experience bullet points to lead with the most job-relevant aspects
+- Prioritize and regroup skills that align with the job description
+- Use strong, active language to present real experience in the most compelling way for this role
+
+Do NOT invent experiences, credentials, or skills not present above. Do NOT add placeholder text. Only rewrite and reorder what is actually there. Format clearly in plain text."""
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
