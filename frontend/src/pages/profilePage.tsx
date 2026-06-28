@@ -426,6 +426,11 @@ function ProfilePage() {
         accessToken={accessToken}
         onExperiencesChange={setExperiences}
       />
+      <EducationSection
+        educations={educations}
+        accessToken={accessToken}
+        onEducationsChange={setEducations}
+      />
       <SkillsSection skills={skills} accessToken={accessToken} onSkillsChange={setSkills} />
     </Box>
   );

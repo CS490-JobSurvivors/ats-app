@@ -10,6 +10,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -128,6 +129,7 @@ const EducationSection = ({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
 
   const sensors = useSensors(useSensor(PointerSensor));
 
@@ -214,11 +216,12 @@ const EducationSection = ({
   };
 
   const handleDelete = async (educationId: string) => {
+    setDeleteError('');
     try {
       await deleteEducation(accessToken, educationId);
       onEducationsChange(educations.filter((e) => e.education_id !== educationId));
     } catch {
-      // silently fail
+      setDeleteError('Failed to delete education record. Please try again.');
     }
   };
 
@@ -237,6 +240,12 @@ const EducationSection = ({
             </Button>
           </Box>
           <Divider sx={{ mb: 2 }} />
+
+          {deleteError && (
+            <Alert severity="error" sx={{ mb: 1 }}>
+              {deleteError}
+            </Alert>
+          )}
 
           {educations.length === 0 ? (
             <Typography variant="body2" color="text.secondary">

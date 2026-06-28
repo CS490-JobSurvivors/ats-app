@@ -319,6 +319,23 @@ def test_update_education_rejects_end_date_before_start_date():
     assert response.status_code == 422
 
 
+def test_update_education_rejects_end_date_before_existing_start_date_when_only_end_date_patched():
+    # S2-BR-015: patching only end_date without start_date must still validate
+    # against the stored start_date (schema-level validator skips this case)
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    education_id = client.post(
+        "/education", json=education_payload(start_date="2018-09-01", end_date="2022-05-15")
+    ).json()["education_id"]
+
+    response = client.patch(
+        f"/education/{education_id}",
+        json={"end_date": "2010-01-01"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_update_education_rejects_empty_institution_name():
     user_id = str(uuid4())
     set_authenticated_user(user_id)

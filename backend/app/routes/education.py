@@ -99,6 +99,16 @@ def update_education(
     for field, value in education_update.model_dump(exclude_unset=True).items():
         setattr(db_education, field, value)
 
+    if (
+        not db_education.is_current
+        and db_education.end_date is not None
+        and db_education.end_date < db_education.start_date
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="end_date cannot be earlier than start_date",
+        )
+
     db.commit()
     db.refresh(db_education)
     return db_education
