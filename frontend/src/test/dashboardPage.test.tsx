@@ -216,6 +216,24 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('Technical')).toBeInTheDocument();
   });
 
+  it('shows an error when adding an interview fails', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockCreateJobInterview.mockRejectedValue(new Error('save failed'));
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /add interview/i }));
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(
+      await screen.findByText('Unable to save that interview. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Unable to save interview. Please try again.')).toBeInTheDocument();
+  });
+
   it('edits an interview from job detail', async () => {
     mockListJobs.mockResolvedValue([sampleJob]);
     mockListJobInterviews

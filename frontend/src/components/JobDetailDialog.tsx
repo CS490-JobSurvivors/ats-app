@@ -241,8 +241,12 @@ const JobDetailDialog = ({
       return;
     }
 
-    await onSaveInterview(buildInterviewPayload(interviewForm), editingInterviewId);
-    closeInterviewForm();
+    try {
+      await onSaveInterview(buildInterviewPayload(interviewForm), editingInterviewId);
+      closeInterviewForm();
+    } catch {
+      setInterviewError('Unable to save interview. Please try again.');
+    }
   };
 
   const handleSave = async () => {

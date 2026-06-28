@@ -287,12 +287,21 @@ const DashboardPage = () => {
     const token = data.session?.access_token;
     if (!token) return;
 
-    if (interviewId) {
-      await updateJobInterview(token, selectedJob.job_id, interviewId, payload);
-    } else {
-      await createJobInterview(token, selectedJob.job_id, payload);
+    setErrorMessage('');
+    try {
+      if (interviewId) {
+        await updateJobInterview(token, selectedJob.job_id, interviewId, payload);
+      } else {
+        await createJobInterview(token, selectedJob.job_id, payload);
+      }
+      await Promise.all([
+        loadJobInterviews(selectedJob.job_id),
+        loadJobActivity(selectedJob.job_id),
+      ]);
+    } catch {
+      setErrorMessage('Unable to save that interview. Please try again.');
+      throw new Error('Unable to save interview.');
     }
-    await Promise.all([loadJobInterviews(selectedJob.job_id), loadJobActivity(selectedJob.job_id)]);
   };
 
   const handleDialogSubmit = async (payload: JobPayload) => {
