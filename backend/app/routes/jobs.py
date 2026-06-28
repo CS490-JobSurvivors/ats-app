@@ -418,6 +418,7 @@ def create_job_followup(
         **followup.model_dump(),
         job_id=job_id,
         user_id=owner_id,
+        created_at=datetime.now(timezone.utc),
     )
 
     db.add(db_followup)
