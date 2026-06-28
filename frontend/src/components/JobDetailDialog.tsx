@@ -16,6 +16,8 @@ import {
   TextField,
   CircularProgress,
   IconButton,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -27,6 +29,8 @@ import FlagIcon from '@mui/icons-material/Flag';
 import SendIcon from '@mui/icons-material/Send';
 import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
 import {
+  FollowUpPayload,
+  FollowUpRecord,
   InterviewPayload,
   InterviewRecord,
   JobActivityEvent,
@@ -57,6 +61,9 @@ interface JobDetailDialogProps {
   onSaveInterview?: (payload: InterviewPayload, interviewId?: string) => Promise<void>;
   interviews?: InterviewRecord[];
   isInterviewsLoading?: boolean;
+  onSaveFollowUp?: (payload: FollowUpPayload, followUpId?: string) => Promise<void>;
+  followUps?: FollowUpRecord[];
+  isFollowUpsLoading?: boolean;
   activityEvents?: JobActivityEvent[];
   isActivityLoading?: boolean;
 }
@@ -66,6 +73,12 @@ const emptyInterviewForm = {
   scheduled_at_date: '',
   scheduled_at_time: '',
   interview_notes: '',
+};
+
+const emptyFollowUpForm = {
+  due_date: '',
+  notes: '',
+  is_completed: false,
 };
 
 const activityIcons: Record<JobActivityEvent['event_type'], typeof AssignmentTurnedInIcon> = {
@@ -104,6 +117,12 @@ const buildInterviewPayload = (form: typeof emptyInterviewForm): InterviewPayloa
   interview_notes: form.interview_notes.trim() || null,
 });
 
+const buildFollowUpPayload = (form: typeof emptyFollowUpForm): FollowUpPayload => ({
+  due_date: form.due_date,
+  notes: form.notes.trim() || null,
+  is_completed: form.is_completed,
+});
+
 const isRejectedEvent = (event: JobActivityEvent) =>
   event.title.toLowerCase().includes('rejected') || event.description?.endsWith('to Rejected');
 
@@ -140,6 +159,9 @@ const JobDetailDialog = ({
   onSaveInterview,
   interviews = [],
   isInterviewsLoading = false,
+  onSaveFollowUp,
+  followUps = [],
+  isFollowUpsLoading = false,
   activityEvents = [],
   isActivityLoading = false,
 }: JobDetailDialogProps) => {
@@ -149,6 +171,10 @@ const JobDetailDialog = ({
   const [editingInterviewId, setEditingInterviewId] = useState<string | undefined>();
   const [interviewForm, setInterviewForm] = useState(emptyInterviewForm);
   const [interviewError, setInterviewError] = useState('');
+  const [followUpFormOpen, setFollowUpFormOpen] = useState(false);
+  const [editingFollowUpId, setEditingFollowUpId] = useState<string | undefined>();
+  const [followUpForm, setFollowUpForm] = useState(emptyFollowUpForm);
+  const [followUpError, setFollowUpError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     job_title: '',
@@ -246,6 +272,47 @@ const JobDetailDialog = ({
       closeInterviewForm();
     } catch {
       setInterviewError('Unable to save interview. Please try again.');
+    }
+  };
+
+  const openFollowUpForm = (followUp?: FollowUpRecord) => {
+    setFollowUpError('');
+    setEditingFollowUpId(followUp?.followup_id);
+    setFollowUpForm(
+      followUp
+        ? {
+            due_date: followUp.due_date,
+            notes: followUp.notes || '',
+            is_completed: followUp.is_completed,
+          }
+        : emptyFollowUpForm
+    );
+    setFollowUpFormOpen(true);
+  };
+
+  const closeFollowUpForm = () => {
+    setFollowUpFormOpen(false);
+    setEditingFollowUpId(undefined);
+    setFollowUpForm(emptyFollowUpForm);
+    setFollowUpError('');
+  };
+
+  const updateFollowUpForm = (field: keyof typeof emptyFollowUpForm, value: string | boolean) => {
+    setFollowUpForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const submitFollowUpForm = async () => {
+    if (!onSaveFollowUp) return;
+    if (!followUpForm.due_date) {
+      setFollowUpError('Due date is required.');
+      return;
+    }
+
+    try {
+      await onSaveFollowUp(buildFollowUpPayload(followUpForm), editingFollowUpId);
+      closeFollowUpForm();
+    } catch {
+      setFollowUpError('Unable to save follow-up. Please try again.');
     }
   };
 
@@ -479,6 +546,84 @@ const JobDetailDialog = ({
                   Last updated: {new Date(job.updated_at).toLocaleDateString()}
                 </Typography>
               </Box>
+
+              <Divider sx={{ mb: 2 }} />
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  mb: 1,
+                }}
+              >
+                <Typography variant="subtitle2">Follow-ups</Typography>
+                {onSaveFollowUp && (
+                  <Button size="small" variant="outlined" onClick={() => openFollowUpForm()}>
+                    Add Follow-up
+                  </Button>
+                )}
+              </Box>
+              {isFollowUpsLoading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading follow-ups...
+                  </Typography>
+                </Box>
+              ) : followUps.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  No follow-ups scheduled.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'grid', gap: 1, mb: 2 }}>
+                  {followUps.map((followUp) => (
+                    <Box
+                      key={followUp.followup_id}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1.5,
+                        bgcolor: 'background.default',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 1,
+                        }}
+                      >
+                        <Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" fontWeight={700}>
+                              {formatActivityDate(`${followUp.due_date}T00:00:00`)}
+                            </Typography>
+                            <Chip
+                              label={followUp.is_completed ? 'Complete' : 'Open'}
+                              size="small"
+                              color={followUp.is_completed ? 'success' : 'default'}
+                            />
+                          </Box>
+                          {followUp.notes && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              {followUp.notes}
+                            </Typography>
+                          )}
+                        </Box>
+                        {onSaveFollowUp && (
+                          <Button size="small" onClick={() => openFollowUpForm(followUp)}>
+                            Edit
+                          </Button>
+                        )}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
 
               <Divider sx={{ mb: 2 }} />
 
@@ -840,6 +985,50 @@ const JobDetailDialog = ({
         <DialogActions>
           <Button onClick={closeInterviewForm}>Cancel</Button>
           <Button onClick={submitInterviewForm} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={followUpFormOpen} onClose={closeFollowUpForm} fullWidth maxWidth="xs">
+        <DialogTitle>{editingFollowUpId ? 'Edit Follow-up' : 'Add Follow-up'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
+            <TextField
+              label="Due date"
+              type="date"
+              size="small"
+              value={followUpForm.due_date}
+              onChange={(event) => updateFollowUpForm('due_date', event.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Notes"
+              size="small"
+              multiline
+              minRows={3}
+              value={followUpForm.notes}
+              onChange={(event) => updateFollowUpForm('notes', event.target.value)}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={followUpForm.is_completed}
+                  onChange={(event) => updateFollowUpForm('is_completed', event.target.checked)}
+                />
+              }
+              label="Completed"
+            />
+            {followUpError && (
+              <Typography variant="body2" color="error">
+                {followUpError}
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeFollowUpForm}>Cancel</Button>
+          <Button onClick={submitFollowUpForm} variant="contained">
             Save
           </Button>
         </DialogActions>

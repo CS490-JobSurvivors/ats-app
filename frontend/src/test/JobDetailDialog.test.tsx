@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JobDetailDialog from '../components/JobDetailDialog';
-import { InterviewRecord, JobRecord } from '../api/jobs';
+import { FollowUpRecord, InterviewRecord, JobRecord } from '../api/jobs';
 import { stageColors } from '../utils/stageColors';
 
 const mockJob: JobRecord = {
@@ -23,6 +23,7 @@ const mockOnDelete = jest.fn();
 const mockOnStageChange = jest.fn();
 const mockOnDeleteStageHistory = jest.fn();
 const mockOnSaveInterview = jest.fn();
+const mockOnSaveFollowUp = jest.fn();
 const interviews: InterviewRecord[] = [
   {
     interview_id: 'interview-1',
@@ -32,6 +33,16 @@ const interviews: InterviewRecord[] = [
     scheduled_at_date: '2026-07-08',
     scheduled_at_time: '2026-07-08T15:30:00.000Z',
     interview_notes: 'Initial recruiter call.',
+  },
+];
+const followUps: FollowUpRecord[] = [
+  {
+    followup_id: 'followup-1',
+    job_id: '123',
+    user_id: 'user-1',
+    due_date: '2026-07-09',
+    notes: 'Email recruiter.',
+    is_completed: false,
   },
 ];
 const activityEvents = [
@@ -98,6 +109,7 @@ describe('JobDetailDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockOnSaveInterview.mockResolvedValue(undefined);
+    mockOnSaveFollowUp.mockResolvedValue(undefined);
   });
 
   it('renders job details when open', () => {
@@ -234,6 +246,112 @@ describe('JobDetailDialog', () => {
     );
 
     expect(screen.getByText(/loading activity/i)).toBeInTheDocument();
+  });
+
+  it('submits a new follow-up from the add follow-up form', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add follow-up/i }));
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-09' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Email recruiter.' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockOnSaveFollowUp).toHaveBeenCalledWith(
+        {
+          due_date: '2026-07-09',
+          notes: 'Email recruiter.',
+          is_completed: false,
+        },
+        undefined
+      );
+    });
+  });
+
+  it('submits updates from the edit follow-up form', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+        followUps={followUps}
+      />
+    );
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-12' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Followed up.' } });
+    await userEvent.click(screen.getByLabelText(/completed/i));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockOnSaveFollowUp).toHaveBeenCalledWith(
+        {
+          due_date: '2026-07-12',
+          notes: 'Followed up.',
+          is_completed: true,
+        },
+        'followup-1'
+      );
+    });
+  });
+
+  it('shows validation error when follow-up due date is missing', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add follow-up/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByText('Due date is required.')).toBeInTheDocument();
+    expect(mockOnSaveFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('keeps the follow-up form open and shows an error when follow-up save fails', async () => {
+    mockOnSaveFollowUp.mockRejectedValue(new Error('save failed'));
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add follow-up/i }));
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-09' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(
+      await screen.findByText('Unable to save follow-up. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /add follow-up/i })).toBeInTheDocument();
   });
 
   it('submits a new interview from the add interview form', async () => {

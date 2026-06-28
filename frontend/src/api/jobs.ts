@@ -64,6 +64,24 @@ export interface InterviewPayload {
 
 export type InterviewUpdatePayload = Partial<InterviewPayload>;
 
+export interface FollowUpRecord {
+  followup_id: string;
+  job_id: string;
+  user_id: string;
+  due_date: string;
+  notes?: string | null;
+  is_completed: boolean;
+  created_at?: string | null;
+}
+
+export interface FollowUpPayload {
+  due_date: string;
+  notes?: string | null;
+  is_completed?: boolean;
+}
+
+export type FollowUpUpdatePayload = Partial<FollowUpPayload>;
+
 const authHeaders = (accessToken: string) => ({
   Authorization: `Bearer ${accessToken}`,
 });
@@ -208,6 +226,65 @@ export const updateJobInterview = async (
 
   if (!response.ok) {
     throw new Error('Unable to update interview.');
+  }
+
+  return await response.json();
+};
+
+export const listJobFollowUps = async (
+  accessToken: string,
+  jobId: string
+): Promise<FollowUpRecord[]> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/followups`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load follow-ups.');
+  }
+
+  return await response.json();
+};
+
+export const createJobFollowUp = async (
+  accessToken: string,
+  jobId: string,
+  followUp: FollowUpPayload
+): Promise<FollowUpRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/followups`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(followUp),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to save follow-up.');
+  }
+
+  return await response.json();
+};
+
+export const updateJobFollowUp = async (
+  accessToken: string,
+  jobId: string,
+  followUpId: string,
+  followUp: FollowUpUpdatePayload
+): Promise<FollowUpRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/followups/${followUpId}`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(followUp),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to update follow-up.');
   }
 
   return await response.json();
