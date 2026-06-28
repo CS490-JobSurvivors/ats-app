@@ -15,6 +15,7 @@ class JobBase(BaseModel):
     application_link: str | None = None
     job_location: str | None = None
     deadline: date | None = None
+    outcome_notes: str | None = None
     job_stage: JobStage = "Interested"
 
 
@@ -29,6 +30,7 @@ class JobUpdate(BaseModel):
     application_link: str | None = None
     job_location: str | None = None
     deadline: date | None = None
+    outcome_notes: str | None = None
     job_stage: JobStage | None = None
 
 

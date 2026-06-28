@@ -46,6 +46,8 @@ const ALL_STAGES: JobStage[] = [
   'Archived',
 ];
 
+const OUTCOME_STAGES: JobStage[] = ['Offer', 'Rejected', 'Archived'];
+
 interface JobDetailDialogProps {
   open: boolean;
   job: JobRecord | null;
@@ -158,6 +160,7 @@ const JobDetailDialog = ({
     job_location: '',
     deadline: '',
     recruiter_notes: '',
+    outcome_notes: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -172,6 +175,7 @@ const JobDetailDialog = ({
         job_location: job.job_location || '',
         deadline: job.deadline || '',
         recruiter_notes: job.recruiter_notes || '',
+        outcome_notes: job.outcome_notes || '',
       });
     }
     setIsEditing(false);
@@ -265,6 +269,7 @@ const JobDetailDialog = ({
         job_location: form.job_location.trim() || null,
         deadline: form.deadline || null,
         recruiter_notes: form.recruiter_notes.trim() || null,
+        outcome_notes: form.outcome_notes.trim() || null,
       });
       setIsEditing(false);
     } catch {
@@ -397,6 +402,16 @@ const JobDetailDialog = ({
                 multiline
                 rows={3}
               />
+              {OUTCOME_STAGES.includes(job.job_stage) && (
+                <TextField
+                  label="Outcome Notes"
+                  value={form.outcome_notes}
+                  onChange={(e) => setForm((f) => ({ ...f, outcome_notes: e.target.value }))}
+                  fullWidth
+                  multiline
+                  rows={3}
+                />
+              )}
             </Box>
           ) : (
             <>
@@ -462,6 +477,21 @@ const JobDetailDialog = ({
                     sx={{ whiteSpace: 'pre-wrap' }}
                   >
                     {job.recruiter_notes}
+                  </Typography>
+                </Box>
+              )}
+
+              {OUTCOME_STAGES.includes(job.job_stage) && job.outcome_notes && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Outcome Notes
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ whiteSpace: 'pre-wrap' }}
+                  >
+                    {job.outcome_notes}
                   </Typography>
                 </Box>
               )}

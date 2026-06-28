@@ -498,4 +498,34 @@ describe('JobDetailDialog', () => {
     expect(screen.getByDisplayValue('2026-07-15')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Follow up Monday.')).toBeInTheDocument();
   });
+
+  it('renders outcome notes when job stage is Rejected', () => {
+    renderDialog({
+      ...mockJob,
+      job_stage: 'Rejected',
+      outcome_notes: 'Went with an internal candidate.',
+    });
+    expect(screen.getByText('Went with an internal candidate.')).toBeInTheDocument();
+  });
+
+  it('does not render outcome notes for non-outcome stages', () => {
+    renderDialog({ ...mockJob, job_stage: 'Applied', outcome_notes: 'Should not show.' });
+    expect(screen.queryByText('Should not show.')).not.toBeInTheDocument();
+  });
+
+  it('pre-fills outcome notes in edit form when stage is an outcome stage', () => {
+    renderDialog({
+      ...mockJob,
+      job_stage: 'Offer',
+      outcome_notes: 'Negotiating start date.',
+    });
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.getByDisplayValue('Negotiating start date.')).toBeInTheDocument();
+  });
+
+  it('does not show outcome notes field in edit form for non-outcome stages', () => {
+    renderDialog({ ...mockJob, job_stage: 'Applied' });
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.queryByLabelText('Outcome Notes')).not.toBeInTheDocument();
+  });
 });
