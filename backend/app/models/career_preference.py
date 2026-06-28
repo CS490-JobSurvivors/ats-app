@@ -1,5 +1,4 @@
 import uuid
-from decimal import Decimal
 
 from sqlalchemy import JSON, Numeric, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
@@ -14,4 +13,4 @@ class CareerPreference(Base):
     target_roles: Mapped[list | None] = mapped_column(JSON, nullable=True)
     location_preference: Mapped[str | None] = mapped_column(Text, nullable=True)
     work_mode: Mapped[str | None] = mapped_column(Text, nullable=True)
-    salary_minimum: Mapped[Decimal | None] = mapped_column(Numeric, nullable=True)
+    salary_minimum: Mapped[int | None] = mapped_column(Numeric, nullable=True)
