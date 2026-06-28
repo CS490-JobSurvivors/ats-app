@@ -42,7 +42,7 @@ Thumbs.db
 .idea/
 
 # Claude Code
-.claude/*
+.claude
 
 # Project Runners
 .testProject.sh
