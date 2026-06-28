@@ -446,3 +446,17 @@ def update_job_followup(
     db.refresh(db_followup)
 
     return db_followup
+
+
+@router.delete("/{job_id}/followups/{followup_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_job_followup(
+    job_id: UUID,
+    followup_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_followup = get_owned_followup_or_404(job_id, followup_id, owner_id, db)
+
+    db.delete(db_followup)
+    db.commit()

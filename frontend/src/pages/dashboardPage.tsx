@@ -34,6 +34,7 @@ import {
   updateJobInterview,
   createJobFollowUp,
   updateJobFollowUp,
+  deleteJobFollowUp,
   InterviewPayload,
   InterviewRecord,
   FollowUpPayload,
@@ -355,6 +356,24 @@ const DashboardPage = () => {
     }
   };
 
+  const handleDeleteFollowUp = async (followUpId: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      await deleteJobFollowUp(token, selectedJob.job_id, followUpId);
+      await Promise.all([
+        loadJobFollowUps(selectedJob.job_id),
+        loadJobActivity(selectedJob.job_id),
+      ]);
+    } catch {
+      setErrorMessage('Unable to delete that follow-up. Please try again.');
+    }
+  };
+
   const handleDialogSubmit = async (payload: JobPayload) => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -595,6 +614,7 @@ const DashboardPage = () => {
         interviews={selectedJobInterviews}
         isInterviewsLoading={isInterviewsLoading}
         onSaveFollowUp={handleSaveFollowUp}
+        onDeleteFollowUp={handleDeleteFollowUp}
         followUps={selectedJobFollowUps}
         isFollowUpsLoading={isFollowUpsLoading}
         onStageChange={async (newStage) => {

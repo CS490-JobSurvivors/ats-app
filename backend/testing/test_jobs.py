@@ -150,9 +150,12 @@ class FakeDb:
 
         return None
 
-    def delete(self, obj: Job | JobStageHistory):
+    def delete(self, obj: Job | JobStageHistory | FollowUp):
         if isinstance(obj, JobStageHistory):
             stage_histories.remove(obj)
+            return
+        if isinstance(obj, FollowUp):
+            followups.remove(obj)
             return
 
         jobs.remove(obj)
@@ -661,3 +664,32 @@ def test_update_job_followup_only_updates_owned_followup():
     assert body["due_date"] == "2026-07-10"
     assert body["notes"] == "Sent thank-you note."
     assert body["is_completed"] is True
+
+
+def test_delete_job_followup_only_deletes_owned_followup():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    followup_response = client.post(
+        f"/jobs/{job_id}/followups",
+        json={
+            "due_date": "2026-07-08",
+            "notes": "Email recruiter.",
+            "is_completed": False,
+        },
+    )
+    followup_id = followup_response.json()["followup_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.delete(f"/jobs/{job_id}/followups/{followup_id}")
+
+    set_authenticated_user(owner_id)
+    delete_response = client.delete(f"/jobs/{job_id}/followups/{followup_id}")
+    list_response = client.get(f"/jobs/{job_id}/followups")
+
+    assert denied_response.status_code == 404
+    assert delete_response.status_code == 204
+    assert list_response.status_code == 200
+    assert list_response.json() == []

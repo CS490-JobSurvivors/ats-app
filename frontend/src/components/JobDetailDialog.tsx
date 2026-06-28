@@ -18,6 +18,7 @@ import {
   IconButton,
   Checkbox,
   FormControlLabel,
+  Alert,
 } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -64,6 +65,7 @@ interface JobDetailDialogProps {
   onSaveFollowUp?: (payload: FollowUpPayload, followUpId?: string) => Promise<void>;
   followUps?: FollowUpRecord[];
   isFollowUpsLoading?: boolean;
+  onDeleteFollowUp?: (followUpId: string) => Promise<void>;
   activityEvents?: JobActivityEvent[];
   isActivityLoading?: boolean;
 }
@@ -162,6 +164,7 @@ const JobDetailDialog = ({
   onSaveFollowUp,
   followUps = [],
   isFollowUpsLoading = false,
+  onDeleteFollowUp,
   activityEvents = [],
   isActivityLoading = false,
 }: JobDetailDialogProps) => {
@@ -175,6 +178,7 @@ const JobDetailDialog = ({
   const [editingFollowUpId, setEditingFollowUpId] = useState<string | undefined>();
   const [followUpForm, setFollowUpForm] = useState(emptyFollowUpForm);
   const [followUpError, setFollowUpError] = useState('');
+  const [pendingDeleteFollowUp, setPendingDeleteFollowUp] = useState<FollowUpRecord | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     job_title: '',
@@ -314,6 +318,12 @@ const JobDetailDialog = ({
     } catch {
       setFollowUpError('Unable to save follow-up. Please try again.');
     }
+  };
+
+  const confirmDeleteFollowUp = async () => {
+    if (!pendingDeleteFollowUp || !onDeleteFollowUp) return;
+    await onDeleteFollowUp(pendingDeleteFollowUp.followup_id);
+    setPendingDeleteFollowUp(null);
   };
 
   const handleSave = async () => {
@@ -614,11 +624,22 @@ const JobDetailDialog = ({
                             </Typography>
                           )}
                         </Box>
-                        {onSaveFollowUp && (
-                          <Button size="small" onClick={() => openFollowUpForm(followUp)}>
-                            Edit
-                          </Button>
-                        )}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {onSaveFollowUp && (
+                            <Button size="small" onClick={() => openFollowUpForm(followUp)}>
+                              Edit
+                            </Button>
+                          )}
+                          {onDeleteFollowUp && (
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => setPendingDeleteFollowUp(followUp)}
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </Box>
                       </Box>
                     </Box>
                   ))}
@@ -1020,9 +1041,9 @@ const JobDetailDialog = ({
               label="Completed"
             />
             {followUpError && (
-              <Typography variant="body2" color="error">
+              <Alert severity="error">
                 {followUpError}
-              </Typography>
+              </Alert>
             )}
           </Box>
         </DialogContent>
@@ -1030,6 +1051,26 @@ const JobDetailDialog = ({
           <Button onClick={closeFollowUpForm}>Cancel</Button>
           <Button onClick={submitFollowUpForm} variant="contained">
             Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pendingDeleteFollowUp)}
+        onClose={() => setPendingDeleteFollowUp(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Delete Follow-up?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            This follow-up will be removed from the job.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDeleteFollowUp(null)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={confirmDeleteFollowUp}>
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

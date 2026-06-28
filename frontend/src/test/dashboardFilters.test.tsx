@@ -25,6 +25,7 @@ jest.mock('../api/jobs', () => ({
   updateJobInterview: jest.fn(),
   createJobFollowUp: jest.fn(),
   updateJobFollowUp: jest.fn(),
+  deleteJobFollowUp: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;

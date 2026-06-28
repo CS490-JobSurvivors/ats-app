@@ -24,6 +24,7 @@ const mockOnStageChange = jest.fn();
 const mockOnDeleteStageHistory = jest.fn();
 const mockOnSaveInterview = jest.fn();
 const mockOnSaveFollowUp = jest.fn();
+const mockOnDeleteFollowUp = jest.fn();
 const interviews: InterviewRecord[] = [
   {
     interview_id: 'interview-1',
@@ -110,6 +111,7 @@ describe('JobDetailDialog', () => {
     jest.clearAllMocks();
     mockOnSaveInterview.mockResolvedValue(undefined);
     mockOnSaveFollowUp.mockResolvedValue(undefined);
+    mockOnDeleteFollowUp.mockResolvedValue(undefined);
   });
 
   it('renders job details when open', () => {
@@ -352,6 +354,32 @@ describe('JobDetailDialog', () => {
       await screen.findByText('Unable to save follow-up. Please try again.')
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /add follow-up/i })).toBeInTheDocument();
+  });
+
+  it('confirms before deleting a follow-up', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+        onDeleteFollowUp={mockOnDeleteFollowUp}
+        followUps={followUps}
+      />
+    );
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
+    expect(screen.getByRole('heading', { name: /delete follow-up/i })).toBeInTheDocument();
+
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
+    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockOnDeleteFollowUp).toHaveBeenCalledWith('followup-1');
+    });
   });
 
   it('submits a new interview from the add interview form', async () => {

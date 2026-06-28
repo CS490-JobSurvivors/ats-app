@@ -17,6 +17,7 @@ import {
   updateJobInterview,
   createJobFollowUp,
   updateJobFollowUp,
+  deleteJobFollowUp,
 } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
@@ -40,6 +41,7 @@ jest.mock('../api/jobs', () => ({
   updateJobInterview: jest.fn(),
   createJobFollowUp: jest.fn(),
   updateJobFollowUp: jest.fn(),
+  deleteJobFollowUp: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
@@ -55,6 +57,7 @@ const mockCreateJobInterview = createJobInterview as jest.Mock;
 const mockUpdateJobInterview = updateJobInterview as jest.Mock;
 const mockCreateJobFollowUp = createJobFollowUp as jest.Mock;
 const mockUpdateJobFollowUp = updateJobFollowUp as jest.Mock;
+const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
 
 const sampleJob = {
   job_id: 'job-1',
@@ -82,6 +85,7 @@ beforeEach(() => {
   mockUpdateJobInterview.mockReset();
   mockCreateJobFollowUp.mockReset();
   mockUpdateJobFollowUp.mockReset();
+  mockDeleteJobFollowUp.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -412,6 +416,35 @@ describe('DashboardPage', () => {
       await screen.findByText('Unable to save that follow-up. Please try again.')
     ).toBeInTheDocument();
     expect(screen.getByText('Unable to save follow-up. Please try again.')).toBeInTheDocument();
+  });
+
+  it('deletes a follow-up from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobFollowUps
+      .mockResolvedValueOnce([
+        {
+          followup_id: 'followup-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          due_date: '2026-07-09',
+          notes: 'Email recruiter.',
+          is_completed: false,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    mockDeleteJobFollowUp.mockResolvedValue(undefined);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Email recruiter.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
+    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockDeleteJobFollowUp).toHaveBeenCalledWith('test-token', 'job-1', 'followup-1');
+    });
+    expect(await screen.findByText('No follow-ups scheduled.')).toBeInTheDocument();
   });
 
   it('deletes a stage history event from the activity timeline', async () => {

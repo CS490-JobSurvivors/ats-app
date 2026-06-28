@@ -289,3 +289,18 @@ export const updateJobFollowUp = async (
 
   return await response.json();
 };
+
+export const deleteJobFollowUp = async (
+  accessToken: string,
+  jobId: string,
+  followUpId: string
+): Promise<void> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/followups/${followUpId}`, {
+    method: 'DELETE',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to delete follow-up.');
+  }
+};
