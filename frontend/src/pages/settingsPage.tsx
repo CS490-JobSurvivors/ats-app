@@ -67,7 +67,6 @@ const SettingsPage = () => {
           )}
         </Box>
       </Paper>
-
     </Container>
   );
 };
