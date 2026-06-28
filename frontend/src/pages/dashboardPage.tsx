@@ -41,6 +41,7 @@ import {
 import JobCard from '../components/JobCard';
 import JobFormDialog from '../components/JobFormDialog';
 import JobDetailDialog from '../components/JobDetailDialog';
+import { generateResume } from '../api/resume';
 
 type SortBy = 'last_activity' | 'deadline' | 'company' | 'created_date';
 type SortOrder = 'asc' | 'desc';
@@ -554,6 +555,13 @@ const DashboardPage = () => {
         }}
         activityEvents={selectedJobActivity}
         isActivityLoading={isActivityLoading}
+        onGenerateResume={async () => {
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.access_token;
+          if (!token || !selectedJob) throw new Error('Not authenticated.');
+          const result = await generateResume(token, selectedJob.job_id);
+          return result.resume;
+        }}
       />
 
       <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>
