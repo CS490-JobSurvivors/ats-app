@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -26,7 +26,14 @@ import EventNoteIcon from '@mui/icons-material/EventNote';
 import FlagIcon from '@mui/icons-material/Flag';
 import SendIcon from '@mui/icons-material/Send';
 import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
-import { JobActivityEvent, JobRecord, JobPayload, JobStage } from '../api/jobs';
+import {
+  InterviewPayload,
+  InterviewRecord,
+  JobActivityEvent,
+  JobPayload,
+  JobRecord,
+  JobStage,
+} from '../api/jobs';
 import { stageColors } from '../utils/stageColors';
 import { FORWARD_TRANSITIONS, isForwardTransition } from '../utils/stageTransitions';
 
@@ -47,9 +54,19 @@ interface JobDetailDialogProps {
   onSave: (payload: JobPayload) => Promise<void>;
   onStageChange: (newStage: JobStage) => void;
   onDeleteStageHistory?: (eventId: string) => void;
+  onSaveInterview?: (payload: InterviewPayload, interviewId?: string) => Promise<void>;
+  interviews?: InterviewRecord[];
+  isInterviewsLoading?: boolean;
   activityEvents?: JobActivityEvent[];
   isActivityLoading?: boolean;
 }
+
+const emptyInterviewForm = {
+  round_type: '',
+  scheduled_at_date: '',
+  scheduled_at_time: '',
+  interview_notes: '',
+};
 
 const activityIcons: Record<JobActivityEvent['event_type'], typeof AssignmentTurnedInIcon> = {
   applied: SendIcon,
@@ -71,6 +88,21 @@ const formatActivityTime = (value: string) =>
     hour: 'numeric',
     minute: '2-digit',
   });
+
+const formatInterviewTimeForInput = (value: string) => {
+  const date = new Date(value);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${hours}:${minutes}`;
+};
+
+const buildInterviewPayload = (form: typeof emptyInterviewForm): InterviewPayload => ({
+  round_type: form.round_type.trim(),
+  scheduled_at_date: form.scheduled_at_date,
+  scheduled_at_time: new Date(`${form.scheduled_at_date}T${form.scheduled_at_time}`).toISOString(),
+  interview_notes: form.interview_notes.trim() || null,
+});
 
 const isRejectedEvent = (event: JobActivityEvent) =>
   event.title.toLowerCase().includes('rejected') || event.description?.endsWith('to Rejected');
@@ -105,11 +137,18 @@ const JobDetailDialog = ({
   onSave,
   onStageChange,
   onDeleteStageHistory,
+  onSaveInterview,
+  interviews = [],
+  isInterviewsLoading = false,
   activityEvents = [],
   isActivityLoading = false,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
+  const [interviewFormOpen, setInterviewFormOpen] = useState(false);
+  const [editingInterviewId, setEditingInterviewId] = useState<string | undefined>();
+  const [interviewForm, setInterviewForm] = useState(emptyInterviewForm);
+  const [interviewError, setInterviewError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     job_title: '',
@@ -162,6 +201,52 @@ const JobDetailDialog = ({
       onDeleteStageHistory(pendingDeleteEvent.event_id);
     }
     setPendingDeleteEvent(null);
+  };
+
+  const openInterviewForm = (interview?: InterviewRecord) => {
+    setInterviewError('');
+    setEditingInterviewId(interview?.interview_id);
+    setInterviewForm(
+      interview
+        ? {
+            round_type: interview.round_type,
+            scheduled_at_date: interview.scheduled_at_date,
+            scheduled_at_time: formatInterviewTimeForInput(interview.scheduled_at_time),
+            interview_notes: interview.interview_notes || '',
+          }
+        : emptyInterviewForm
+    );
+    setInterviewFormOpen(true);
+  };
+
+  const closeInterviewForm = () => {
+    setInterviewFormOpen(false);
+    setEditingInterviewId(undefined);
+    setInterviewForm(emptyInterviewForm);
+    setInterviewError('');
+  };
+
+  const updateInterviewForm = (field: keyof typeof emptyInterviewForm, value: string) => {
+    setInterviewForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const submitInterviewForm = async () => {
+    if (!onSaveInterview) return;
+    if (
+      !interviewForm.round_type.trim() ||
+      !interviewForm.scheduled_at_date ||
+      !interviewForm.scheduled_at_time
+    ) {
+      setInterviewError('Round type, date, and time are required.');
+      return;
+    }
+
+    try {
+      await onSaveInterview(buildInterviewPayload(interviewForm), editingInterviewId);
+      closeInterviewForm();
+    } catch {
+      setInterviewError('Unable to save interview. Please try again.');
+    }
   };
 
   const handleSave = async () => {
@@ -242,7 +327,7 @@ const JobDetailDialog = ({
                         <Typography variant="body2">{stage}</Typography>
                         {!isCurrent && !isForward && (
                           <Typography variant="caption" color="warning.main">
-                            ⚠ non-standard
+                            non-standard
                           </Typography>
                         )}
                       </Box>
@@ -394,10 +479,82 @@ const JobDetailDialog = ({
                   Last updated: {new Date(job.updated_at).toLocaleDateString()}
                 </Typography>
               </Box>
-            </>
-          )}
-          {!isEditing && (
-            <>
+
+              <Divider sx={{ mb: 2 }} />
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  mb: 1,
+                }}
+              >
+                <Typography variant="subtitle2">Interviews</Typography>
+                {onSaveInterview && (
+                  <Button size="small" variant="outlined" onClick={() => openInterviewForm()}>
+                    Add Interview
+                  </Button>
+                )}
+              </Box>
+              {isInterviewsLoading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading interviews...
+                  </Typography>
+                </Box>
+              ) : interviews.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  No interviews scheduled.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'grid', gap: 1, mb: 2 }}>
+                  {interviews.map((interview) => (
+                    <Box
+                      key={interview.interview_id}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1.5,
+                        bgcolor: 'background.default',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 1,
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="body2" fontWeight={700}>
+                            {interview.round_type}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {formatActivityDate(interview.scheduled_at_time)} at{' '}
+                            {formatActivityTime(interview.scheduled_at_time)}
+                          </Typography>
+                          {interview.interview_notes && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              {interview.interview_notes}
+                            </Typography>
+                          )}
+                        </Box>
+                        {onSaveInterview && (
+                          <Button size="small" onClick={() => openInterviewForm(interview)}>
+                            Edit
+                          </Button>
+                        )}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+
               <Divider sx={{ mb: 2 }} />
 
               <Typography variant="subtitle2" gutterBottom>
@@ -635,6 +792,55 @@ const JobDetailDialog = ({
           <Button onClick={() => setPendingDeleteEvent(null)}>Cancel</Button>
           <Button onClick={confirmStageHistoryDelete} variant="contained" color="error">
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={interviewFormOpen} onClose={closeInterviewForm} fullWidth maxWidth="xs">
+        <DialogTitle>{editingInterviewId ? 'Edit Interview' : 'Add Interview'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
+            <TextField
+              label="Round type"
+              size="small"
+              value={interviewForm.round_type}
+              onChange={(event) => updateInterviewForm('round_type', event.target.value)}
+            />
+            <TextField
+              label="Date"
+              type="date"
+              size="small"
+              value={interviewForm.scheduled_at_date}
+              onChange={(event) => updateInterviewForm('scheduled_at_date', event.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Time"
+              type="time"
+              size="small"
+              value={interviewForm.scheduled_at_time}
+              onChange={(event) => updateInterviewForm('scheduled_at_time', event.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Notes"
+              size="small"
+              multiline
+              minRows={3}
+              value={interviewForm.interview_notes}
+              onChange={(event) => updateInterviewForm('interview_notes', event.target.value)}
+            />
+            {interviewError && (
+              <Typography variant="body2" color="error">
+                {interviewError}
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeInterviewForm}>Cancel</Button>
+          <Button onClick={submitInterviewForm} variant="contained">
+            Save
           </Button>
         </DialogActions>
       </Dialog>

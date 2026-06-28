@@ -11,7 +11,16 @@ from app.models.followup import FollowUp
 from app.models.interviews import Interview
 from app.models.job_stage_history import JobStageHistory
 from app.models.jobs import Job
-from app.schemas.jobs import ActivityEventType, JobActivityEvent, JobCreate, JobRead, JobUpdate
+from app.schemas.jobs import (
+    ActivityEventType,
+    InterviewCreate,
+    InterviewRead,
+    InterviewUpdate,
+    JobActivityEvent,
+    JobCreate,
+    JobRead,
+    JobUpdate,
+)
 from app.services.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -54,6 +63,27 @@ def sync_job_stage_with_history(db_job: Job, db: Session) -> bool:
 
     db_job.job_stage = latest_history.to_stage
     return True
+
+
+def get_owned_interview_or_404(
+    job_id: UUID, interview_id: UUID, owner_id: UUID, db: Session
+) -> Interview:
+    get_owned_job_or_404(job_id, owner_id, db)
+    interview = db.scalar(
+        select(Interview).where(
+            Interview.interview_id == interview_id,
+            Interview.job_id == job_id,
+            Interview.user_id == owner_id,
+        )
+    )
+
+    if interview is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Interview not found",
+        )
+
+    return interview
 
 
 def as_datetime(value: date | datetime) -> datetime:
@@ -267,3 +297,65 @@ def delete_job_stage_history(
     latest_history = get_latest_stage_history(job_id, db)
     db_job.job_stage = latest_history.to_stage if latest_history else fallback_stage
     db.commit()
+
+
+@router.get("/{job_id}/interviews", response_model=list[InterviewRead])
+def list_job_interviews(
+    job_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_job_or_404(job_id, owner_id, db)
+
+    return db.scalars(
+        select(Interview)
+        .where(Interview.job_id == job_id, Interview.user_id == owner_id)
+        .order_by(Interview.scheduled_at_date.asc(), Interview.scheduled_at_time.asc())
+    ).all()
+
+
+@router.post(
+    "/{job_id}/interviews",
+    response_model=InterviewRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_job_interview(
+    job_id: UUID,
+    interview: InterviewCreate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_job_or_404(job_id, owner_id, db)
+    db_interview = Interview(
+        **interview.model_dump(),
+        job_id=job_id,
+        user_id=owner_id,
+    )
+
+    db.add(db_interview)
+    db.commit()
+    db.refresh(db_interview)
+
+    return db_interview
+
+
+@router.patch("/{job_id}/interviews/{interview_id}", response_model=InterviewRead)
+def update_job_interview(
+    job_id: UUID,
+    interview_id: UUID,
+    interview_update: InterviewUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_interview = get_owned_interview_or_404(job_id, interview_id, owner_id, db)
+
+    for field, value in interview_update.model_dump(exclude_unset=True).items():
+        setattr(db_interview, field, value)
+
+    db.commit()
+    db.refresh(db_interview)
+
+    return db_interview
