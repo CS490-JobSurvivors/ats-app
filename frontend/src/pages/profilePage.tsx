@@ -16,6 +16,8 @@ import { useProfile } from '../contexts/ProfileContext';
 import { listExperiences, ExperienceRecord } from '../api/experiences';
 import { listSkills, SkillRecord } from '../api/skills';
 import { getCareerPreferences, CareerPreferenceRecord } from '../api/careerPreferences';
+import { listEducation, EducationRecord } from '../api/education';
+import EducationSection from '../components/EducationSection';
 import ExperienceSection from '../components/ExperienceSection';
 import SkillsSection from '../components/SkillsSection';
 import CareerPreferencesSection from '../components/CareerPreferencesSection';
@@ -80,6 +82,8 @@ const ProfileView = ({
   onExperiencesChange,
   onSkillsChange,
   onPreferencesChange,
+  educations,
+  onEducationsChange,
 }: {
   profile: ProfileFields;
   onEdit: () => void;
@@ -90,6 +94,8 @@ const ProfileView = ({
   onExperiencesChange: (updated: ExperienceRecord[]) => void;
   onSkillsChange: (updated: SkillRecord[]) => void;
   onPreferencesChange: (updated: CareerPreferenceRecord) => void;
+  educations: EducationRecord[];
+  onEducationsChange: (updated: EducationRecord[]) => void;
 }) => (
   <Box sx={{ maxWidth: 900, mx: 'auto', px: 3, py: 5 }}>
     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
@@ -144,6 +150,11 @@ const ProfileView = ({
       accessToken={accessToken}
       onExperiencesChange={onExperiencesChange}
     />
+    <EducationSection
+      educations={educations}
+      accessToken={accessToken}
+      onEducationsChange={onEducationsChange}
+    />
     <SkillsSection skills={skills} accessToken={accessToken} onSkillsChange={onSkillsChange} />
     <CareerPreferencesSection
       preferences={preferences}
@@ -172,6 +183,7 @@ function ProfilePage() {
   const [experiences, setExperiences] = useState<ExperienceRecord[]>([]);
   const [skills, setSkills] = useState<SkillRecord[]>([]);
   const [preferences, setPreferences] = useState<CareerPreferenceRecord | null>(null);
+  const [educations, setEducations] = useState<EducationRecord[]>([]);
   const [accessToken, setAccessToken] = useState('');
 
   useEffect(() => {
@@ -187,6 +199,9 @@ function ProfilePage() {
         .catch(() => {});
       getCareerPreferences(token)
         .then(setPreferences)
+        .catch(() => {});
+      listEducation(token)
+        .then(setEducations)
         .catch(() => {});
     });
   }, []);
@@ -267,6 +282,8 @@ function ProfilePage() {
         onExperiencesChange={setExperiences}
         onSkillsChange={setSkills}
         onPreferencesChange={setPreferences}
+        educations={educations}
+        onEducationsChange={setEducations}
       />
     );
   }
@@ -425,6 +442,11 @@ function ProfilePage() {
         experiences={experiences}
         accessToken={accessToken}
         onExperiencesChange={setExperiences}
+      />
+      <EducationSection
+        educations={educations}
+        accessToken={accessToken}
+        onEducationsChange={setEducations}
       />
       <SkillsSection skills={skills} accessToken={accessToken} onSkillsChange={setSkills} />
       <CareerPreferencesSection

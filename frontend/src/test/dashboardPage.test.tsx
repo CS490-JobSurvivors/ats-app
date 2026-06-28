@@ -4,7 +4,17 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
-import { listJobs, createJob, updateJob, deleteJob } from '../api/jobs';
+import {
+  listJobs,
+  listJobActivity,
+  listJobInterviews,
+  createJob,
+  updateJob,
+  deleteJob,
+  deleteJobStageHistory,
+  createJobInterview,
+  updateJobInterview,
+} from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -16,16 +26,26 @@ jest.mock('../utils/supabaseClient', () => ({
 
 jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
+  listJobActivity: jest.fn(),
+  listJobInterviews: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
   deleteJob: jest.fn(),
+  deleteJobStageHistory: jest.fn(),
+  createJobInterview: jest.fn(),
+  updateJobInterview: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
+const mockListJobActivity = listJobActivity as jest.Mock;
+const mockListJobInterviews = listJobInterviews as jest.Mock;
 const mockCreateJob = createJob as jest.Mock;
 const mockUpdateJob = updateJob as jest.Mock;
 const mockDeleteJob = deleteJob as jest.Mock;
+const mockDeleteJobStageHistory = deleteJobStageHistory as jest.Mock;
+const mockCreateJobInterview = createJobInterview as jest.Mock;
+const mockUpdateJobInterview = updateJobInterview as jest.Mock;
 
 const sampleJob = {
   job_id: 'job-1',
@@ -42,9 +62,14 @@ const sampleJob = {
 beforeEach(() => {
   mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
   mockListJobs.mockResolvedValue([]);
+  mockListJobActivity.mockResolvedValue([]);
+  mockListJobInterviews.mockResolvedValue([]);
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
   mockDeleteJob.mockReset();
+  mockDeleteJobStageHistory.mockReset();
+  mockCreateJobInterview.mockReset();
+  mockUpdateJobInterview.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -123,6 +148,213 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByText('Software Engineer'));
     await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
     expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument();
+  });
+
+  it('loads activity timeline when a job detail is opened', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobActivity.mockResolvedValue([
+      {
+        event_id: 'activity-1',
+        event_type: 'applied',
+        title: 'Applied',
+        description: 'Software Engineer at Test Co',
+        occurred_at: '2026-06-16T00:00:00Z',
+      },
+    ]);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Applied')).toBeInTheDocument();
+    expect(mockListJobActivity).toHaveBeenCalledWith('test-token', 'job-1');
+  });
+
+  it('adds an interview from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobInterviews.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        interview_id: 'interview-1',
+        job_id: 'job-1',
+        user_id: 'user-1',
+        round_type: 'Technical',
+        scheduled_at_date: '2026-07-08',
+        scheduled_at_time: '2026-07-08T15:30:00.000Z',
+        interview_notes: 'Review system design.',
+      },
+    ]);
+    mockCreateJobInterview.mockResolvedValue({
+      interview_id: 'interview-1',
+      job_id: 'job-1',
+      user_id: 'user-1',
+      round_type: 'Technical',
+      scheduled_at_date: '2026-07-08',
+      scheduled_at_time: '2026-07-08T15:30:00.000Z',
+      interview_notes: 'Review system design.',
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /add interview/i }));
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), {
+      target: { value: 'Review system design.' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockCreateJobInterview).toHaveBeenCalledWith(
+        'test-token',
+        'job-1',
+        expect.objectContaining({
+          round_type: 'Technical',
+          scheduled_at_date: '2026-07-08',
+          scheduled_at_time: new Date('2026-07-08T15:30').toISOString(),
+          interview_notes: 'Review system design.',
+        })
+      );
+    });
+    expect(await screen.findByText('Technical')).toBeInTheDocument();
+  });
+
+  it('shows an error when adding an interview fails', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockCreateJobInterview.mockRejectedValue(new Error('save failed'));
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /add interview/i }));
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(
+      await screen.findByText('Unable to save that interview. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Unable to save interview. Please try again.')).toBeInTheDocument();
+  });
+
+  it('edits an interview from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobInterviews
+      .mockResolvedValueOnce([
+        {
+          interview_id: 'interview-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          round_type: 'Phone screen',
+          scheduled_at_date: '2026-07-08',
+          scheduled_at_time: '2026-07-08T15:30:00.000Z',
+          interview_notes: 'Initial recruiter call.',
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          interview_id: 'interview-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          round_type: 'Final',
+          scheduled_at_date: '2026-07-10',
+          scheduled_at_time: '2026-07-10T18:00:00.000Z',
+          interview_notes: 'Meet hiring manager.',
+        },
+      ]);
+    mockUpdateJobInterview.mockResolvedValue({
+      interview_id: 'interview-1',
+      job_id: 'job-1',
+      user_id: 'user-1',
+      round_type: 'Final',
+      scheduled_at_date: '2026-07-10',
+      scheduled_at_time: '2026-07-10T18:00:00.000Z',
+      interview_notes: 'Meet hiring manager.',
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Phone screen')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Final' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-10' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '18:00' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), {
+      target: { value: 'Meet hiring manager.' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateJobInterview).toHaveBeenCalledWith(
+        'test-token',
+        'job-1',
+        'interview-1',
+        expect.objectContaining({
+          round_type: 'Final',
+          scheduled_at_date: '2026-07-10',
+          scheduled_at_time: new Date('2026-07-10T18:00').toISOString(),
+          interview_notes: 'Meet hiring manager.',
+        })
+      );
+    });
+    expect(await screen.findByText('Final')).toBeInTheDocument();
+  });
+
+  it('deletes a stage history event from the activity timeline', async () => {
+    mockListJobs
+      .mockResolvedValueOnce([{ ...sampleJob, job_stage: 'Rejected' }])
+      .mockResolvedValueOnce([{ ...sampleJob, job_stage: 'Offer' }]);
+    mockListJobActivity
+      .mockResolvedValueOnce([
+        {
+          event_id: 'history-1',
+          event_type: 'outcome',
+          title: 'Marked rejected',
+          description: 'Offer to Rejected',
+          occurred_at: '2026-06-16T00:00:00Z',
+          can_delete: true,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    mockDeleteJobStageHistory.mockResolvedValue(undefined);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Marked rejected')).toBeInTheDocument();
+    expect(screen.getAllByText('Rejected').length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole('button', { name: /delete marked rejected history/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+    await waitFor(() => {
+      expect(mockDeleteJobStageHistory).toHaveBeenCalledWith('test-token', 'job-1', 'history-1');
+    });
+    await waitFor(() => {
+      expect(screen.queryByText('Marked rejected')).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByText('Offer').length).toBeGreaterThan(0);
+  });
+
+  it('shows an error when deleting a stage history event fails', async () => {
+    mockListJobs.mockResolvedValue([{ ...sampleJob, job_stage: 'Rejected' }]);
+    mockListJobActivity.mockResolvedValue([
+      {
+        event_id: 'history-1',
+        event_type: 'outcome',
+        title: 'Marked rejected',
+        description: 'Offer to Rejected',
+        occurred_at: '2026-06-16T00:00:00Z',
+        can_delete: true,
+      },
+    ]);
+    mockDeleteJobStageHistory.mockRejectedValue(new Error('delete failed'));
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Marked rejected')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /delete marked rejected history/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+    expect(
+      await screen.findByText('Unable to delete that stage history. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Marked rejected')).toBeInTheDocument();
   });
 
   it('calls deleteJob and removes job from list when confirmed', async () => {

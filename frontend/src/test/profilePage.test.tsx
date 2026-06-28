@@ -9,6 +9,7 @@ import { saveProfile } from '../api/profile';
 import { listExperiences } from '../api/experiences';
 import { listSkills } from '../api/skills';
 import { getCareerPreferences } from '../api/careerPreferences';
+import { listEducation } from '../api/education';
 
 jest.mock('../contexts/ProfileContext', () => ({
   useProfile: jest.fn(),
@@ -46,12 +47,21 @@ jest.mock('../api/careerPreferences', () => ({
   saveCareerPreferences: jest.fn(),
 }));
 
+jest.mock('../api/education', () => ({
+  listEducation: jest.fn().mockResolvedValue([]),
+  createEducation: jest.fn(),
+  updateEducation: jest.fn(),
+  deleteEducation: jest.fn(),
+  reorderEducation: jest.fn(),
+}));
+
 const mockUseProfile = useProfile as jest.Mock;
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockSaveProfile = saveProfile as jest.Mock;
 const mockListExperiences = listExperiences as jest.Mock;
 const mockListSkills = listSkills as jest.Mock;
 const mockGetCareerPreferences = getCareerPreferences as jest.Mock;
+const mockListEducation = listEducation as jest.Mock;
 
 const emptyContext = { profile: null, loading: false, setProfile: jest.fn() };
 
@@ -72,6 +82,7 @@ describe('ProfilePage', () => {
     mockListExperiences.mockResolvedValue([]);
     mockListSkills.mockResolvedValue([]);
     mockGetCareerPreferences.mockRejectedValue(new Error('NOT_FOUND'));
+    mockListEducation.mockResolvedValue([]);
   });
 
   afterEach(() => {

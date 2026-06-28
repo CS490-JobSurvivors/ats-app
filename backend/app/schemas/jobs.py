@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 JobStage = Literal["Interested", "Applied", "Interview", "Offer", "Rejected", "Archived"]
+ActivityEventType = Literal["applied", "follow_up", "interview", "outcome", "stage_change"]
 
 
 class JobBase(BaseModel):
@@ -38,3 +39,38 @@ class JobRead(JobBase):
     job_poster_id: UUID
     updated_at: datetime
     created_at: datetime
+
+
+class JobActivityEvent(BaseModel):
+    event_id: str
+    event_type: ActivityEventType
+    title: str
+    description: str | None = None
+    occurred_at: datetime
+    can_delete: bool = False
+
+
+class InterviewBase(BaseModel):
+    round_type: str = Field(..., min_length=1)
+    scheduled_at_date: date
+    scheduled_at_time: datetime
+    interview_notes: str | None = None
+
+
+class InterviewCreate(InterviewBase):
+    pass
+
+
+class InterviewUpdate(BaseModel):
+    round_type: str | None = Field(default=None, min_length=1)
+    scheduled_at_date: date | None = None
+    scheduled_at_time: datetime | None = None
+    interview_notes: str | None = None
+
+
+class InterviewRead(InterviewBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    interview_id: UUID
+    job_id: UUID
+    user_id: UUID

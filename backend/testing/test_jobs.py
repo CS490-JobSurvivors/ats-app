@@ -1,32 +1,45 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.main import app
+from app.models.followup import FollowUp
+from app.models.interviews import Interview
 from app.models.job_stage_history import JobStageHistory
 from app.models.jobs import Job
 from app.services.auth.dependencies import get_current_user
 
 client = TestClient(app)
 jobs: list[Job] = []
+stage_histories: list[JobStageHistory] = []
+followups: list[FollowUp] = []
+interviews: list[Interview] = []
 active_user_id = ""
 
 
 class FakeScalarResult:
-    def __init__(self, query):
-        self.query = query
+    def __init__(self, results):
+        self.results = results
 
     def all(self):
-        user_id = str(self.query.compile().params["job_poster_id_1"])
-
-        return [job for job in jobs if str(job.job_poster_id) == user_id]
+        return self.results
 
 
 class FakeDb:
-    def add(self, obj: Job | JobStageHistory):
+    def add(self, obj: Job | JobStageHistory | Interview):
         if isinstance(obj, JobStageHistory):
+            if obj.job_history_id is None:
+                obj.job_history_id = uuid4()
+            if obj.changed_at is None:
+                obj.changed_at = datetime.now(UTC)
+            stage_histories.append(obj)
+            return
+        if isinstance(obj, Interview):
+            if obj.interview_id is None:
+                obj.interview_id = uuid4()
+            interviews.append(obj)
             return
         if obj.job_id is None:
             obj.job_id = uuid4()
@@ -42,11 +55,74 @@ class FakeDb:
     def refresh(self, job: Job):
         job.updated_at = datetime.now(UTC)
 
-    def scalars(self, _query):
-        return FakeScalarResult(_query)
+    def scalars(self, query):
+        entity = query.column_descriptions[0]["entity"]
+        params = query.compile().params
+
+        if entity is Job:
+            user_id = str(params["job_poster_id_1"])
+            return FakeScalarResult([job for job in jobs if str(job.job_poster_id) == user_id])
+
+        if entity is JobStageHistory:
+            job_id = str(params["job_id_1"])
+            results = [history for history in stage_histories if str(history.job_id) == job_id]
+            return FakeScalarResult(sorted(results, key=lambda history: history.changed_at))
+
+        if entity is FollowUp:
+            job_id = str(params["job_id_1"])
+            user_id = str(params["user_id_1"])
+            results = [
+                followup
+                for followup in followups
+                if str(followup.job_id) == job_id and str(followup.user_id) == user_id
+            ]
+            return FakeScalarResult(sorted(results, key=lambda followup: followup.due_date))
+
+        if entity is Interview:
+            job_id = str(params["job_id_1"])
+            user_id = str(params["user_id_1"])
+            results = [
+                interview
+                for interview in interviews
+                if str(interview.job_id) == job_id and str(interview.user_id) == user_id
+            ]
+            return FakeScalarResult(
+                sorted(results, key=lambda interview: interview.scheduled_at_date)
+            )
+
+        return FakeScalarResult([])
 
     def scalar(self, query):
+        entity = query.column_descriptions[0]["entity"]
         params = query.compile().params
+
+        if "job_history_id_1" in params:
+            for history in stage_histories:
+                if str(history.job_history_id) == str(params["job_history_id_1"]) and str(
+                    history.job_id
+                ) == str(params["job_id_1"]):
+                    return history
+
+            return None
+
+        if entity is JobStageHistory:
+            job_id = str(params["job_id_1"])
+            results = [history for history in stage_histories if str(history.job_id) == job_id]
+            if not results:
+                return None
+
+            return max(results, key=lambda history: history.changed_at)
+
+        if entity is Interview:
+            for interview in interviews:
+                if (
+                    str(interview.interview_id) == str(params["interview_id_1"])
+                    and str(interview.job_id) == str(params["job_id_1"])
+                    and str(interview.user_id) == str(params["user_id_1"])
+                ):
+                    return interview
+
+            return None
 
         for job in jobs:
             if str(job.job_id) == str(params["job_id_1"]) and str(job.job_poster_id) == str(
@@ -55,6 +131,13 @@ class FakeDb:
                 return job
 
         return None
+
+    def delete(self, obj: Job | JobStageHistory):
+        if isinstance(obj, JobStageHistory):
+            stage_histories.remove(obj)
+            return
+
+        jobs.remove(obj)
 
 
 def override_db():
@@ -85,6 +168,9 @@ def create_job_payload(company: str = "Acme"):
 
 def setup_function():
     jobs.clear()
+    stage_histories.clear()
+    followups.clear()
+    interviews.clear()
     app.dependency_overrides[get_db] = override_db
 
 
@@ -140,6 +226,41 @@ def test_list_jobs_returns_only_authenticated_users_jobs():
     assert user_jobs[0]["job_poster_id"] == second_user_id
 
 
+def test_list_jobs_uses_latest_stage_history_as_current_stage():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    jobs[0].job_stage = "Applied"
+    stage_histories.extend(
+        [
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Applied",
+                to_stage="Offer",
+                changed_by=user_id,
+                changed_at=datetime(2026, 7, 4, tzinfo=UTC),
+            ),
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Offer",
+                to_stage="Rejected",
+                changed_by=user_id,
+                changed_at=datetime(2026, 7, 5, tzinfo=UTC),
+            ),
+        ]
+    )
+
+    response = client.get("/jobs")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body[0]["job_stage"] == "Rejected"
+    assert jobs[0].job_stage == "Rejected"
+
+
 def test_update_job_only_updates_owned_jobs():
     owner_id = str(uuid4())
     other_user_id = str(uuid4())
@@ -171,3 +292,287 @@ def test_update_job_only_updates_owned_jobs():
     assert update_response.json()["job_stage"] == "Interview"
     assert update_response.json()["job_location"] == "New York"
     assert update_response.json()["deadline"] == "2026-08-01"
+
+
+def test_job_activity_timeline_returns_key_events_for_owned_job():
+    owner_id = str(uuid4())
+    other_user_id = uuid4()
+    set_authenticated_user(owner_id)
+    create_response = client.post(
+        "/jobs",
+        json={**create_job_payload(), "job_stage": "Applied"},
+    )
+    assert create_response.status_code == 201
+    job_id = create_response.json()["job_id"]
+
+    stage_histories.append(
+        JobStageHistory(
+            job_id=job_id,
+            from_stage="Interview",
+            to_stage="Offer",
+            changed_by=owner_id,
+            changed_at=datetime(2026, 7, 4, tzinfo=UTC),
+        )
+    )
+    followups.append(
+        FollowUp(
+            followup_id=uuid4(),
+            job_id=job_id,
+            user_id=owner_id,
+            due_date=date(2026, 7, 2),
+            notes="Email recruiter",
+            is_completed=False,
+        )
+    )
+    interviews.append(
+        Interview(
+            interview_id=uuid4(),
+            job_id=job_id,
+            user_id=owner_id,
+            scheduled_at_date=date(2026, 7, 3),
+            scheduled_at_time=datetime(2026, 7, 3, 15, tzinfo=UTC),
+            interview_notes="Technical round",
+            round_type="Technical interview",
+        )
+    )
+    followups.append(
+        FollowUp(
+            followup_id=uuid4(),
+            job_id=job_id,
+            user_id=other_user_id,
+            due_date=date(2026, 7, 5),
+            notes="Other user's reminder",
+            is_completed=False,
+        )
+    )
+
+    response = client.get(f"/jobs/{job_id}/activity")
+
+    assert response.status_code == 200
+    body = response.json()
+    event_types = [event["event_type"] for event in body]
+    assert event_types == ["stage_change", "follow_up", "interview", "outcome"]
+    assert [event["title"] for event in body] == [
+        "Added to pipeline",
+        "Follow-up",
+        "Technical interview scheduled",
+        "Offer received",
+    ]
+    assert body[1]["description"] == "Email recruiter (due)"
+    assert body[2]["description"] == "Technical round"
+    assert body[3]["can_delete"] is True
+
+
+def test_job_activity_timeline_keeps_added_to_pipeline_when_stages_move_randomly():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    assert create_response.status_code == 201
+    job_id = create_response.json()["job_id"]
+
+    for stage in ["Applied", "Interview", "Offer", "Rejected", "Applied"]:
+        response = client.patch(f"/jobs/{job_id}", json={"job_stage": stage})
+        assert response.status_code == 200
+
+    response = client.get(f"/jobs/{job_id}/activity")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body[0]["title"] == "Added to pipeline"
+    assert body[0]["event_type"] == "stage_change"
+    assert body[0]["can_delete"] is False
+    assert [event["description"] for event in body[1:]] == [
+        "Interested to Applied",
+        "Applied to Interview",
+        "Interview to Offer",
+        "Offer to Rejected",
+        "Rejected to Applied",
+    ]
+    assert [event["can_delete"] for event in body[1:]] == [True, True, True, True, True]
+
+
+def test_deleting_stage_history_keeps_added_to_pipeline_event():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    patch_response = client.patch(f"/jobs/{job_id}", json={"job_stage": "Applied"})
+    assert patch_response.status_code == 200
+    history_id = stage_histories[0].job_history_id
+
+    delete_response = client.delete(f"/jobs/{job_id}/stage-history/{history_id}")
+    activity_response = client.get(f"/jobs/{job_id}/activity")
+
+    assert delete_response.status_code == 204
+    assert activity_response.status_code == 200
+    assert activity_response.json() == [
+        {
+            "event_id": f"job-created-{job_id}",
+            "event_type": "stage_change",
+            "title": "Added to pipeline",
+            "description": "Software Engineer at Acme",
+            "occurred_at": activity_response.json()[0]["occurred_at"],
+            "can_delete": False,
+        }
+    ]
+
+
+def test_job_activity_timeline_rejects_unowned_job():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    set_authenticated_user(other_user_id)
+    response = client.get(f"/jobs/{job_id}/activity")
+
+    assert response.status_code == 404
+
+
+def test_delete_job_stage_history_removes_owned_history_entry():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    history_id = uuid4()
+    stage_histories.append(
+        JobStageHistory(
+            job_history_id=history_id,
+            job_id=job_id,
+            from_stage="Applied",
+            to_stage="Interview",
+            changed_by=owner_id,
+            changed_at=datetime(2026, 7, 4, tzinfo=UTC),
+        )
+    )
+
+    response = client.delete(f"/jobs/{job_id}/stage-history/{history_id}")
+
+    assert response.status_code == 204
+    assert stage_histories == []
+
+
+def test_delete_latest_stage_history_rolls_job_stage_back_before_next_transition():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    for stage in ["Applied", "Interview", "Offer", "Archived"]:
+        response = client.patch(f"/jobs/{job_id}", json={"job_stage": stage})
+        assert response.status_code == 200
+
+    archived_history_id = stage_histories[-1].job_history_id
+    delete_response = client.delete(f"/jobs/{job_id}/stage-history/{archived_history_id}")
+    assert delete_response.status_code == 204
+    assert jobs[0].job_stage == "Offer"
+
+    rejected_response = client.patch(f"/jobs/{job_id}", json={"job_stage": "Rejected"})
+    activity_response = client.get(f"/jobs/{job_id}/activity")
+
+    assert rejected_response.status_code == 200
+    assert rejected_response.json()["job_stage"] == "Rejected"
+    assert stage_histories[-1].from_stage == "Offer"
+    assert stage_histories[-1].to_stage == "Rejected"
+    assert [event["description"] for event in activity_response.json()[1:]] == [
+        "Interested to Applied",
+        "Applied to Interview",
+        "Interview to Offer",
+        "Offer to Rejected",
+    ]
+
+
+def test_delete_job_stage_history_rejects_unowned_job():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    history = JobStageHistory(
+        job_history_id=uuid4(),
+        job_id=job_id,
+        from_stage="Applied",
+        to_stage="Interview",
+        changed_by=owner_id,
+        changed_at=datetime(2026, 7, 4, tzinfo=UTC),
+    )
+    stage_histories.append(history)
+
+    set_authenticated_user(other_user_id)
+    response = client.delete(f"/jobs/{job_id}/stage-history/{history.job_history_id}")
+
+    assert response.status_code == 404
+    assert stage_histories == [history]
+
+
+def test_create_and_list_job_interviews_for_owned_job():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    interview_response = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Technical",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+            "interview_notes": "Review system design.",
+        },
+    )
+    list_response = client.get(f"/jobs/{job_id}/interviews")
+
+    assert interview_response.status_code == 201
+    body = interview_response.json()
+    assert body["round_type"] == "Technical"
+    assert body["scheduled_at_date"] == "2026-07-08"
+    assert body["scheduled_at_time"] == "2026-07-08T15:30:00Z"
+    assert body["interview_notes"] == "Review system design."
+    assert body["job_id"] == job_id
+    assert body["user_id"] == owner_id
+    assert list_response.status_code == 200
+    assert [interview["round_type"] for interview in list_response.json()] == ["Technical"]
+
+
+def test_update_job_interview_only_updates_owned_interview():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    interview_response = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Phone screen",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+            "interview_notes": "Initial recruiter call.",
+        },
+    )
+    interview_id = interview_response.json()["interview_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.patch(
+        f"/jobs/{job_id}/interviews/{interview_id}",
+        json={"round_type": "Unauthorized"},
+    )
+
+    set_authenticated_user(owner_id)
+    update_response = client.patch(
+        f"/jobs/{job_id}/interviews/{interview_id}",
+        json={
+            "round_type": "Final",
+            "scheduled_at_date": "2026-07-10",
+            "scheduled_at_time": "2026-07-10T18:00:00Z",
+            "interview_notes": "Meet hiring manager.",
+        },
+    )
+
+    assert denied_response.status_code == 404
+    assert update_response.status_code == 200
+    body = update_response.json()
+    assert body["round_type"] == "Final"
+    assert body["scheduled_at_date"] == "2026-07-10"
+    assert body["scheduled_at_time"] == "2026-07-10T18:00:00Z"
+    assert body["interview_notes"] == "Meet hiring manager."

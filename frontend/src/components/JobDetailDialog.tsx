@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -14,8 +14,26 @@ import {
   FormControl,
   InputLabel,
   TextField,
+  CircularProgress,
+  IconButton,
 } from '@mui/material';
-import { JobRecord, JobPayload, JobStage } from '../api/jobs';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import CloseIcon from '@mui/icons-material/Close';
+import CancelIcon from '@mui/icons-material/Cancel';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import FlagIcon from '@mui/icons-material/Flag';
+import SendIcon from '@mui/icons-material/Send';
+import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
+import {
+  InterviewPayload,
+  InterviewRecord,
+  JobActivityEvent,
+  JobPayload,
+  JobRecord,
+  JobStage,
+} from '../api/jobs';
 import { stageColors } from '../utils/stageColors';
 import { FORWARD_TRANSITIONS, isForwardTransition } from '../utils/stageTransitions';
 
@@ -35,7 +53,81 @@ interface JobDetailDialogProps {
   onDelete: () => void;
   onSave: (payload: JobPayload) => Promise<void>;
   onStageChange: (newStage: JobStage) => void;
+  onDeleteStageHistory?: (eventId: string) => void;
+  onSaveInterview?: (payload: InterviewPayload, interviewId?: string) => Promise<void>;
+  interviews?: InterviewRecord[];
+  isInterviewsLoading?: boolean;
+  activityEvents?: JobActivityEvent[];
+  isActivityLoading?: boolean;
 }
+
+const emptyInterviewForm = {
+  round_type: '',
+  scheduled_at_date: '',
+  scheduled_at_time: '',
+  interview_notes: '',
+};
+
+const activityIcons: Record<JobActivityEvent['event_type'], typeof AssignmentTurnedInIcon> = {
+  applied: SendIcon,
+  follow_up: EventNoteIcon,
+  interview: WorkHistoryIcon,
+  outcome: FlagIcon,
+  stage_change: AssignmentTurnedInIcon,
+};
+
+const formatActivityDate = (value: string) =>
+  new Date(value).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+const formatActivityTime = (value: string) =>
+  new Date(value).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+const formatInterviewTimeForInput = (value: string) => {
+  const date = new Date(value);
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+
+  return `${hours}:${minutes}`;
+};
+
+const buildInterviewPayload = (form: typeof emptyInterviewForm): InterviewPayload => ({
+  round_type: form.round_type.trim(),
+  scheduled_at_date: form.scheduled_at_date,
+  scheduled_at_time: new Date(`${form.scheduled_at_date}T${form.scheduled_at_time}`).toISOString(),
+  interview_notes: form.interview_notes.trim() || null,
+});
+
+const isRejectedEvent = (event: JobActivityEvent) =>
+  event.title.toLowerCase().includes('rejected') || event.description?.endsWith('to Rejected');
+
+const getEventStage = (event: JobActivityEvent): JobStage | null => {
+  if (event.description) {
+    const targetStage = event.description.split(' to ').at(-1);
+    if (targetStage && ALL_STAGES.includes(targetStage as JobStage)) {
+      return targetStage as JobStage;
+    }
+  }
+
+  if (event.title === 'Applied') return 'Applied';
+  if (event.title === 'Interview stage started') return 'Interview';
+  if (event.title === 'Offer received') return 'Offer';
+  if (event.title === 'Marked rejected') return 'Rejected';
+  if (event.title === 'Archived') return 'Archived';
+
+  return null;
+};
+
+const getActivityColor = (event: JobActivityEvent) => {
+  const eventStage = getEventStage(event);
+  return eventStage ? stageColors[eventStage].color : stageColors.Interested.color;
+};
 
 const JobDetailDialog = ({
   open,
@@ -44,8 +136,19 @@ const JobDetailDialog = ({
   onDelete,
   onSave,
   onStageChange,
+  onDeleteStageHistory,
+  onSaveInterview,
+  interviews = [],
+  isInterviewsLoading = false,
+  activityEvents = [],
+  isActivityLoading = false,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
+  const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
+  const [interviewFormOpen, setInterviewFormOpen] = useState(false);
+  const [editingInterviewId, setEditingInterviewId] = useState<string | undefined>();
+  const [interviewForm, setInterviewForm] = useState(emptyInterviewForm);
+  const [interviewError, setInterviewError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     job_title: '',
@@ -91,6 +194,59 @@ const JobDetailDialog = ({
   const confirmOverride = () => {
     if (pendingStage) onStageChange(pendingStage);
     setPendingStage(null);
+  };
+
+  const confirmStageHistoryDelete = () => {
+    if (pendingDeleteEvent && onDeleteStageHistory) {
+      onDeleteStageHistory(pendingDeleteEvent.event_id);
+    }
+    setPendingDeleteEvent(null);
+  };
+
+  const openInterviewForm = (interview?: InterviewRecord) => {
+    setInterviewError('');
+    setEditingInterviewId(interview?.interview_id);
+    setInterviewForm(
+      interview
+        ? {
+            round_type: interview.round_type,
+            scheduled_at_date: interview.scheduled_at_date,
+            scheduled_at_time: formatInterviewTimeForInput(interview.scheduled_at_time),
+            interview_notes: interview.interview_notes || '',
+          }
+        : emptyInterviewForm
+    );
+    setInterviewFormOpen(true);
+  };
+
+  const closeInterviewForm = () => {
+    setInterviewFormOpen(false);
+    setEditingInterviewId(undefined);
+    setInterviewForm(emptyInterviewForm);
+    setInterviewError('');
+  };
+
+  const updateInterviewForm = (field: keyof typeof emptyInterviewForm, value: string) => {
+    setInterviewForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const submitInterviewForm = async () => {
+    if (!onSaveInterview) return;
+    if (
+      !interviewForm.round_type.trim() ||
+      !interviewForm.scheduled_at_date ||
+      !interviewForm.scheduled_at_time
+    ) {
+      setInterviewError('Round type, date, and time are required.');
+      return;
+    }
+
+    try {
+      await onSaveInterview(buildInterviewPayload(interviewForm), editingInterviewId);
+      closeInterviewForm();
+    } catch {
+      setInterviewError('Unable to save interview. Please try again.');
+    }
   };
 
   const handleSave = async () => {
@@ -171,7 +327,7 @@ const JobDetailDialog = ({
                         <Typography variant="body2">{stage}</Typography>
                         {!isCurrent && !isForward && (
                           <Typography variant="caption" color="warning.main">
-                            ⚠ non-standard
+                            non-standard
                           </Typography>
                         )}
                       </Box>
@@ -323,6 +479,263 @@ const JobDetailDialog = ({
                   Last updated: {new Date(job.updated_at).toLocaleDateString()}
                 </Typography>
               </Box>
+
+              <Divider sx={{ mb: 2 }} />
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  mb: 1,
+                }}
+              >
+                <Typography variant="subtitle2">Interviews</Typography>
+                {onSaveInterview && (
+                  <Button size="small" variant="outlined" onClick={() => openInterviewForm()}>
+                    Add Interview
+                  </Button>
+                )}
+              </Box>
+              {isInterviewsLoading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading interviews...
+                  </Typography>
+                </Box>
+              ) : interviews.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  No interviews scheduled.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'grid', gap: 1, mb: 2 }}>
+                  {interviews.map((interview) => (
+                    <Box
+                      key={interview.interview_id}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1.5,
+                        bgcolor: 'background.default',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 1,
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="body2" fontWeight={700}>
+                            {interview.round_type}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            {formatActivityDate(interview.scheduled_at_time)} at{' '}
+                            {formatActivityTime(interview.scheduled_at_time)}
+                          </Typography>
+                          {interview.interview_notes && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              {interview.interview_notes}
+                            </Typography>
+                          )}
+                        </Box>
+                        {onSaveInterview && (
+                          <Button size="small" onClick={() => openInterviewForm(interview)}>
+                            Edit
+                          </Button>
+                        )}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+
+              <Divider sx={{ mb: 2 }} />
+
+              <Typography variant="subtitle2" gutterBottom>
+                Activity Timeline
+              </Typography>
+              {isActivityLoading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading activity...
+                  </Typography>
+                </Box>
+              ) : activityEvents.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No activity yet.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'grid', gap: 2, mt: 1 }}>
+                  {[...activityEvents].reverse().map((event, index) => {
+                    const rejectedEvent = isRejectedEvent(event);
+                    const Icon = rejectedEvent ? CancelIcon : activityIcons[event.event_type];
+                    const eventColor = getActivityColor(event);
+                    const isCurrent = index === 0;
+
+                    return (
+                      <Box
+                        key={event.event_id}
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: '48px minmax(0, 1fr)',
+                          gap: 2,
+                          alignItems: 'start',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            position: 'relative',
+                            minHeight: '100%',
+                          }}
+                        >
+                          {index < activityEvents.length - 1 && (
+                            <Box
+                              sx={{
+                                position: 'absolute',
+                                top: 44,
+                                bottom: 8,
+                                width: 2,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  top: 8,
+                                  bottom: 0,
+                                  left: 0,
+                                  width: 2,
+                                  bgcolor: eventColor,
+                                }}
+                              />
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: '50%',
+                                  width: 0,
+                                  height: 0,
+                                  transform: 'translateX(-50%)',
+                                  borderLeft: '5px solid transparent',
+                                  borderRight: '5px solid transparent',
+                                  borderBottom: `8px solid ${eventColor}`,
+                                }}
+                              />
+                            </Box>
+                          )}
+                          <Box
+                            data-testid={`activity-icon-${event.event_id}`}
+                            sx={{
+                              width: 42,
+                              height: 42,
+                              borderRadius: '50%',
+                              bgcolor: eventColor,
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              position: 'relative',
+                              zIndex: 1,
+                              boxShadow: isCurrent ? `0 0 0 3px ${eventColor}22` : 'none',
+                            }}
+                          >
+                            <Icon fontSize="small" />
+                          </Box>
+                        </Box>
+                        <Box
+                          sx={{
+                            minWidth: 0,
+                            border: '1px solid',
+                            borderColor: isCurrent ? `${eventColor}55` : 'divider',
+                            borderRadius: 1,
+                            px: 2,
+                            py: 1.5,
+                            bgcolor: isCurrent ? `${eventColor}0f` : 'background.default',
+                            position: 'relative',
+                            boxShadow: isCurrent ? `0 0 0 1px ${eventColor}1f` : 'none',
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              justifyContent: 'space-between',
+                              gap: 1,
+                            }}
+                          >
+                            <Box sx={{ minWidth: 0 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+                                {isCurrent && (
+                                  <Chip
+                                    label="Current"
+                                    size="small"
+                                    sx={{
+                                      height: 24,
+                                      color: '#fff',
+                                      bgcolor: eventColor,
+                                      fontWeight: 700,
+                                    }}
+                                  />
+                                )}
+                                <Typography variant="body1" fontWeight={700}>
+                                  {event.title}
+                                </Typography>
+                              </Box>
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 2,
+                                  flexWrap: 'wrap',
+                                  mb: event.description ? 0.75 : 0,
+                                }}
+                              >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                  <CalendarTodayIcon
+                                    sx={{ fontSize: 16, color: 'text.secondary' }}
+                                  />
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatActivityDate(event.occurred_at)}
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                  <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatActivityTime(event.occurred_at)}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              {event.description && (
+                                <Typography variant="body2" color="text.secondary">
+                                  {event.description}
+                                </Typography>
+                              )}
+                            </Box>
+                            {event.can_delete && onDeleteStageHistory && (
+                              <IconButton
+                                size="small"
+                                aria-label={`Delete ${event.title} history`}
+                                onClick={() => setPendingDeleteEvent(event)}
+                                sx={{ color: 'text.secondary', p: 0.5 }}
+                              >
+                                <CloseIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </Box>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
             </>
           )}
         </DialogContent>
@@ -363,6 +776,71 @@ const JobDetailDialog = ({
           <Button onClick={() => setPendingStage(null)}>Cancel</Button>
           <Button onClick={confirmOverride} variant="contained" color="warning">
             Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!pendingDeleteEvent} onClose={() => setPendingDeleteEvent(null)}>
+        <DialogTitle>Delete stage history?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Remove <strong>{pendingDeleteEvent?.title}</strong> from this job&apos;s activity
+            timeline?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDeleteEvent(null)}>Cancel</Button>
+          <Button onClick={confirmStageHistoryDelete} variant="contained" color="error">
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={interviewFormOpen} onClose={closeInterviewForm} fullWidth maxWidth="xs">
+        <DialogTitle>{editingInterviewId ? 'Edit Interview' : 'Add Interview'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
+            <TextField
+              label="Round type"
+              size="small"
+              value={interviewForm.round_type}
+              onChange={(event) => updateInterviewForm('round_type', event.target.value)}
+            />
+            <TextField
+              label="Date"
+              type="date"
+              size="small"
+              value={interviewForm.scheduled_at_date}
+              onChange={(event) => updateInterviewForm('scheduled_at_date', event.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Time"
+              type="time"
+              size="small"
+              value={interviewForm.scheduled_at_time}
+              onChange={(event) => updateInterviewForm('scheduled_at_time', event.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Notes"
+              size="small"
+              multiline
+              minRows={3}
+              value={interviewForm.interview_notes}
+              onChange={(event) => updateInterviewForm('interview_notes', event.target.value)}
+            />
+            {interviewError && (
+              <Typography variant="body2" color="error">
+                {interviewError}
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeInterviewForm}>Cancel</Button>
+          <Button onClick={submitInterviewForm} variant="contained">
+            Save
           </Button>
         </DialogActions>
       </Dialog>

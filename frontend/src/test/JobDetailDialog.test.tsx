@@ -2,7 +2,8 @@ import '@testing-library/jest-dom';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JobDetailDialog from '../components/JobDetailDialog';
-import { JobRecord } from '../api/jobs';
+import { InterviewRecord, JobRecord } from '../api/jobs';
+import { stageColors } from '../utils/stageColors';
 
 const mockJob: JobRecord = {
   job_id: '123',
@@ -20,6 +21,66 @@ const mockOnClose = jest.fn();
 const mockOnSave = jest.fn();
 const mockOnDelete = jest.fn();
 const mockOnStageChange = jest.fn();
+const mockOnDeleteStageHistory = jest.fn();
+const mockOnSaveInterview = jest.fn();
+const interviews: InterviewRecord[] = [
+  {
+    interview_id: 'interview-1',
+    job_id: '123',
+    user_id: 'user-1',
+    round_type: 'Phone screen',
+    scheduled_at_date: '2026-07-08',
+    scheduled_at_time: '2026-07-08T15:30:00.000Z',
+    interview_notes: 'Initial recruiter call.',
+  },
+];
+const activityEvents = [
+  {
+    event_id: 'job-created-123',
+    event_type: 'stage_change' as const,
+    title: 'Added to pipeline',
+    description: 'Software Engineer at Acme Corp',
+    occurred_at: '2026-06-19T00:00:00Z',
+    can_delete: false,
+  },
+  {
+    event_id: 'activity-1',
+    event_type: 'applied' as const,
+    title: 'Applied',
+    description: 'Software Engineer at Acme Corp',
+    occurred_at: '2026-06-20T00:00:00Z',
+  },
+  {
+    event_id: 'activity-2',
+    event_type: 'follow_up' as const,
+    title: 'Follow-up',
+    description: 'Email recruiter (due)',
+    occurred_at: '2026-06-22T00:00:00Z',
+  },
+  {
+    event_id: 'activity-3',
+    event_type: 'interview' as const,
+    title: 'Technical interview scheduled',
+    description: 'Bring portfolio',
+    occurred_at: '2026-06-24T15:00:00Z',
+  },
+  {
+    event_id: 'activity-4',
+    event_type: 'outcome' as const,
+    title: 'Offer received',
+    description: 'Interview to Offer',
+    occurred_at: '2026-06-25T00:00:00Z',
+    can_delete: true,
+  },
+  {
+    event_id: 'activity-5',
+    event_type: 'outcome' as const,
+    title: 'Marked rejected',
+    description: 'Offer to Rejected',
+    occurred_at: '2026-06-26T00:00:00Z',
+    can_delete: true,
+  },
+];
 
 const renderDialog = (job = mockJob) =>
   render(
@@ -36,6 +97,7 @@ const renderDialog = (job = mockJob) =>
 describe('JobDetailDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOnSaveInterview.mockResolvedValue(undefined);
   });
 
   it('renders job details when open', () => {
@@ -49,6 +111,251 @@ describe('JobDetailDialog', () => {
   it('renders application link when provided', () => {
     renderDialog();
     expect(screen.getByText('https://acme.com/jobs/1')).toBeInTheDocument();
+  });
+
+  it('renders job activity timeline events', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        activityEvents={activityEvents}
+      />
+    );
+
+    expect(screen.getByText('Activity Timeline')).toBeInTheDocument();
+    expect(screen.getByText('Added to pipeline')).toBeInTheDocument();
+    expect(screen.getAllByText('Applied').length).toBeGreaterThan(0);
+    expect(screen.getByText('Follow-up')).toBeInTheDocument();
+    expect(screen.getByText('Technical interview scheduled')).toBeInTheDocument();
+    expect(screen.getByText('Offer received')).toBeInTheDocument();
+    expect(screen.getByText('Marked rejected')).toBeInTheDocument();
+    expect(screen.getByTestId('CancelIcon')).toBeInTheDocument();
+    expect(screen.getByTestId('activity-icon-activity-5')).toHaveStyle(
+      `background-color: ${stageColors.Rejected.color}`
+    );
+  });
+
+  it('does not render a delete button for the added to pipeline event', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={activityEvents}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: /delete added to pipeline history/i })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /delete offer received history/i })
+    ).toBeInTheDocument();
+  });
+
+  it('asks for confirmation before deleting a stage history event', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={activityEvents}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /delete offer received history/i }));
+
+    expect(screen.getByText(/delete stage history/i)).toBeInTheDocument();
+    expect(screen.getByText(/remove/i)).toBeInTheDocument();
+    expect(mockOnDeleteStageHistory).not.toHaveBeenCalled();
+  });
+
+  it('calls onDeleteStageHistory after confirming a stage history deletion', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={activityEvents}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /delete offer received history/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+    expect(mockOnDeleteStageHistory).toHaveBeenCalledWith('activity-4');
+  });
+
+  it('does not delete a stage history event when confirmation is cancelled', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={activityEvents}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /delete offer received history/i }));
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+    expect(mockOnDeleteStageHistory).not.toHaveBeenCalled();
+  });
+
+  it('renders activity loading state', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        isActivityLoading={true}
+      />
+    );
+
+    expect(screen.getByText(/loading activity/i)).toBeInTheDocument();
+  });
+
+  it('submits a new interview from the add interview form', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add interview/i }));
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), {
+      target: { value: 'Review system design.' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockOnSaveInterview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          round_type: 'Technical',
+          scheduled_at_date: '2026-07-08',
+          scheduled_at_time: new Date('2026-07-08T15:30').toISOString(),
+          interview_notes: 'Review system design.',
+        }),
+        undefined
+      );
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByText('Round type, date, and time are required.')
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it('submits updates from the edit interview form', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+        interviews={interviews}
+      />
+    );
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Final' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-10' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '18:00' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), {
+      target: { value: 'Meet hiring manager.' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockOnSaveInterview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          round_type: 'Final',
+          scheduled_at_date: '2026-07-10',
+          scheduled_at_time: new Date('2026-07-10T18:00').toISOString(),
+          interview_notes: 'Meet hiring manager.',
+        }),
+        'interview-1'
+      );
+    });
+  });
+
+  it('shows validation error when required interview fields are missing', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add interview/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByText('Round type, date, and time are required.')).toBeInTheDocument();
+    expect(mockOnSaveInterview).not.toHaveBeenCalled();
+  });
+
+  it('keeps the interview form open and shows an error when interview save fails', async () => {
+    mockOnSaveInterview.mockRejectedValue(new Error('save failed'));
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add interview/i }));
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(
+      await screen.findByText('Unable to save interview. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /add interview/i })).toBeInTheDocument();
   });
 
   it('does not render application link when not provided', () => {

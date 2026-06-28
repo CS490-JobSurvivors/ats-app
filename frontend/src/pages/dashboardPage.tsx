@@ -23,9 +23,17 @@ import {
 import { supabase } from '../utils/supabaseClient';
 import {
   listJobs,
+  listJobActivity,
+  listJobInterviews,
   createJob,
   updateJob,
   deleteJob,
+  deleteJobStageHistory,
+  createJobInterview,
+  updateJobInterview,
+  InterviewPayload,
+  InterviewRecord,
+  JobActivityEvent,
   JobRecord,
   JobPayload,
   JobStage,
@@ -83,6 +91,10 @@ const DashboardPage = () => {
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('All');
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobRecord | null>(null);
+  const [selectedJobActivity, setSelectedJobActivity] = useState<JobActivityEvent[]>([]);
+  const [isActivityLoading, setIsActivityLoading] = useState(false);
+  const [selectedJobInterviews, setSelectedJobInterviews] = useState<InterviewRecord[]>([]);
+  const [isInterviewsLoading, setIsInterviewsLoading] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('last_activity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -97,8 +109,10 @@ const DashboardPage = () => {
     try {
       const result = await listJobs(token);
       setJobs(result);
+      return result;
     } catch {
       setErrorMessage('Unable to load your applications right now. Please try again later.');
+      return [];
     } finally {
       setIsLoading(false);
     }
@@ -186,9 +200,44 @@ const DashboardPage = () => {
     setDeadlineFilter('All');
   };
 
-  const openDetailDialog = (job: JobRecord) => {
+  const loadJobActivity = async (jobId: string) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setIsActivityLoading(true);
+    try {
+      const activity = await listJobActivity(token, jobId);
+      setSelectedJobActivity(activity);
+    } catch {
+      setSelectedJobActivity([]);
+    } finally {
+      setIsActivityLoading(false);
+    }
+  };
+
+  const loadJobInterviews = async (jobId: string) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setIsInterviewsLoading(true);
+    try {
+      const interviews = await listJobInterviews(token, jobId);
+      setSelectedJobInterviews(interviews);
+    } catch {
+      setSelectedJobInterviews([]);
+    } finally {
+      setIsInterviewsLoading(false);
+    }
+  };
+
+  const openDetailDialog = async (job: JobRecord) => {
     setSelectedJob(job);
+    setSelectedJobActivity([]);
+    setSelectedJobInterviews([]);
     setDetailOpen(true);
+    await Promise.all([loadJobActivity(job.job_id), loadJobInterviews(job.job_id)]);
   };
 
   const handleDelete = async () => {
@@ -210,6 +259,49 @@ const DashboardPage = () => {
     const updated = await updateJob(token, selectedJob.job_id, payload);
     setJobs((prev) => prev.map((j) => (j.job_id === updated.job_id ? updated : j)));
     setSelectedJob(updated);
+  };
+
+  const handleDeleteStageHistory = async (eventId: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      await deleteJobStageHistory(token, selectedJob.job_id, eventId);
+      const refreshedJobs = await fetchJobs();
+      const refreshedSelectedJob = refreshedJobs?.find((job) => job.job_id === selectedJob.job_id);
+      if (refreshedSelectedJob) {
+        setSelectedJob(refreshedSelectedJob);
+      }
+      await loadJobActivity(selectedJob.job_id);
+    } catch {
+      setErrorMessage('Unable to delete that stage history. Please try again.');
+    }
+  };
+
+  const handleSaveInterview = async (payload: InterviewPayload, interviewId?: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      if (interviewId) {
+        await updateJobInterview(token, selectedJob.job_id, interviewId, payload);
+      } else {
+        await createJobInterview(token, selectedJob.job_id, payload);
+      }
+      await Promise.all([
+        loadJobInterviews(selectedJob.job_id),
+        loadJobActivity(selectedJob.job_id),
+      ]);
+    } catch {
+      setErrorMessage('Unable to save that interview. Please try again.');
+      throw new Error('Unable to save interview.');
+    }
   };
 
   const handleDialogSubmit = async (payload: JobPayload) => {
@@ -447,6 +539,10 @@ const DashboardPage = () => {
         onClose={() => setDetailOpen(false)}
         onSave={handleDetailSave}
         onDelete={() => setConfirmDeleteOpen(true)}
+        onDeleteStageHistory={handleDeleteStageHistory}
+        onSaveInterview={handleSaveInterview}
+        interviews={selectedJobInterviews}
+        isInterviewsLoading={isInterviewsLoading}
         onStageChange={async (newStage) => {
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;
@@ -454,7 +550,10 @@ const DashboardPage = () => {
           const updated = await updateJob(token, selectedJob.job_id, { job_stage: newStage });
           setJobs((prev) => prev.map((j) => (j.job_id === updated.job_id ? updated : j)));
           setSelectedJob(updated);
+          await loadJobActivity(updated.job_id);
         }}
+        activityEvents={selectedJobActivity}
+        isActivityLoading={isActivityLoading}
       />
 
       <Dialog open={confirmDeleteOpen} onClose={() => setConfirmDeleteOpen(false)}>

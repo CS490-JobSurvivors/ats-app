@@ -29,6 +29,40 @@ export interface JobPayload {
 }
 
 export type JobUpdatePayload = Partial<JobPayload>;
+export type JobActivityEventType =
+  | 'applied'
+  | 'follow_up'
+  | 'interview'
+  | 'outcome'
+  | 'stage_change';
+
+export interface JobActivityEvent {
+  event_id: string;
+  event_type: JobActivityEventType;
+  title: string;
+  description?: string | null;
+  occurred_at: string;
+  can_delete?: boolean;
+}
+
+export interface InterviewRecord {
+  interview_id: string;
+  job_id: string;
+  user_id: string;
+  round_type: string;
+  scheduled_at_date: string;
+  scheduled_at_time: string;
+  interview_notes?: string | null;
+}
+
+export interface InterviewPayload {
+  round_type: string;
+  scheduled_at_date: string;
+  scheduled_at_time: string;
+  interview_notes?: string | null;
+}
+
+export type InterviewUpdatePayload = Partial<InterviewPayload>;
 
 const authHeaders = (accessToken: string) => ({
   Authorization: `Bearer ${accessToken}`,
@@ -86,5 +120,95 @@ export const updateJob = async (
   if (!response.ok) {
     throw new Error('Unable to update job.');
   }
+  return await response.json();
+};
+
+export const listJobActivity = async (
+  accessToken: string,
+  jobId: string
+): Promise<JobActivityEvent[]> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/activity`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load job activity.');
+  }
+
+  return await response.json();
+};
+
+export const deleteJobStageHistory = async (
+  accessToken: string,
+  jobId: string,
+  jobHistoryId: string
+): Promise<void> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/stage-history/${jobHistoryId}`, {
+    method: 'DELETE',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to delete stage history.');
+  }
+};
+
+export const listJobInterviews = async (
+  accessToken: string,
+  jobId: string
+): Promise<InterviewRecord[]> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/interviews`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load interviews.');
+  }
+
+  return await response.json();
+};
+
+export const createJobInterview = async (
+  accessToken: string,
+  jobId: string,
+  interview: InterviewPayload
+): Promise<InterviewRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/interviews`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(interview),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to save interview.');
+  }
+
+  return await response.json();
+};
+
+export const updateJobInterview = async (
+  accessToken: string,
+  jobId: string,
+  interviewId: string,
+  interview: InterviewUpdatePayload
+): Promise<InterviewRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/interviews/${interviewId}`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(interview),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to update interview.');
+  }
+
   return await response.json();
 };
