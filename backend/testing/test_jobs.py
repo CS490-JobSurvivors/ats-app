@@ -576,3 +576,29 @@ def test_update_job_interview_only_updates_owned_interview():
     assert body["scheduled_at_date"] == "2026-07-10"
     assert body["scheduled_at_time"] == "2026-07-10T18:00:00Z"
     assert body["interview_notes"] == "Meet hiring manager."
+
+
+def test_create_job_with_recruiter_notes():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    payload = {**create_job_payload(), "recruiter_notes": "Spoke with Jane from HR."}
+
+    response = client.post("/jobs", json=payload)
+
+    assert response.status_code == 201
+    assert response.json()["recruiter_notes"] == "Spoke with Jane from HR."
+
+
+def test_update_job_recruiter_notes():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    update_response = client.patch(
+        f"/jobs/{job_id}",
+        json={"recruiter_notes": "Follow up next Monday."},
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["recruiter_notes"] == "Follow up next Monday."
