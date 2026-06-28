@@ -14,8 +14,19 @@ import {
   FormControl,
   InputLabel,
   TextField,
+  CircularProgress,
+  IconButton,
 } from '@mui/material';
-import { JobRecord, JobPayload, JobStage } from '../api/jobs';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
+import CloseIcon from '@mui/icons-material/Close';
+import CancelIcon from '@mui/icons-material/Cancel';
+import EventNoteIcon from '@mui/icons-material/EventNote';
+import FlagIcon from '@mui/icons-material/Flag';
+import SendIcon from '@mui/icons-material/Send';
+import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
+import { JobActivityEvent, JobRecord, JobPayload, JobStage } from '../api/jobs';
 import { stageColors } from '../utils/stageColors';
 import { FORWARD_TRANSITIONS, isForwardTransition } from '../utils/stageTransitions';
 
@@ -35,7 +46,56 @@ interface JobDetailDialogProps {
   onDelete: () => void;
   onSave: (payload: JobPayload) => Promise<void>;
   onStageChange: (newStage: JobStage) => void;
+  onDeleteStageHistory?: (eventId: string) => void;
+  activityEvents?: JobActivityEvent[];
+  isActivityLoading?: boolean;
 }
+
+const activityIcons: Record<JobActivityEvent['event_type'], typeof AssignmentTurnedInIcon> = {
+  applied: SendIcon,
+  follow_up: EventNoteIcon,
+  interview: WorkHistoryIcon,
+  outcome: FlagIcon,
+  stage_change: AssignmentTurnedInIcon,
+};
+
+const formatActivityDate = (value: string) =>
+  new Date(value).toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+const formatActivityTime = (value: string) =>
+  new Date(value).toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+const isRejectedEvent = (event: JobActivityEvent) =>
+  event.title.toLowerCase().includes('rejected') || event.description?.endsWith('to Rejected');
+
+const getEventStage = (event: JobActivityEvent): JobStage | null => {
+  if (event.description) {
+    const targetStage = event.description.split(' to ').at(-1);
+    if (targetStage && ALL_STAGES.includes(targetStage as JobStage)) {
+      return targetStage as JobStage;
+    }
+  }
+
+  if (event.title === 'Applied') return 'Applied';
+  if (event.title === 'Interview stage started') return 'Interview';
+  if (event.title === 'Offer received') return 'Offer';
+  if (event.title === 'Marked rejected') return 'Rejected';
+  if (event.title === 'Archived') return 'Archived';
+
+  return null;
+};
+
+const getActivityColor = (event: JobActivityEvent) => {
+  const eventStage = getEventStage(event);
+  return eventStage ? stageColors[eventStage].color : stageColors.Interested.color;
+};
 
 const JobDetailDialog = ({
   open,
@@ -44,8 +104,12 @@ const JobDetailDialog = ({
   onDelete,
   onSave,
   onStageChange,
+  onDeleteStageHistory,
+  activityEvents = [],
+  isActivityLoading = false,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
+  const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     job_title: '',
@@ -91,6 +155,13 @@ const JobDetailDialog = ({
   const confirmOverride = () => {
     if (pendingStage) onStageChange(pendingStage);
     setPendingStage(null);
+  };
+
+  const confirmStageHistoryDelete = () => {
+    if (pendingDeleteEvent && onDeleteStageHistory) {
+      onDeleteStageHistory(pendingDeleteEvent.event_id);
+    }
+    setPendingDeleteEvent(null);
   };
 
   const handleSave = async () => {
@@ -325,6 +396,191 @@ const JobDetailDialog = ({
               </Box>
             </>
           )}
+          {!isEditing && (
+            <>
+              <Divider sx={{ mb: 2 }} />
+
+              <Typography variant="subtitle2" gutterBottom>
+                Activity Timeline
+              </Typography>
+              {isActivityLoading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading activity...
+                  </Typography>
+                </Box>
+              ) : activityEvents.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No activity yet.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'grid', gap: 2, mt: 1 }}>
+                  {[...activityEvents].reverse().map((event, index) => {
+                    const rejectedEvent = isRejectedEvent(event);
+                    const Icon = rejectedEvent ? CancelIcon : activityIcons[event.event_type];
+                    const eventColor = getActivityColor(event);
+                    const isCurrent = index === 0;
+
+                    return (
+                      <Box
+                        key={event.event_id}
+                        sx={{
+                          display: 'grid',
+                          gridTemplateColumns: '48px minmax(0, 1fr)',
+                          gap: 2,
+                          alignItems: 'start',
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            display: 'flex',
+                            justifyContent: 'center',
+                            position: 'relative',
+                            minHeight: '100%',
+                          }}
+                        >
+                          {index < activityEvents.length - 1 && (
+                            <Box
+                              sx={{
+                                position: 'absolute',
+                                top: 44,
+                                bottom: 8,
+                                width: 2,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  top: 8,
+                                  bottom: 0,
+                                  left: 0,
+                                  width: 2,
+                                  bgcolor: eventColor,
+                                }}
+                              />
+                              <Box
+                                sx={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: '50%',
+                                  width: 0,
+                                  height: 0,
+                                  transform: 'translateX(-50%)',
+                                  borderLeft: '5px solid transparent',
+                                  borderRight: '5px solid transparent',
+                                  borderBottom: `8px solid ${eventColor}`,
+                                }}
+                              />
+                            </Box>
+                          )}
+                          <Box
+                            data-testid={`activity-icon-${event.event_id}`}
+                            sx={{
+                              width: 42,
+                              height: 42,
+                              borderRadius: '50%',
+                              bgcolor: eventColor,
+                              color: '#fff',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              position: 'relative',
+                              zIndex: 1,
+                              boxShadow: isCurrent ? `0 0 0 3px ${eventColor}22` : 'none',
+                            }}
+                          >
+                            <Icon fontSize="small" />
+                          </Box>
+                        </Box>
+                        <Box
+                          sx={{
+                            minWidth: 0,
+                            border: '1px solid',
+                            borderColor: isCurrent ? `${eventColor}55` : 'divider',
+                            borderRadius: 1,
+                            px: 2,
+                            py: 1.5,
+                            bgcolor: isCurrent ? `${eventColor}0f` : 'background.default',
+                            position: 'relative',
+                            boxShadow: isCurrent ? `0 0 0 1px ${eventColor}1f` : 'none',
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'flex-start',
+                              justifyContent: 'space-between',
+                              gap: 1,
+                            }}
+                          >
+                            <Box sx={{ minWidth: 0 }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+                                {isCurrent && (
+                                  <Chip
+                                    label="Current"
+                                    size="small"
+                                    sx={{
+                                      height: 24,
+                                      color: '#fff',
+                                      bgcolor: eventColor,
+                                      fontWeight: 700,
+                                    }}
+                                  />
+                                )}
+                                <Typography variant="body1" fontWeight={700}>
+                                  {event.title}
+                                </Typography>
+                              </Box>
+                              <Box
+                                sx={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 2,
+                                  flexWrap: 'wrap',
+                                  mb: event.description ? 0.75 : 0,
+                                }}
+                              >
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                  <CalendarTodayIcon
+                                    sx={{ fontSize: 16, color: 'text.secondary' }}
+                                  />
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatActivityDate(event.occurred_at)}
+                                  </Typography>
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                                  <AccessTimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
+                                  <Typography variant="caption" color="text.secondary">
+                                    {formatActivityTime(event.occurred_at)}
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              {event.description && (
+                                <Typography variant="body2" color="text.secondary">
+                                  {event.description}
+                                </Typography>
+                              )}
+                            </Box>
+                            {event.can_delete && onDeleteStageHistory && (
+                              <IconButton
+                                size="small"
+                                aria-label={`Delete ${event.title} history`}
+                                onClick={() => setPendingDeleteEvent(event)}
+                                sx={{ color: 'text.secondary', p: 0.5 }}
+                              >
+                                <CloseIcon fontSize="small" />
+                              </IconButton>
+                            )}
+                          </Box>
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Box>
+              )}
+            </>
+          )}
         </DialogContent>
 
         <DialogActions>
@@ -363,6 +619,22 @@ const JobDetailDialog = ({
           <Button onClick={() => setPendingStage(null)}>Cancel</Button>
           <Button onClick={confirmOverride} variant="contained" color="warning">
             Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!pendingDeleteEvent} onClose={() => setPendingDeleteEvent(null)}>
+        <DialogTitle>Delete stage history?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Remove <strong>{pendingDeleteEvent?.title}</strong> from this job&apos;s activity
+            timeline?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDeleteEvent(null)}>Cancel</Button>
+          <Button onClick={confirmStageHistoryDelete} variant="contained" color="error">
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

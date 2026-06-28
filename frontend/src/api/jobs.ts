@@ -29,6 +29,21 @@ export interface JobPayload {
 }
 
 export type JobUpdatePayload = Partial<JobPayload>;
+export type JobActivityEventType =
+  | 'applied'
+  | 'follow_up'
+  | 'interview'
+  | 'outcome'
+  | 'stage_change';
+
+export interface JobActivityEvent {
+  event_id: string;
+  event_type: JobActivityEventType;
+  title: string;
+  description?: string | null;
+  occurred_at: string;
+  can_delete?: boolean;
+}
 
 const authHeaders = (accessToken: string) => ({
   Authorization: `Bearer ${accessToken}`,
@@ -87,4 +102,35 @@ export const updateJob = async (
     throw new Error('Unable to update job.');
   }
   return await response.json();
+};
+
+export const listJobActivity = async (
+  accessToken: string,
+  jobId: string
+): Promise<JobActivityEvent[]> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/activity`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load job activity.');
+  }
+
+  return await response.json();
+};
+
+export const deleteJobStageHistory = async (
+  accessToken: string,
+  jobId: string,
+  jobHistoryId: string
+): Promise<void> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/stage-history/${jobHistoryId}`, {
+    method: 'DELETE',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to delete stage history.');
+  }
 };

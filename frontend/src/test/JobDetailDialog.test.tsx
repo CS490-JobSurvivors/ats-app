@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JobDetailDialog from '../components/JobDetailDialog';
 import { JobRecord } from '../api/jobs';
+import { stageColors } from '../utils/stageColors';
 
 const mockJob: JobRecord = {
   job_id: '123',
@@ -20,6 +21,54 @@ const mockOnClose = jest.fn();
 const mockOnSave = jest.fn();
 const mockOnDelete = jest.fn();
 const mockOnStageChange = jest.fn();
+const mockOnDeleteStageHistory = jest.fn();
+const activityEvents = [
+  {
+    event_id: 'job-created-123',
+    event_type: 'stage_change' as const,
+    title: 'Added to pipeline',
+    description: 'Software Engineer at Acme Corp',
+    occurred_at: '2026-06-19T00:00:00Z',
+    can_delete: false,
+  },
+  {
+    event_id: 'activity-1',
+    event_type: 'applied' as const,
+    title: 'Applied',
+    description: 'Software Engineer at Acme Corp',
+    occurred_at: '2026-06-20T00:00:00Z',
+  },
+  {
+    event_id: 'activity-2',
+    event_type: 'follow_up' as const,
+    title: 'Follow-up',
+    description: 'Email recruiter (due)',
+    occurred_at: '2026-06-22T00:00:00Z',
+  },
+  {
+    event_id: 'activity-3',
+    event_type: 'interview' as const,
+    title: 'Technical interview scheduled',
+    description: 'Bring portfolio',
+    occurred_at: '2026-06-24T15:00:00Z',
+  },
+  {
+    event_id: 'activity-4',
+    event_type: 'outcome' as const,
+    title: 'Offer received',
+    description: 'Interview to Offer',
+    occurred_at: '2026-06-25T00:00:00Z',
+    can_delete: true,
+  },
+  {
+    event_id: 'activity-5',
+    event_type: 'outcome' as const,
+    title: 'Marked rejected',
+    description: 'Offer to Rejected',
+    occurred_at: '2026-06-26T00:00:00Z',
+    can_delete: true,
+  },
+];
 
 const renderDialog = (job = mockJob) =>
   render(
@@ -49,6 +98,129 @@ describe('JobDetailDialog', () => {
   it('renders application link when provided', () => {
     renderDialog();
     expect(screen.getByText('https://acme.com/jobs/1')).toBeInTheDocument();
+  });
+
+  it('renders job activity timeline events', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        activityEvents={activityEvents}
+      />
+    );
+
+    expect(screen.getByText('Activity Timeline')).toBeInTheDocument();
+    expect(screen.getByText('Added to pipeline')).toBeInTheDocument();
+    expect(screen.getAllByText('Applied').length).toBeGreaterThan(0);
+    expect(screen.getByText('Follow-up')).toBeInTheDocument();
+    expect(screen.getByText('Technical interview scheduled')).toBeInTheDocument();
+    expect(screen.getByText('Offer received')).toBeInTheDocument();
+    expect(screen.getByText('Marked rejected')).toBeInTheDocument();
+    expect(screen.getByTestId('CancelIcon')).toBeInTheDocument();
+    expect(screen.getByTestId('activity-icon-activity-5')).toHaveStyle(
+      `background-color: ${stageColors.Rejected.color}`
+    );
+  });
+
+  it('does not render a delete button for the added to pipeline event', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={activityEvents}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: /delete added to pipeline history/i })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: /delete offer received history/i })
+    ).toBeInTheDocument();
+  });
+
+  it('asks for confirmation before deleting a stage history event', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={activityEvents}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /delete offer received history/i }));
+
+    expect(screen.getByText(/delete stage history/i)).toBeInTheDocument();
+    expect(screen.getByText(/remove/i)).toBeInTheDocument();
+    expect(mockOnDeleteStageHistory).not.toHaveBeenCalled();
+  });
+
+  it('calls onDeleteStageHistory after confirming a stage history deletion', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={activityEvents}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /delete offer received history/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+
+    expect(mockOnDeleteStageHistory).toHaveBeenCalledWith('activity-4');
+  });
+
+  it('does not delete a stage history event when confirmation is cancelled', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={activityEvents}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /delete offer received history/i }));
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+
+    expect(mockOnDeleteStageHistory).not.toHaveBeenCalled();
+  });
+
+  it('renders activity loading state', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        isActivityLoading={true}
+      />
+    );
+
+    expect(screen.getByText(/loading activity/i)).toBeInTheDocument();
   });
 
   it('does not render application link when not provided', () => {
