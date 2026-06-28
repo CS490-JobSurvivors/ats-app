@@ -34,7 +34,7 @@ const SettingsPage = () => {
         Settings
       </Typography>
       <Typography variant="body1" color="text.secondary" mb={4}>
-        Manage your account and preferences.
+        Manage your account settings.
       </Typography>
 
       <Paper sx={{ p: 3, mb: 3 }}>
@@ -66,16 +66,6 @@ const SettingsPage = () => {
             </Alert>
           )}
         </Box>
-      </Paper>
-
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h6" fontWeight={600} mb={2}>
-          Preferences
-        </Typography>
-        <Divider sx={{ mb: 2 }} />
-        <Typography variant="body2" color="text.secondary">
-          No preferences configured yet.
-        </Typography>
       </Paper>
     </Container>
   );
