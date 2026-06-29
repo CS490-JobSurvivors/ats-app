@@ -64,6 +64,7 @@ interface JobDetailDialogProps {
   onSaveInterview?: (payload: InterviewPayload, interviewId?: string) => Promise<void>;
   onGenerateResume?: () => Promise<string>;
   onImproveResume?: (draftText: string) => Promise<string>;
+  onGenerateCoverLetter?: () => Promise<string>;
   interviews?: InterviewRecord[];
   isInterviewsLoading?: boolean;
   onSaveFollowUp?: (payload: FollowUpPayload, followUpId?: string) => Promise<void>;
@@ -165,6 +166,7 @@ const JobDetailDialog = ({
   onSaveInterview,
   onGenerateResume,
   onImproveResume,
+  onGenerateCoverLetter,
   interviews = [],
   isInterviewsLoading = false,
   onSaveFollowUp,
@@ -205,6 +207,9 @@ const JobDetailDialog = ({
   const [isImproving, setIsImproving] = useState(false);
   const [showImproved, setShowImproved] = useState(false);
   const [resumeError, setResumeError] = useState('');
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+  const [generatedCoverLetter, setGeneratedCoverLetter] = useState<string | null>(null);
+  const [coverLetterError, setCoverLetterError] = useState('');
 
   useEffect(() => {
     if (job) {
@@ -996,6 +1001,26 @@ const JobDetailDialog = ({
                   {isGenerating ? 'Generating...' : 'Generate Resume'}
                 </Button>
               )}
+              {onGenerateCoverLetter && (
+                <Button
+                  onClick={async () => {
+                    setCoverLetterError('');
+                    setIsGeneratingCoverLetter(true);
+                    try {
+                      const text = await onGenerateCoverLetter();
+                      setGeneratedCoverLetter(text);
+                    } catch {
+                      setCoverLetterError('Failed to generate cover letter. Please try again.');
+                    } finally {
+                      setIsGeneratingCoverLetter(false);
+                    }
+                  }}
+                  disabled={isGeneratingCoverLetter}
+                  startIcon={isGeneratingCoverLetter ? <CircularProgress size={16} /> : undefined}
+                >
+                  {isGeneratingCoverLetter ? 'Generating...' : 'Cover Letter'}
+                </Button>
+              )}
               <Button onClick={onClose}>Close</Button>
               {job.job_stage !== 'Archived' && (
                 <Button onClick={() => handleStageSelect('Archived')} color="secondary">
@@ -1158,6 +1183,43 @@ const JobDetailDialog = ({
             }}
             variant="contained"
           >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {coverLetterError && (
+        <Alert severity="error" onClose={() => setCoverLetterError('')} sx={{ mt: 1 }}>
+          {coverLetterError}
+        </Alert>
+      )}
+
+      <Dialog
+        open={generatedCoverLetter !== null}
+        onClose={() => setGeneratedCoverLetter(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Generated Cover Letter</DialogTitle>
+        <DialogContent>
+          <TextField
+            multiline
+            fullWidth
+            minRows={15}
+            value={generatedCoverLetter ?? ''}
+            onChange={(e) => setGeneratedCoverLetter(e.target.value)}
+            inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              if (generatedCoverLetter) navigator.clipboard.writeText(generatedCoverLetter);
+            }}
+          >
+            Copy
+          </Button>
+          <Button onClick={() => setGeneratedCoverLetter(null)} variant="contained">
             Close
           </Button>
         </DialogActions>

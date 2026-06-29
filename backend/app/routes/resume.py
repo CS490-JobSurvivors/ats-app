@@ -46,19 +46,16 @@ class ImproveResponse(BaseModel):
     improved: str
 
 
-@router.post("/generate", response_model=ResumeResponse)
-def generate_resume(
-    body: ResumeRequest,
-    current_user: dict = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    owner_id = get_current_user_id(current_user)
+class CoverLetterResponse(BaseModel):
+    cover_letter: str
 
+
+def _gather_candidate_context(owner_id: UUID, job_id: UUID, db: Session) -> tuple:
     profile = db.scalar(select(Profile).where(Profile.user_id == owner_id))
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
-    job = db.scalar(select(Job).where(Job.job_id == body.job_id, Job.job_poster_id == owner_id))
+    job = db.scalar(select(Job).where(Job.job_id == job_id, Job.job_poster_id == owner_id))
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
@@ -116,6 +113,30 @@ def generate_resume(
         if career_pref.salary_minimum is not None:
             pref_lines.append(f"Minimum Salary: ${int(career_pref.salary_minimum):,}")
 
+    return profile, job, exp_lines, edu_lines, skill_parts, pref_lines
+
+
+def _get_anthropic_client() -> anthropic.Anthropic:
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ANTHROPIC_API_KEY is not configured",
+        )
+    return anthropic.Anthropic(api_key=api_key)
+
+
+@router.post("/generate", response_model=ResumeResponse)
+def generate_resume(
+    body: ResumeRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    profile, job, exp_lines, edu_lines, skill_parts, pref_lines = _gather_candidate_context(
+        owner_id, body.job_id, db
+    )
+
     pref_heading = (
         "\n\n## Career Preferences"
         " (use as context only — do not print preferences directly in the resume)\n"
@@ -160,22 +181,14 @@ Your job is to:
 Do NOT invent experiences, credentials, or skills not present above. Do NOT add placeholder text.
 Only rewrite and reorder what is actually there. Format using markdown."""
 
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ANTHROPIC_API_KEY is not configured",
-        )
-
-    client = anthropic.Anthropic(api_key=api_key)
+    client = _get_anthropic_client()
     message = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=2000,
         messages=[{"role": "user", "content": prompt}],
     )
 
-    resume_text = message.content[0].text
-    return ResumeResponse(resume=resume_text)
+    return ResumeResponse(resume=message.content[0].text)
 
 
 @router.post("/improve", response_model=ImproveResponse)
@@ -224,3 +237,58 @@ def improve_resume(
     )
 
     return ImproveResponse(improved=message.content[0].text)
+
+
+@router.post("/cover-letter", response_model=CoverLetterResponse)
+def generate_cover_letter(
+    body: ResumeRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    profile, job, exp_lines, edu_lines, skill_parts, pref_lines = _gather_candidate_context(
+        owner_id, body.job_id, db
+    )
+
+    prompt = f"""
+You are a professional cover letter writer helping a real job seeker apply for a specific role.
+Write a tailored, concise cover letter using ONLY the information provided below.
+Do NOT invent experiences, skills, or credentials not present. Do NOT use placeholder text.
+
+## Candidate
+Name: {profile.first_name} {profile.last_name}
+City: {profile.city}
+Phone: {profile.phone_number}
+Summary: {profile.summary}
+
+## Work Experience
+{chr(10).join(exp_lines) if exp_lines else "No work experience listed."}
+
+## Education
+{chr(10).join(edu_lines) if edu_lines else "No education listed."}
+
+## Skills
+{", ".join(skill_parts) if skill_parts else "No skills listed."}
+
+## Job They Are Applying To
+Title: {job.job_title}
+Company: {job.company_name}
+Description: {job.job_description}
+Location: {job.job_location}
+
+Write a professional cover letter (3–4 paragraphs) that:
+- Opens by connecting the candidate's background directly to why they are excited about this role
+- Highlights the 2–3 most relevant experiences or skills that match the job description
+- Closes with a confident call to action
+
+Use a natural, professional tone. Format as plain text (no markdown headers). Address it to the \
+hiring team at {job.company_name}."""
+
+    client = _get_anthropic_client()
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1000,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return CoverLetterResponse(cover_letter=message.content[0].text)
