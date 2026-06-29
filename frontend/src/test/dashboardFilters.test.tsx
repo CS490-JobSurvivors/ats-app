@@ -4,7 +4,7 @@ import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
-import { listJobs } from '../api/jobs';
+import { listJobs, getJobMetrics } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -18,6 +18,7 @@ jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
   listJobActivity: jest.fn(),
   listJobInterviews: jest.fn(),
+  getJobMetrics: jest.fn(),
   listJobFollowUps: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
@@ -30,6 +31,7 @@ jest.mock('../api/jobs', () => ({
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
+const mockGetJobMetrics = getJobMetrics as jest.Mock;
 
 const today = new Date();
 const formatDate = (date: Date) => {
@@ -126,6 +128,19 @@ const chooseFilter = async (label: RegExp, optionName: RegExp) => {
 beforeEach(() => {
   mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
   mockListJobs.mockResolvedValue(jobFixtures);
+  mockGetJobMetrics.mockResolvedValue({
+    total_applications: 0,
+    awaiting_response: 0,
+    responded: 0,
+    stage_counts: {
+      Interested: 0,
+      Applied: 0,
+      Interview: 0,
+      Offer: 0,
+      Rejected: 0,
+      Archived: 0,
+    },
+  });
 });
 
 afterEach(() => {

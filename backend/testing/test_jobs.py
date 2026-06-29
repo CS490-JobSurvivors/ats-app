@@ -282,6 +282,89 @@ def test_list_jobs_uses_latest_stage_history_as_current_stage():
     assert jobs[0].job_stage == "Rejected"
 
 
+def test_job_metrics_returns_zero_counts_when_no_jobs():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+
+    response = client.get("/jobs/metrics")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_applications"] == 0
+    assert body["awaiting_response"] == 0
+    assert body["responded"] == 0
+    assert body["stage_counts"] == {
+        "Interested": 0,
+        "Applied": 0,
+        "Interview": 0,
+        "Offer": 0,
+        "Rejected": 0,
+        "Archived": 0,
+    }
+
+
+def test_job_metrics_computes_stage_counts_and_response_tracking():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    client.post("/jobs", json=create_job_payload("Interested Co"))
+    for stage in ["Applied"]:
+        response = client.post("/jobs", json=create_job_payload("Applied Co"))
+        client.patch(f"/jobs/{response.json()['job_id']}", json={"job_stage": stage})
+    for stage in ["Interview"]:
+        response = client.post("/jobs", json=create_job_payload("Interview Co"))
+        client.patch(f"/jobs/{response.json()['job_id']}", json={"job_stage": stage})
+    for stage in ["Offer"]:
+        response = client.post("/jobs", json=create_job_payload("Offer Co"))
+        client.patch(f"/jobs/{response.json()['job_id']}", json={"job_stage": stage})
+
+    response = client.get("/jobs/metrics")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_applications"] == 4
+    assert body["awaiting_response"] == 1
+    assert body["responded"] == 2
+    assert body["stage_counts"] == {
+        "Interested": 1,
+        "Applied": 1,
+        "Interview": 1,
+        "Offer": 1,
+        "Rejected": 0,
+        "Archived": 0,
+    }
+
+
+def test_job_metrics_excludes_interested_and_archived_from_response_tracking():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    client.post("/jobs", json=create_job_payload("Interested Co"))
+    archived_response = client.post("/jobs", json=create_job_payload("Archived Co"))
+    client.patch(f"/jobs/{archived_response.json()['job_id']}", json={"job_stage": "Archived"})
+
+    response = client.get("/jobs/metrics")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_applications"] == 2
+    assert body["awaiting_response"] == 0
+    assert body["responded"] == 0
+
+
+def test_job_metrics_only_includes_owned_jobs():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    client.post("/jobs", json=create_job_payload("Owner Co"))
+
+    set_authenticated_user(other_user_id)
+    client.post("/jobs", json=create_job_payload("Other Co"))
+
+    response = client.get("/jobs/metrics")
+
+    assert response.status_code == 200
+    assert response.json()["total_applications"] == 1
+
+
 def test_update_job_only_updates_owned_jobs():
     owner_id = str(uuid4())
     other_user_id = str(uuid4())

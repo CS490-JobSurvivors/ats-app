@@ -25,6 +25,7 @@ import {
   listJobs,
   listJobActivity,
   listJobInterviews,
+  getJobMetrics,
   listJobFollowUps,
   createJob,
   updateJob,
@@ -40,10 +41,12 @@ import {
   FollowUpPayload,
   FollowUpRecord,
   JobActivityEvent,
+  JobMetrics,
   JobRecord,
   JobPayload,
   JobStage,
 } from '../api/jobs';
+import { stageColors } from '../utils/stageColors';
 import JobCard from '../components/JobCard';
 import JobFormDialog from '../components/JobFormDialog';
 import JobDetailDialog from '../components/JobDetailDialog';
@@ -60,6 +63,15 @@ const sortOptions: Array<{ value: SortBy; label: string }> = [
 
 const stageFilterOptions: Array<JobStage | 'All'> = [
   'All',
+  'Interested',
+  'Applied',
+  'Interview',
+  'Offer',
+  'Rejected',
+  'Archived',
+];
+
+const ALL_JOB_STAGES: JobStage[] = [
   'Interested',
   'Applied',
   'Interview',
@@ -106,6 +118,7 @@ const DashboardPage = () => {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('last_activity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [metrics, setMetrics] = useState<JobMetrics | null>(null);
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -126,13 +139,22 @@ const DashboardPage = () => {
     }
   }, []);
 
+  const fetchMetrics = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    try {
+      const result = await getJobMetrics(token);
+      setMetrics(result);
+    } catch {
+      setMetrics(null);
+    }
+  }, []);
+
   useEffect(() => {
     fetchJobs();
-  }, [fetchJobs]);
-
-  const totalApplications = jobs.length;
-  const interviewCount = jobs.filter((job) => job.job_stage === 'Interview').length;
-  const offerCount = jobs.filter((job) => job.job_stage === 'Offer').length;
+    fetchMetrics();
+  }, [fetchJobs, fetchMetrics]);
 
   const locationOptions = useMemo<string[]>(() => {
     const locations = jobs
@@ -278,6 +300,7 @@ const DashboardPage = () => {
     setJobs((prev) => prev.filter((j) => j.job_id !== selectedJob.job_id));
     setConfirmDeleteOpen(false);
     setDetailOpen(false);
+    await fetchMetrics();
   };
 
   const handleDetailSave = async (payload: JobPayload) => {
@@ -305,6 +328,7 @@ const DashboardPage = () => {
         setSelectedJob(refreshedSelectedJob);
       }
       await loadJobActivity(selectedJob.job_id);
+      await fetchMetrics();
     } catch {
       setErrorMessage('Unable to delete that stage history. Please try again.');
     }
@@ -381,6 +405,7 @@ const DashboardPage = () => {
     await createJob(token, payload);
     setDialogOpen(false);
     await fetchJobs();
+    await fetchMetrics();
   };
 
   return (
@@ -392,32 +417,53 @@ const DashboardPage = () => {
         Track your applications and activity at a glance.
       </Typography>
 
-      <Box sx={{ display: 'flex', gap: 3, mb: 4 }}>
+      <Box sx={{ display: 'flex', gap: 3, mb: 3 }}>
         <Paper sx={{ p: 3, textAlign: 'center', flex: 1 }}>
           <Typography variant="h6" fontWeight={600} mb={1}>
             Total Applications
           </Typography>
           <Typography variant="h3" fontWeight={700}>
-            {totalApplications}
+            {metrics?.total_applications ?? 0}
           </Typography>
         </Paper>
         <Paper sx={{ p: 3, textAlign: 'center', flex: 1 }}>
           <Typography variant="h6" fontWeight={600} mb={1}>
-            Interviews
+            Awaiting Response
           </Typography>
           <Typography variant="h3" fontWeight={700}>
-            {interviewCount}
+            {metrics?.awaiting_response ?? 0}
           </Typography>
         </Paper>
         <Paper sx={{ p: 3, textAlign: 'center', flex: 1 }}>
           <Typography variant="h6" fontWeight={600} mb={1}>
-            Offers
+            Responded
           </Typography>
           <Typography variant="h3" fontWeight={700}>
-            {offerCount}
+            {metrics?.responded ?? 0}
           </Typography>
         </Paper>
       </Box>
+
+      <Paper sx={{ p: 3, mb: 4 }}>
+        <Typography variant="h6" fontWeight={600} mb={2} textAlign="center">
+          Applications by Stage
+        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, flexWrap: 'wrap' }}>
+          {ALL_JOB_STAGES.map((stage) => {
+            const style = stageColors[stage] ?? { color: '#424242', bgcolor: '#F5F5F5' };
+            return (
+              <Box key={stage} sx={{ textAlign: 'center', minWidth: 90 }}>
+                <Typography variant="body2" sx={{ color: style.color, fontWeight: 600 }}>
+                  {stage}
+                </Typography>
+                <Typography variant="h5" fontWeight={700}>
+                  {metrics?.stage_counts[stage] ?? 0}
+                </Typography>
+              </Box>
+            );
+          })}
+        </Box>
+      </Paper>
 
       <Box
         sx={{
@@ -625,6 +671,7 @@ const DashboardPage = () => {
           setJobs((prev) => prev.map((j) => (j.job_id === updated.job_id ? updated : j)));
           setSelectedJob(updated);
           await loadJobActivity(updated.job_id);
+          await fetchMetrics();
         }}
         activityEvents={selectedJobActivity}
         isActivityLoading={isActivityLoading}

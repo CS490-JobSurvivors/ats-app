@@ -29,6 +29,16 @@ export interface JobPayload {
 }
 
 export type JobUpdatePayload = Partial<JobPayload>;
+
+export type StageCounts = Record<JobStage, number>;
+
+export interface JobMetrics {
+  total_applications: number;
+  awaiting_response: number;
+  responded: number;
+  stage_counts: StageCounts;
+}
+
 export type JobActivityEventType =
   | 'applied'
   | 'follow_up'
@@ -93,6 +103,17 @@ export const listJobs = async (accessToken: string): Promise<JobRecord[]> => {
   });
   if (!response.ok) {
     throw new Error('Unable to load jobs.');
+  }
+  return await response.json();
+};
+
+export const getJobMetrics = async (accessToken: string): Promise<JobMetrics> => {
+  const response = await fetch(`${API_URL}/jobs/metrics`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+  if (!response.ok) {
+    throw new Error('Unable to load job metrics.');
   }
   return await response.json();
 };

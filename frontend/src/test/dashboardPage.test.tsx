@@ -8,6 +8,7 @@ import {
   listJobs,
   listJobActivity,
   listJobInterviews,
+  getJobMetrics,
   listJobFollowUps,
   createJob,
   updateJob,
@@ -32,6 +33,7 @@ jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
   listJobActivity: jest.fn(),
   listJobInterviews: jest.fn(),
+  getJobMetrics: jest.fn(),
   listJobFollowUps: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
@@ -48,6 +50,7 @@ const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
 const mockListJobActivity = listJobActivity as jest.Mock;
 const mockListJobInterviews = listJobInterviews as jest.Mock;
+const mockGetJobMetrics = getJobMetrics as jest.Mock;
 const mockListJobFollowUps = listJobFollowUps as jest.Mock;
 const mockCreateJob = createJob as jest.Mock;
 const mockUpdateJob = updateJob as jest.Mock;
@@ -58,6 +61,20 @@ const mockUpdateJobInterview = updateJobInterview as jest.Mock;
 const mockCreateJobFollowUp = createJobFollowUp as jest.Mock;
 const mockUpdateJobFollowUp = updateJobFollowUp as jest.Mock;
 const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
+
+const zeroMetrics = {
+  total_applications: 0,
+  awaiting_response: 0,
+  responded: 0,
+  stage_counts: {
+    Interested: 0,
+    Applied: 0,
+    Interview: 0,
+    Offer: 0,
+    Rejected: 0,
+    Archived: 0,
+  },
+};
 
 const sampleJob = {
   job_id: 'job-1',
@@ -76,6 +93,7 @@ beforeEach(() => {
   mockListJobs.mockResolvedValue([]);
   mockListJobActivity.mockResolvedValue([]);
   mockListJobInterviews.mockResolvedValue([]);
+  mockGetJobMetrics.mockResolvedValue(zeroMetrics);
   mockListJobFollowUps.mockResolvedValue([]);
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
@@ -95,12 +113,13 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/track your applications and activity/i)).toBeInTheDocument();
   });
 
-  it('renders the three stat cards with zero counts when there are no jobs', () => {
+  it('renders baseline dashboard metrics with zero counts when there are no jobs', () => {
     render(<DashboardPage />);
     expect(screen.getByText(/total applications/i)).toBeInTheDocument();
-    expect(screen.getByText(/interviews/i)).toBeInTheDocument();
-    expect(screen.getByText(/offers/i)).toBeInTheDocument();
-    expect(screen.getAllByText('0')).toHaveLength(3);
+    expect(screen.getByText(/awaiting response/i)).toBeInTheDocument();
+    expect(screen.getByText(/^responded$/i)).toBeInTheDocument();
+    expect(screen.getByText(/applications by stage/i)).toBeInTheDocument();
+    expect(screen.getAllByText('0')).toHaveLength(9);
   });
 
   it('renders the recent applications section with empty state', async () => {
@@ -109,16 +128,72 @@ describe('DashboardPage', () => {
     expect(await screen.findByText(/no recent applications/i)).toBeInTheDocument();
   });
 
-  it('renders job cards and reflects accurate stat counts when jobs exist', async () => {
+  it('renders job cards and dashboard metrics fetched from the metrics endpoint', async () => {
     mockListJobs.mockResolvedValue([
       sampleJob,
       { ...sampleJob, job_id: 'job-2', job_stage: 'Interview' },
       { ...sampleJob, job_id: 'job-3', job_stage: 'Offer' },
     ]);
+    mockGetJobMetrics.mockResolvedValue({
+      total_applications: 3,
+      awaiting_response: 0,
+      responded: 2,
+      stage_counts: {
+        Interested: 1,
+        Applied: 0,
+        Interview: 1,
+        Offer: 1,
+        Rejected: 0,
+        Archived: 0,
+      },
+    });
     render(<DashboardPage />);
     expect(await screen.findAllByText('Software Engineer')).toHaveLength(3);
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getAllByText('1')).toHaveLength(2);
+    expect(await screen.findByText('3')).toBeInTheDocument(); // Total Applications
+    expect(screen.getByText('2')).toBeInTheDocument(); // Responded
+    expect(screen.getAllByText('1')).toHaveLength(3); // Interested, Interview, Offer stage counts
+    expect(screen.getAllByText('0')).toHaveLength(4); // Awaiting Response, Applied, Rejected, Archived
+  });
+
+  it('renders metrics from the API without recomputing them from the loaded jobs list', async () => {
+    mockListJobs.mockResolvedValue([
+      { ...sampleJob, job_id: 'job-1', job_stage: 'Interested' },
+      { ...sampleJob, job_id: 'job-2', job_stage: 'Applied' },
+      { ...sampleJob, job_id: 'job-3', job_stage: 'Offer' },
+      { ...sampleJob, job_id: 'job-4', job_stage: 'Rejected' },
+    ]);
+    mockGetJobMetrics.mockResolvedValue({
+      total_applications: 4,
+      awaiting_response: 1,
+      responded: 1,
+      stage_counts: {
+        Interested: 1,
+        Applied: 1,
+        Interview: 0,
+        Offer: 1,
+        Rejected: 1,
+        Archived: 0,
+      },
+    });
+    render(<DashboardPage />);
+
+    expect(await screen.findAllByText('Software Engineer')).toHaveLength(4);
+    expect(await screen.findByText('4')).toBeInTheDocument(); // Total Applications
+    expect(screen.getAllByText('1')).toHaveLength(6); // Awaiting Response, Responded, and 4 stage counts of 1
+    expect(screen.getAllByText('0')).toHaveLength(2); // Interview and Offer stage counts
+  });
+
+  it('refetches metrics after creating a job', async () => {
+    mockCreateJob.mockResolvedValue({ ...sampleJob, job_id: 'job-new' });
+    render(<DashboardPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /new application/i }));
+    fireEvent.change(screen.getByLabelText(/company/i), { target: { value: 'New Co' } });
+    fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: 'New Role' } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: 'Details' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(mockGetJobMetrics).toHaveBeenCalledTimes(2));
   });
 
   it('opens the create dialog when "New Application" is clicked', async () => {
