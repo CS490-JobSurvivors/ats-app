@@ -96,6 +96,19 @@ const jobFixtures = [
     updated_at: '2026-06-19T00:00:00Z',
     created_at: '2026-06-19T00:00:00Z',
   },
+  {
+    job_id: 'job-6',
+    company_name: 'Old Co',
+    job_title: 'Archived Role',
+    job_description: 'No longer pursuing',
+    application_link: null,
+    job_location: 'Remote',
+    deadline: null,
+    job_stage: 'Archived',
+    job_poster_id: 'user-1',
+    updated_at: '2026-06-20T00:00:00Z',
+    created_at: '2026-06-20T00:00:00Z',
+  },
 ];
 
 const openFilters = async () => {
@@ -229,6 +242,24 @@ describe('Dashboard job filters', () => {
     await chooseFilter(/stage/i, /offer/i);
 
     expect(screen.getByText(/no applications match your filters/i)).toBeInTheDocument();
+    expect(screen.queryByText('Frontend Engineer')).not.toBeInTheDocument();
+  });
+
+  it('hides archived jobs from the default "All" stage view', async () => {
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('Frontend Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Archived Role')).not.toBeInTheDocument();
+  });
+
+  it('shows archived jobs when explicitly filtering by the Archived stage', async () => {
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('Frontend Engineer')).toBeInTheDocument();
+    await openFilters();
+    await chooseFilter(/stage/i, /archived/i);
+
+    expect(screen.getByText('Archived Role')).toBeInTheDocument();
     expect(screen.queryByText('Frontend Engineer')).not.toBeInTheDocument();
   });
 });
