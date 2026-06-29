@@ -16,6 +16,7 @@ class JobBase(BaseModel):
     job_location: str | None = None
     deadline: date | None = None
     recruiter_notes: str | None = None
+    outcome_notes: str | None = None
     job_stage: JobStage = "Interested"
 
 
@@ -31,6 +32,7 @@ class JobUpdate(BaseModel):
     job_location: str | None = None
     deadline: date | None = None
     recruiter_notes: str | None = None
+    outcome_notes: str | None = None
     job_stage: JobStage | None = None
 
 
@@ -40,6 +42,22 @@ class JobRead(JobBase):
     job_poster_id: UUID
     updated_at: datetime
     created_at: datetime
+
+
+class StageCounts(BaseModel):
+    Interested: int
+    Applied: int
+    Interview: int
+    Offer: int
+    Rejected: int
+    Archived: int
+
+
+class JobMetrics(BaseModel):
+    total_applications: int
+    awaiting_response: int
+    responded: int
+    stage_counts: StageCounts
 
 
 class JobActivityEvent(BaseModel):
@@ -75,3 +93,28 @@ class InterviewRead(InterviewBase):
     interview_id: UUID
     job_id: UUID
     user_id: UUID
+
+
+class FollowUpBase(BaseModel):
+    due_date: date
+    notes: str | None = None
+    is_completed: bool = False
+
+
+class FollowUpCreate(FollowUpBase):
+    pass
+
+
+class FollowUpUpdate(BaseModel):
+    due_date: date | None = None
+    notes: str | None = None
+    is_completed: bool | None = None
+
+
+class FollowUpRead(FollowUpBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    followup_id: UUID
+    job_id: UUID
+    user_id: UUID
+    created_at: datetime | None = None

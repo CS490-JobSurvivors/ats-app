@@ -4,7 +4,7 @@ import { render, screen, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
-import { listJobs } from '../api/jobs';
+import { listJobs, getJobMetrics } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -18,14 +18,20 @@ jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
   listJobActivity: jest.fn(),
   listJobInterviews: jest.fn(),
+  getJobMetrics: jest.fn(),
+  listJobFollowUps: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
   createJobInterview: jest.fn(),
   updateJobInterview: jest.fn(),
+  createJobFollowUp: jest.fn(),
+  updateJobFollowUp: jest.fn(),
+  deleteJobFollowUp: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
+const mockGetJobMetrics = getJobMetrics as jest.Mock;
 
 const today = new Date();
 const formatDate = (date: Date) => {
@@ -94,6 +100,19 @@ const jobFixtures = [
     updated_at: '2026-06-19T00:00:00Z',
     created_at: '2026-06-19T00:00:00Z',
   },
+  {
+    job_id: 'job-6',
+    company_name: 'Old Co',
+    job_title: 'Archived Role',
+    job_description: 'No longer pursuing',
+    application_link: null,
+    job_location: 'Remote',
+    deadline: null,
+    job_stage: 'Archived',
+    job_poster_id: 'user-1',
+    updated_at: '2026-06-20T00:00:00Z',
+    created_at: '2026-06-20T00:00:00Z',
+  },
 ];
 
 const openFilters = async () => {
@@ -109,6 +128,19 @@ const chooseFilter = async (label: RegExp, optionName: RegExp) => {
 beforeEach(() => {
   mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
   mockListJobs.mockResolvedValue(jobFixtures);
+  mockGetJobMetrics.mockResolvedValue({
+    total_applications: 0,
+    awaiting_response: 0,
+    responded: 0,
+    stage_counts: {
+      Interested: 0,
+      Applied: 0,
+      Interview: 0,
+      Offer: 0,
+      Rejected: 0,
+      Archived: 0,
+    },
+  });
 });
 
 afterEach(() => {
@@ -214,6 +246,24 @@ describe('Dashboard job filters', () => {
     await chooseFilter(/stage/i, /offer/i);
 
     expect(screen.getByText(/no applications match your filters/i)).toBeInTheDocument();
+    expect(screen.queryByText('Frontend Engineer')).not.toBeInTheDocument();
+  });
+
+  it('hides archived jobs from the default "All" stage view', async () => {
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('Frontend Engineer')).toBeInTheDocument();
+    expect(screen.queryByText('Archived Role')).not.toBeInTheDocument();
+  });
+
+  it('shows archived jobs when explicitly filtering by the Archived stage', async () => {
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('Frontend Engineer')).toBeInTheDocument();
+    await openFilters();
+    await chooseFilter(/stage/i, /archived/i);
+
+    expect(screen.getByText('Archived Role')).toBeInTheDocument();
     expect(screen.queryByText('Frontend Engineer')).not.toBeInTheDocument();
   });
 });

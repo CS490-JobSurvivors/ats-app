@@ -53,10 +53,9 @@ class FakeDb:
 
         if "education_id_1" in params and "education_user_id_1" in params:
             for e in education:
-                if (
-                    str(e.education_id) == str(params["education_id_1"])
-                    and str(e.education_user_id) == str(params["education_user_id_1"])
-                ):
+                if str(e.education_id) == str(params["education_id_1"]) and str(
+                    e.education_user_id
+                ) == str(params["education_user_id_1"]):
                     return e
             return None
 

@@ -72,9 +72,8 @@ class FakeDb:
 
         if "skill_id_1" in params and "skill_user_id_1" in params:
             for s in skills:
-                if (
-                    str(s.skill_id) == str(params["skill_id_1"])
-                    and str(s.skill_user_id) == str(params["skill_user_id_1"])
+                if str(s.skill_id) == str(params["skill_id_1"]) and str(s.skill_user_id) == str(
+                    params["skill_user_id_1"]
                 ):
                     return s
             return None

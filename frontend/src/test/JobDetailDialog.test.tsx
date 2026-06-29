@@ -2,7 +2,7 @@ import '@testing-library/jest-dom';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JobDetailDialog from '../components/JobDetailDialog';
-import { InterviewRecord, JobRecord } from '../api/jobs';
+import { FollowUpRecord, InterviewRecord, JobRecord } from '../api/jobs';
 import { stageColors } from '../utils/stageColors';
 
 const mockJob: JobRecord = {
@@ -23,6 +23,8 @@ const mockOnDelete = jest.fn();
 const mockOnStageChange = jest.fn();
 const mockOnDeleteStageHistory = jest.fn();
 const mockOnSaveInterview = jest.fn();
+const mockOnSaveFollowUp = jest.fn();
+const mockOnDeleteFollowUp = jest.fn();
 const interviews: InterviewRecord[] = [
   {
     interview_id: 'interview-1',
@@ -32,6 +34,16 @@ const interviews: InterviewRecord[] = [
     scheduled_at_date: '2026-07-08',
     scheduled_at_time: '2026-07-08T15:30:00.000Z',
     interview_notes: 'Initial recruiter call.',
+  },
+];
+const followUps: FollowUpRecord[] = [
+  {
+    followup_id: 'followup-1',
+    job_id: '123',
+    user_id: 'user-1',
+    due_date: '2026-07-09',
+    notes: 'Email recruiter.',
+    is_completed: false,
   },
 ];
 const activityEvents = [
@@ -98,6 +110,8 @@ describe('JobDetailDialog', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockOnSaveInterview.mockResolvedValue(undefined);
+    mockOnSaveFollowUp.mockResolvedValue(undefined);
+    mockOnDeleteFollowUp.mockResolvedValue(undefined);
   });
 
   it('renders job details when open', () => {
@@ -234,6 +248,138 @@ describe('JobDetailDialog', () => {
     );
 
     expect(screen.getByText(/loading activity/i)).toBeInTheDocument();
+  });
+
+  it('submits a new follow-up from the add follow-up form', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add follow-up/i }));
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-09' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Email recruiter.' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockOnSaveFollowUp).toHaveBeenCalledWith(
+        {
+          due_date: '2026-07-09',
+          notes: 'Email recruiter.',
+          is_completed: false,
+        },
+        undefined
+      );
+    });
+  });
+
+  it('submits updates from the edit follow-up form', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+        followUps={followUps}
+      />
+    );
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-12' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Followed up.' } });
+    await userEvent.click(screen.getByLabelText(/completed/i));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockOnSaveFollowUp).toHaveBeenCalledWith(
+        {
+          due_date: '2026-07-12',
+          notes: 'Followed up.',
+          is_completed: true,
+        },
+        'followup-1'
+      );
+    });
+  });
+
+  it('shows validation error when follow-up due date is missing', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add follow-up/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByText('Due date is required.')).toBeInTheDocument();
+    expect(mockOnSaveFollowUp).not.toHaveBeenCalled();
+  });
+
+  it('keeps the follow-up form open and shows an error when follow-up save fails', async () => {
+    mockOnSaveFollowUp.mockRejectedValue(new Error('save failed'));
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add follow-up/i }));
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-09' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(
+      await screen.findByText('Unable to save follow-up. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /add follow-up/i })).toBeInTheDocument();
+  });
+
+  it('confirms before deleting a follow-up', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveFollowUp={mockOnSaveFollowUp}
+        onDeleteFollowUp={mockOnDeleteFollowUp}
+        followUps={followUps}
+      />
+    );
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
+    expect(screen.getByRole('heading', { name: /delete follow-up/i })).toBeInTheDocument();
+
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
+    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockOnDeleteFollowUp).toHaveBeenCalledWith('followup-1');
+    });
   });
 
   it('submits a new interview from the add interview form', async () => {
@@ -497,5 +643,120 @@ describe('JobDetailDialog', () => {
     fireEvent.click(screen.getByText('Edit'));
     expect(screen.getByDisplayValue('2026-07-15')).toBeInTheDocument();
     expect(screen.getByDisplayValue('Follow up Monday.')).toBeInTheDocument();
+  });
+
+  it('renders outcome notes when job stage is Rejected', () => {
+    renderDialog({
+      ...mockJob,
+      job_stage: 'Rejected',
+      outcome_notes: 'Went with an internal candidate.',
+    });
+    expect(screen.getByText('Went with an internal candidate.')).toBeInTheDocument();
+  });
+
+  it('does not render outcome notes for non-outcome stages', () => {
+    renderDialog({ ...mockJob, job_stage: 'Applied', outcome_notes: 'Should not show.' });
+    expect(screen.queryByText('Should not show.')).not.toBeInTheDocument();
+  });
+
+  it('pre-fills outcome notes in edit form when stage is an outcome stage', () => {
+    renderDialog({
+      ...mockJob,
+      job_stage: 'Offer',
+      outcome_notes: 'Negotiating start date.',
+    });
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.getByDisplayValue('Negotiating start date.')).toBeInTheDocument();
+  });
+
+  it('does not show outcome notes field in edit form for non-outcome stages', () => {
+    renderDialog({ ...mockJob, job_stage: 'Applied' });
+    fireEvent.click(screen.getByText('Edit'));
+    expect(screen.queryByLabelText('Outcome Notes')).not.toBeInTheDocument();
+  });
+
+  const archivedActivityEvents = [
+    ...activityEvents.slice(0, -1),
+    {
+      event_id: 'activity-6',
+      event_type: 'outcome' as const,
+      title: 'Archived',
+      description: 'Offer to Archived',
+      occurred_at: '2026-06-26T00:00:00Z',
+      can_delete: true,
+    },
+  ];
+
+  it('shows an Archive button for jobs that are not archived', () => {
+    renderDialog();
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument();
+  });
+
+  it('opens the non-forward warning when archiving from a non-Offer stage', async () => {
+    renderDialog();
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    expect(screen.getByText(/non-standard transition/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+    expect(mockOnStageChange).toHaveBeenCalledWith('Archived');
+  });
+
+  it('shows a Restore button and confirmation for an archived job with a deletable archive event', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={{ ...mockJob, job_stage: 'Archived' }}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={archivedActivityEvents}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    expect(screen.getByText(/restore job/i)).toBeInTheDocument();
+    expect(screen.getByText('Offer')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^restore$/i }));
+    expect(mockOnDeleteStageHistory).toHaveBeenCalledWith('activity-6');
+  });
+
+  it('does not call onDeleteStageHistory when restore is cancelled', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={{ ...mockJob, job_stage: 'Archived' }}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={archivedActivityEvents}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(mockOnDeleteStageHistory).not.toHaveBeenCalled();
+  });
+
+  it('does not show a Restore button when an archived job has no deletable archive history', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={{ ...mockJob, job_stage: 'Archived' }}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={[activityEvents[0]]}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument();
   });
 });

@@ -11,6 +11,7 @@ export interface JobRecord {
   job_location?: string | null;
   deadline?: string | null;
   recruiter_notes?: string | null;
+  outcome_notes?: string | null;
   job_stage: JobStage;
   job_poster_id: string;
   updated_at: string;
@@ -25,10 +26,21 @@ export interface JobPayload {
   job_location?: string | null;
   deadline?: string | null;
   recruiter_notes?: string | null;
+  outcome_notes?: string | null;
   job_stage?: JobStage;
 }
 
 export type JobUpdatePayload = Partial<JobPayload>;
+
+export type StageCounts = Record<JobStage, number>;
+
+export interface JobMetrics {
+  total_applications: number;
+  awaiting_response: number;
+  responded: number;
+  stage_counts: StageCounts;
+}
+
 export type JobActivityEventType =
   | 'applied'
   | 'follow_up'
@@ -64,6 +76,24 @@ export interface InterviewPayload {
 
 export type InterviewUpdatePayload = Partial<InterviewPayload>;
 
+export interface FollowUpRecord {
+  followup_id: string;
+  job_id: string;
+  user_id: string;
+  due_date: string;
+  notes?: string | null;
+  is_completed: boolean;
+  created_at?: string | null;
+}
+
+export interface FollowUpPayload {
+  due_date: string;
+  notes?: string | null;
+  is_completed?: boolean;
+}
+
+export type FollowUpUpdatePayload = Partial<FollowUpPayload>;
+
 const authHeaders = (accessToken: string) => ({
   Authorization: `Bearer ${accessToken}`,
 });
@@ -75,6 +105,17 @@ export const listJobs = async (accessToken: string): Promise<JobRecord[]> => {
   });
   if (!response.ok) {
     throw new Error('Unable to load jobs.');
+  }
+  return await response.json();
+};
+
+export const getJobMetrics = async (accessToken: string): Promise<JobMetrics> => {
+  const response = await fetch(`${API_URL}/jobs/metrics`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+  if (!response.ok) {
+    throw new Error('Unable to load job metrics.');
   }
   return await response.json();
 };
@@ -211,4 +252,78 @@ export const updateJobInterview = async (
   }
 
   return await response.json();
+};
+
+export const listJobFollowUps = async (
+  accessToken: string,
+  jobId: string
+): Promise<FollowUpRecord[]> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/followups`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load follow-ups.');
+  }
+
+  return await response.json();
+};
+
+export const createJobFollowUp = async (
+  accessToken: string,
+  jobId: string,
+  followUp: FollowUpPayload
+): Promise<FollowUpRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/followups`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(followUp),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to save follow-up.');
+  }
+
+  return await response.json();
+};
+
+export const updateJobFollowUp = async (
+  accessToken: string,
+  jobId: string,
+  followUpId: string,
+  followUp: FollowUpUpdatePayload
+): Promise<FollowUpRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/followups/${followUpId}`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(followUp),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to update follow-up.');
+  }
+
+  return await response.json();
+};
+
+export const deleteJobFollowUp = async (
+  accessToken: string,
+  jobId: string,
+  followUpId: string
+): Promise<void> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/followups/${followUpId}`, {
+    method: 'DELETE',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to delete follow-up.');
+  }
 };

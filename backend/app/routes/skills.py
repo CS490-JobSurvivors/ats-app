@@ -59,9 +59,7 @@ def list_skills(
 ):
     owner_id = get_current_user_id(current_user)
     return db.scalars(
-        select(Skill)
-        .where(Skill.skill_user_id == owner_id)
-        .order_by(Skill.position_number.asc())
+        select(Skill).where(Skill.skill_user_id == owner_id).order_by(Skill.position_number.asc())
     ).all()
 
 

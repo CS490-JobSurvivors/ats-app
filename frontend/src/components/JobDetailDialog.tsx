@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -16,6 +17,8 @@ import {
   TextField,
   CircularProgress,
   IconButton,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -27,6 +30,8 @@ import FlagIcon from '@mui/icons-material/Flag';
 import SendIcon from '@mui/icons-material/Send';
 import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
 import {
+  FollowUpPayload,
+  FollowUpRecord,
   InterviewPayload,
   InterviewRecord,
   JobActivityEvent,
@@ -46,6 +51,8 @@ const ALL_STAGES: JobStage[] = [
   'Archived',
 ];
 
+const OUTCOME_STAGES: JobStage[] = ['Offer', 'Rejected', 'Archived'];
+
 interface JobDetailDialogProps {
   open: boolean;
   job: JobRecord | null;
@@ -55,8 +62,13 @@ interface JobDetailDialogProps {
   onStageChange: (newStage: JobStage) => void;
   onDeleteStageHistory?: (eventId: string) => void;
   onSaveInterview?: (payload: InterviewPayload, interviewId?: string) => Promise<void>;
+  onGenerateResume?: () => Promise<string>;
   interviews?: InterviewRecord[];
   isInterviewsLoading?: boolean;
+  onSaveFollowUp?: (payload: FollowUpPayload, followUpId?: string) => Promise<void>;
+  followUps?: FollowUpRecord[];
+  isFollowUpsLoading?: boolean;
+  onDeleteFollowUp?: (followUpId: string) => Promise<void>;
   activityEvents?: JobActivityEvent[];
   isActivityLoading?: boolean;
 }
@@ -66,6 +78,12 @@ const emptyInterviewForm = {
   scheduled_at_date: '',
   scheduled_at_time: '',
   interview_notes: '',
+};
+
+const emptyFollowUpForm = {
+  due_date: '',
+  notes: '',
+  is_completed: false,
 };
 
 const activityIcons: Record<JobActivityEvent['event_type'], typeof AssignmentTurnedInIcon> = {
@@ -104,6 +122,12 @@ const buildInterviewPayload = (form: typeof emptyInterviewForm): InterviewPayloa
   interview_notes: form.interview_notes.trim() || null,
 });
 
+const buildFollowUpPayload = (form: typeof emptyFollowUpForm): FollowUpPayload => ({
+  due_date: form.due_date,
+  notes: form.notes.trim() || null,
+  is_completed: form.is_completed,
+});
+
 const isRejectedEvent = (event: JobActivityEvent) =>
   event.title.toLowerCase().includes('rejected') || event.description?.endsWith('to Rejected');
 
@@ -138,17 +162,28 @@ const JobDetailDialog = ({
   onStageChange,
   onDeleteStageHistory,
   onSaveInterview,
+  onGenerateResume,
   interviews = [],
   isInterviewsLoading = false,
+  onSaveFollowUp,
+  followUps = [],
+  isFollowUpsLoading = false,
+  onDeleteFollowUp,
   activityEvents = [],
   isActivityLoading = false,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [interviewFormOpen, setInterviewFormOpen] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<string | undefined>();
   const [interviewForm, setInterviewForm] = useState(emptyInterviewForm);
   const [interviewError, setInterviewError] = useState('');
+  const [followUpFormOpen, setFollowUpFormOpen] = useState(false);
+  const [editingFollowUpId, setEditingFollowUpId] = useState<string | undefined>();
+  const [followUpForm, setFollowUpForm] = useState(emptyFollowUpForm);
+  const [followUpError, setFollowUpError] = useState('');
+  const [pendingDeleteFollowUp, setPendingDeleteFollowUp] = useState<FollowUpRecord | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     job_title: '',
@@ -158,9 +193,13 @@ const JobDetailDialog = ({
     job_location: '',
     deadline: '',
     recruiter_notes: '',
+    outcome_notes: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedResume, setGeneratedResume] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState('');
 
   useEffect(() => {
     if (job) {
@@ -172,6 +211,7 @@ const JobDetailDialog = ({
         job_location: job.job_location || '',
         deadline: job.deadline || '',
         recruiter_notes: job.recruiter_notes || '',
+        outcome_notes: job.outcome_notes || '',
       });
     }
     setIsEditing(false);
@@ -181,6 +221,13 @@ const JobDetailDialog = ({
   if (!job) return null;
 
   const stageStyle = stageColors[job.job_stage] ?? { color: '#424242', bgcolor: '#F5F5F5' };
+
+  const latestActivityEvent = activityEvents[activityEvents.length - 1] ?? null;
+  const canRestoreFromArchive =
+    job.job_stage === 'Archived' &&
+    !!latestActivityEvent?.can_delete &&
+    getEventStage(latestActivityEvent) === 'Archived';
+  const restoreTargetStage = latestActivityEvent?.description?.split(' to ')[0];
 
   const handleStageSelect = (selected: JobStage) => {
     if (selected === job.job_stage) return;
@@ -201,6 +248,13 @@ const JobDetailDialog = ({
       onDeleteStageHistory(pendingDeleteEvent.event_id);
     }
     setPendingDeleteEvent(null);
+  };
+
+  const confirmRestore = () => {
+    if (latestActivityEvent && onDeleteStageHistory) {
+      onDeleteStageHistory(latestActivityEvent.event_id);
+    }
+    setRestoreConfirmOpen(false);
   };
 
   const openInterviewForm = (interview?: InterviewRecord) => {
@@ -249,6 +303,53 @@ const JobDetailDialog = ({
     }
   };
 
+  const openFollowUpForm = (followUp?: FollowUpRecord) => {
+    setFollowUpError('');
+    setEditingFollowUpId(followUp?.followup_id);
+    setFollowUpForm(
+      followUp
+        ? {
+            due_date: followUp.due_date,
+            notes: followUp.notes || '',
+            is_completed: followUp.is_completed,
+          }
+        : emptyFollowUpForm
+    );
+    setFollowUpFormOpen(true);
+  };
+
+  const closeFollowUpForm = () => {
+    setFollowUpFormOpen(false);
+    setEditingFollowUpId(undefined);
+    setFollowUpForm(emptyFollowUpForm);
+    setFollowUpError('');
+  };
+
+  const updateFollowUpForm = (field: keyof typeof emptyFollowUpForm, value: string | boolean) => {
+    setFollowUpForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const submitFollowUpForm = async () => {
+    if (!onSaveFollowUp) return;
+    if (!followUpForm.due_date) {
+      setFollowUpError('Due date is required.');
+      return;
+    }
+
+    try {
+      await onSaveFollowUp(buildFollowUpPayload(followUpForm), editingFollowUpId);
+      closeFollowUpForm();
+    } catch {
+      setFollowUpError('Unable to save follow-up. Please try again.');
+    }
+  };
+
+  const confirmDeleteFollowUp = async () => {
+    if (!pendingDeleteFollowUp || !onDeleteFollowUp) return;
+    await onDeleteFollowUp(pendingDeleteFollowUp.followup_id);
+    setPendingDeleteFollowUp(null);
+  };
+
   const handleSave = async () => {
     if (!form.job_title.trim() || !form.company_name.trim() || !form.job_description.trim()) {
       setErrorMessage('Company, title, and description are required.');
@@ -265,6 +366,7 @@ const JobDetailDialog = ({
         job_location: form.job_location.trim() || null,
         deadline: form.deadline || null,
         recruiter_notes: form.recruiter_notes.trim() || null,
+        outcome_notes: form.outcome_notes.trim() || null,
       });
       setIsEditing(false);
     } catch {
@@ -397,6 +499,16 @@ const JobDetailDialog = ({
                 multiline
                 rows={3}
               />
+              {OUTCOME_STAGES.includes(job.job_stage) && (
+                <TextField
+                  label="Outcome Notes"
+                  value={form.outcome_notes}
+                  onChange={(e) => setForm((f) => ({ ...f, outcome_notes: e.target.value }))}
+                  fullWidth
+                  multiline
+                  rows={3}
+                />
+              )}
             </Box>
           ) : (
             <>
@@ -466,6 +578,21 @@ const JobDetailDialog = ({
                 </Box>
               )}
 
+              {OUTCOME_STAGES.includes(job.job_stage) && job.outcome_notes && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Outcome Notes
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ whiteSpace: 'pre-wrap' }}
+                  >
+                    {job.outcome_notes}
+                  </Typography>
+                </Box>
+              )}
+
               <Divider sx={{ mb: 2 }} />
 
               <Typography variant="subtitle2" gutterBottom>
@@ -479,6 +606,95 @@ const JobDetailDialog = ({
                   Last updated: {new Date(job.updated_at).toLocaleDateString()}
                 </Typography>
               </Box>
+
+              <Divider sx={{ mb: 2 }} />
+
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 2,
+                  mb: 1,
+                }}
+              >
+                <Typography variant="subtitle2">Follow-ups</Typography>
+                {onSaveFollowUp && (
+                  <Button size="small" variant="outlined" onClick={() => openFollowUpForm()}>
+                    Add Follow-up
+                  </Button>
+                )}
+              </Box>
+              {isFollowUpsLoading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading follow-ups...
+                  </Typography>
+                </Box>
+              ) : followUps.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  No follow-ups scheduled.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'grid', gap: 1, mb: 2 }}>
+                  {followUps.map((followUp) => (
+                    <Box
+                      key={followUp.followup_id}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1.5,
+                        bgcolor: 'background.default',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 1,
+                        }}
+                      >
+                        <Box>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" fontWeight={700}>
+                              {formatActivityDate(`${followUp.due_date}T00:00:00`)}
+                            </Typography>
+                            <Chip
+                              label={followUp.is_completed ? 'Complete' : 'Open'}
+                              size="small"
+                              color={followUp.is_completed ? 'success' : 'default'}
+                            />
+                          </Box>
+                          {followUp.notes && (
+                            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                              {followUp.notes}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                          {onSaveFollowUp && (
+                            <Button size="small" onClick={() => openFollowUpForm(followUp)}>
+                              Edit
+                            </Button>
+                          )}
+                          {onDeleteFollowUp && (
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => setPendingDeleteFollowUp(followUp)}
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </Box>
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
 
               <Divider sx={{ mb: 2 }} />
 
@@ -755,12 +971,64 @@ const JobDetailDialog = ({
             </>
           ) : (
             <>
+              {onGenerateResume && (
+                <Button
+                  onClick={async () => {
+                    setResumeError('');
+                    setIsGenerating(true);
+                    try {
+                      const text = await onGenerateResume();
+                      setGeneratedResume(text);
+                    } catch {
+                      setResumeError('Failed to generate resume. Please try again.');
+                    } finally {
+                      setIsGenerating(false);
+                    }
+                  }}
+                  disabled={isGenerating}
+                  startIcon={isGenerating ? <CircularProgress size={16} /> : undefined}
+                >
+                  {isGenerating ? 'Generating...' : 'Generate Resume'}
+                </Button>
+              )}
               <Button onClick={onClose}>Close</Button>
+              {job.job_stage !== 'Archived' && (
+                <Button onClick={() => handleStageSelect('Archived')} color="secondary">
+                  Archive
+                </Button>
+              )}
+              {canRestoreFromArchive && (
+                <Button onClick={() => setRestoreConfirmOpen(true)} color="secondary">
+                  Restore
+                </Button>
+              )}
               <Button onClick={() => setIsEditing(true)} variant="contained">
                 Edit
               </Button>
             </>
           )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={restoreConfirmOpen} onClose={() => setRestoreConfirmOpen(false)}>
+        <DialogTitle>Restore job?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This will restore <strong>{job.job_title}</strong> to its previous stage
+            {restoreTargetStage ? (
+              <>
+                {' '}
+                (<strong>{restoreTargetStage}</strong>)
+              </>
+            ) : null}
+            . Interviews and follow-ups will be kept.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRestoreConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={confirmRestore} variant="contained">
+            Restore
+          </Button>
         </DialogActions>
       </Dialog>
 
@@ -792,6 +1060,43 @@ const JobDetailDialog = ({
           <Button onClick={() => setPendingDeleteEvent(null)}>Cancel</Button>
           <Button onClick={confirmStageHistoryDelete} variant="contained" color="error">
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {resumeError && (
+        <Alert severity="error" onClose={() => setResumeError('')} sx={{ mt: 1 }}>
+          {resumeError}
+        </Alert>
+      )}
+
+      <Dialog
+        open={generatedResume !== null}
+        onClose={() => setGeneratedResume(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Generated Resume</DialogTitle>
+        <DialogContent>
+          <TextField
+            multiline
+            fullWidth
+            minRows={20}
+            value={generatedResume ?? ''}
+            onChange={(e) => setGeneratedResume(e.target.value)}
+            inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              if (generatedResume) navigator.clipboard.writeText(generatedResume);
+            }}
+          >
+            Copy
+          </Button>
+          <Button onClick={() => setGeneratedResume(null)} variant="contained">
+            Close
           </Button>
         </DialogActions>
       </Dialog>
@@ -841,6 +1146,66 @@ const JobDetailDialog = ({
           <Button onClick={closeInterviewForm}>Cancel</Button>
           <Button onClick={submitInterviewForm} variant="contained">
             Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={followUpFormOpen} onClose={closeFollowUpForm} fullWidth maxWidth="xs">
+        <DialogTitle>{editingFollowUpId ? 'Edit Follow-up' : 'Add Follow-up'}</DialogTitle>
+        <DialogContent>
+          <Box sx={{ display: 'grid', gap: 2, pt: 1 }}>
+            <TextField
+              label="Due date"
+              type="date"
+              size="small"
+              value={followUpForm.due_date}
+              onChange={(event) => updateFollowUpForm('due_date', event.target.value)}
+              InputLabelProps={{ shrink: true }}
+            />
+            <TextField
+              label="Notes"
+              size="small"
+              multiline
+              minRows={3}
+              value={followUpForm.notes}
+              onChange={(event) => updateFollowUpForm('notes', event.target.value)}
+            />
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={followUpForm.is_completed}
+                  onChange={(event) => updateFollowUpForm('is_completed', event.target.checked)}
+                />
+              }
+              label="Completed"
+            />
+            {followUpError && <Alert severity="error">{followUpError}</Alert>}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeFollowUpForm}>Cancel</Button>
+          <Button onClick={submitFollowUpForm} variant="contained">
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pendingDeleteFollowUp)}
+        onClose={() => setPendingDeleteFollowUp(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Delete Follow-up?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            This follow-up will be removed from the job.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDeleteFollowUp(null)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={confirmDeleteFollowUp}>
+            Delete
           </Button>
         </DialogActions>
       </Dialog>

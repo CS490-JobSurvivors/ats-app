@@ -8,12 +8,17 @@ import {
   listJobs,
   listJobActivity,
   listJobInterviews,
+  getJobMetrics,
+  listJobFollowUps,
   createJob,
   updateJob,
   deleteJob,
   deleteJobStageHistory,
   createJobInterview,
   updateJobInterview,
+  createJobFollowUp,
+  updateJobFollowUp,
+  deleteJobFollowUp,
 } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
@@ -28,24 +33,48 @@ jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
   listJobActivity: jest.fn(),
   listJobInterviews: jest.fn(),
+  getJobMetrics: jest.fn(),
+  listJobFollowUps: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
   deleteJob: jest.fn(),
   deleteJobStageHistory: jest.fn(),
   createJobInterview: jest.fn(),
   updateJobInterview: jest.fn(),
+  createJobFollowUp: jest.fn(),
+  updateJobFollowUp: jest.fn(),
+  deleteJobFollowUp: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
 const mockListJobActivity = listJobActivity as jest.Mock;
 const mockListJobInterviews = listJobInterviews as jest.Mock;
+const mockGetJobMetrics = getJobMetrics as jest.Mock;
+const mockListJobFollowUps = listJobFollowUps as jest.Mock;
 const mockCreateJob = createJob as jest.Mock;
 const mockUpdateJob = updateJob as jest.Mock;
 const mockDeleteJob = deleteJob as jest.Mock;
 const mockDeleteJobStageHistory = deleteJobStageHistory as jest.Mock;
 const mockCreateJobInterview = createJobInterview as jest.Mock;
 const mockUpdateJobInterview = updateJobInterview as jest.Mock;
+const mockCreateJobFollowUp = createJobFollowUp as jest.Mock;
+const mockUpdateJobFollowUp = updateJobFollowUp as jest.Mock;
+const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
+
+const zeroMetrics = {
+  total_applications: 0,
+  awaiting_response: 0,
+  responded: 0,
+  stage_counts: {
+    Interested: 0,
+    Applied: 0,
+    Interview: 0,
+    Offer: 0,
+    Rejected: 0,
+    Archived: 0,
+  },
+};
 
 const sampleJob = {
   job_id: 'job-1',
@@ -64,12 +93,17 @@ beforeEach(() => {
   mockListJobs.mockResolvedValue([]);
   mockListJobActivity.mockResolvedValue([]);
   mockListJobInterviews.mockResolvedValue([]);
+  mockGetJobMetrics.mockResolvedValue(zeroMetrics);
+  mockListJobFollowUps.mockResolvedValue([]);
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
   mockDeleteJob.mockReset();
   mockDeleteJobStageHistory.mockReset();
   mockCreateJobInterview.mockReset();
   mockUpdateJobInterview.mockReset();
+  mockCreateJobFollowUp.mockReset();
+  mockUpdateJobFollowUp.mockReset();
+  mockDeleteJobFollowUp.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -79,12 +113,13 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/track your applications and activity/i)).toBeInTheDocument();
   });
 
-  it('renders the three stat cards with zero counts when there are no jobs', () => {
+  it('renders baseline dashboard metrics with zero counts when there are no jobs', () => {
     render(<DashboardPage />);
     expect(screen.getByText(/total applications/i)).toBeInTheDocument();
-    expect(screen.getByText(/interviews/i)).toBeInTheDocument();
-    expect(screen.getByText(/offers/i)).toBeInTheDocument();
-    expect(screen.getAllByText('0')).toHaveLength(3);
+    expect(screen.getByText(/awaiting response/i)).toBeInTheDocument();
+    expect(screen.getByText(/^responded$/i)).toBeInTheDocument();
+    expect(screen.getByText(/applications by stage/i)).toBeInTheDocument();
+    expect(screen.getAllByText('0')).toHaveLength(9);
   });
 
   it('renders the recent applications section with empty state', async () => {
@@ -93,16 +128,72 @@ describe('DashboardPage', () => {
     expect(await screen.findByText(/no recent applications/i)).toBeInTheDocument();
   });
 
-  it('renders job cards and reflects accurate stat counts when jobs exist', async () => {
+  it('renders job cards and dashboard metrics fetched from the metrics endpoint', async () => {
     mockListJobs.mockResolvedValue([
       sampleJob,
       { ...sampleJob, job_id: 'job-2', job_stage: 'Interview' },
       { ...sampleJob, job_id: 'job-3', job_stage: 'Offer' },
     ]);
+    mockGetJobMetrics.mockResolvedValue({
+      total_applications: 3,
+      awaiting_response: 0,
+      responded: 2,
+      stage_counts: {
+        Interested: 1,
+        Applied: 0,
+        Interview: 1,
+        Offer: 1,
+        Rejected: 0,
+        Archived: 0,
+      },
+    });
     render(<DashboardPage />);
     expect(await screen.findAllByText('Software Engineer')).toHaveLength(3);
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getAllByText('1')).toHaveLength(2);
+    expect(await screen.findByText('3')).toBeInTheDocument(); // Total Applications
+    expect(screen.getByText('2')).toBeInTheDocument(); // Responded
+    expect(screen.getAllByText('1')).toHaveLength(3); // Interested, Interview, Offer stage counts
+    expect(screen.getAllByText('0')).toHaveLength(4); // Awaiting Response, Applied, Rejected, Archived
+  });
+
+  it('renders metrics from the API without recomputing them from the loaded jobs list', async () => {
+    mockListJobs.mockResolvedValue([
+      { ...sampleJob, job_id: 'job-1', job_stage: 'Interested' },
+      { ...sampleJob, job_id: 'job-2', job_stage: 'Applied' },
+      { ...sampleJob, job_id: 'job-3', job_stage: 'Offer' },
+      { ...sampleJob, job_id: 'job-4', job_stage: 'Rejected' },
+    ]);
+    mockGetJobMetrics.mockResolvedValue({
+      total_applications: 4,
+      awaiting_response: 1,
+      responded: 1,
+      stage_counts: {
+        Interested: 1,
+        Applied: 1,
+        Interview: 0,
+        Offer: 1,
+        Rejected: 1,
+        Archived: 0,
+      },
+    });
+    render(<DashboardPage />);
+
+    expect(await screen.findAllByText('Software Engineer')).toHaveLength(4);
+    expect(await screen.findByText('4')).toBeInTheDocument(); // Total Applications
+    expect(screen.getAllByText('1')).toHaveLength(6); // Awaiting Response, Responded, and 4 stage counts of 1
+    expect(screen.getAllByText('0')).toHaveLength(2); // Interview and Offer stage counts
+  });
+
+  it('refetches metrics after creating a job', async () => {
+    mockCreateJob.mockResolvedValue({ ...sampleJob, job_id: 'job-new' });
+    render(<DashboardPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /new application/i }));
+    fireEvent.change(screen.getByLabelText(/company/i), { target: { value: 'New Co' } });
+    fireEvent.change(screen.getByLabelText(/job title/i), { target: { value: 'New Role' } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: 'Details' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(mockGetJobMetrics).toHaveBeenCalledTimes(2));
   });
 
   it('opens the create dialog when "New Application" is clicked', async () => {
@@ -295,6 +386,140 @@ describe('DashboardPage', () => {
       );
     });
     expect(await screen.findByText('Final')).toBeInTheDocument();
+  });
+
+  it('adds a follow-up from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobFollowUps.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        followup_id: 'followup-1',
+        job_id: 'job-1',
+        user_id: 'user-1',
+        due_date: '2026-07-09',
+        notes: 'Email recruiter.',
+        is_completed: false,
+      },
+    ]);
+    mockCreateJobFollowUp.mockResolvedValue({
+      followup_id: 'followup-1',
+      job_id: 'job-1',
+      user_id: 'user-1',
+      due_date: '2026-07-09',
+      notes: 'Email recruiter.',
+      is_completed: false,
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /add follow-up/i }));
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-09' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Email recruiter.' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockCreateJobFollowUp).toHaveBeenCalledWith('test-token', 'job-1', {
+        due_date: '2026-07-09',
+        notes: 'Email recruiter.',
+        is_completed: false,
+      });
+    });
+    expect(await screen.findByText('Email recruiter.')).toBeInTheDocument();
+  });
+
+  it('edits a follow-up from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobFollowUps
+      .mockResolvedValueOnce([
+        {
+          followup_id: 'followup-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          due_date: '2026-07-09',
+          notes: 'Email recruiter.',
+          is_completed: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          followup_id: 'followup-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          due_date: '2026-07-12',
+          notes: 'Followed up.',
+          is_completed: true,
+        },
+      ]);
+    mockUpdateJobFollowUp.mockResolvedValue({
+      followup_id: 'followup-1',
+      job_id: 'job-1',
+      user_id: 'user-1',
+      due_date: '2026-07-12',
+      notes: 'Followed up.',
+      is_completed: true,
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Email recruiter.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-12' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Followed up.' } });
+    await userEvent.click(screen.getByLabelText(/completed/i));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateJobFollowUp).toHaveBeenCalledWith('test-token', 'job-1', 'followup-1', {
+        due_date: '2026-07-12',
+        notes: 'Followed up.',
+        is_completed: true,
+      });
+    });
+    expect(await screen.findByText('Followed up.')).toBeInTheDocument();
+  });
+
+  it('shows an error when saving a follow-up fails', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockCreateJobFollowUp.mockRejectedValue(new Error('save failed'));
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /add follow-up/i }));
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-09' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(
+      await screen.findByText('Unable to save that follow-up. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Unable to save follow-up. Please try again.')).toBeInTheDocument();
+  });
+
+  it('deletes a follow-up from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobFollowUps
+      .mockResolvedValueOnce([
+        {
+          followup_id: 'followup-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          due_date: '2026-07-09',
+          notes: 'Email recruiter.',
+          is_completed: false,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    mockDeleteJobFollowUp.mockResolvedValue(undefined);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Email recruiter.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
+    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockDeleteJobFollowUp).toHaveBeenCalledWith('test-token', 'job-1', 'followup-1');
+    });
+    expect(await screen.findByText('No follow-ups scheduled.')).toBeInTheDocument();
   });
 
   it('deletes a stage history event from the activity timeline', async () => {
