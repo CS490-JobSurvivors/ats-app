@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -18,7 +19,6 @@ import {
   IconButton,
   Checkbox,
   FormControlLabel,
-  Alert,
 } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -62,6 +62,7 @@ interface JobDetailDialogProps {
   onStageChange: (newStage: JobStage) => void;
   onDeleteStageHistory?: (eventId: string) => void;
   onSaveInterview?: (payload: InterviewPayload, interviewId?: string) => Promise<void>;
+  onGenerateResume?: () => Promise<string>;
   interviews?: InterviewRecord[];
   isInterviewsLoading?: boolean;
   onSaveFollowUp?: (payload: FollowUpPayload, followUpId?: string) => Promise<void>;
@@ -161,6 +162,7 @@ const JobDetailDialog = ({
   onStageChange,
   onDeleteStageHistory,
   onSaveInterview,
+  onGenerateResume,
   interviews = [],
   isInterviewsLoading = false,
   onSaveFollowUp,
@@ -195,6 +197,9 @@ const JobDetailDialog = ({
   });
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedResume, setGeneratedResume] = useState<string | null>(null);
+  const [resumeError, setResumeError] = useState('');
 
   useEffect(() => {
     if (job) {
@@ -966,6 +971,26 @@ const JobDetailDialog = ({
             </>
           ) : (
             <>
+              {onGenerateResume && (
+                <Button
+                  onClick={async () => {
+                    setResumeError('');
+                    setIsGenerating(true);
+                    try {
+                      const text = await onGenerateResume();
+                      setGeneratedResume(text);
+                    } catch {
+                      setResumeError('Failed to generate resume. Please try again.');
+                    } finally {
+                      setIsGenerating(false);
+                    }
+                  }}
+                  disabled={isGenerating}
+                  startIcon={isGenerating ? <CircularProgress size={16} /> : undefined}
+                >
+                  {isGenerating ? 'Generating...' : 'Generate Resume'}
+                </Button>
+              )}
               <Button onClick={onClose}>Close</Button>
               {job.job_stage !== 'Archived' && (
                 <Button onClick={() => handleStageSelect('Archived')} color="secondary">
@@ -1035,6 +1060,43 @@ const JobDetailDialog = ({
           <Button onClick={() => setPendingDeleteEvent(null)}>Cancel</Button>
           <Button onClick={confirmStageHistoryDelete} variant="contained" color="error">
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {resumeError && (
+        <Alert severity="error" onClose={() => setResumeError('')} sx={{ mt: 1 }}>
+          {resumeError}
+        </Alert>
+      )}
+
+      <Dialog
+        open={generatedResume !== null}
+        onClose={() => setGeneratedResume(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Generated Resume</DialogTitle>
+        <DialogContent>
+          <TextField
+            multiline
+            fullWidth
+            minRows={20}
+            value={generatedResume ?? ''}
+            onChange={(e) => setGeneratedResume(e.target.value)}
+            inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              if (generatedResume) navigator.clipboard.writeText(generatedResume);
+            }}
+          >
+            Copy
+          </Button>
+          <Button onClick={() => setGeneratedResume(null)} variant="contained">
+            Close
           </Button>
         </DialogActions>
       </Dialog>
