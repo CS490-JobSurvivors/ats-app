@@ -29,11 +29,9 @@ def create_experience(
     db: Session = Depends(get_db),
 ):
     owner_id = get_current_user_id(current_user)
-    position = db.scalar(
-        select(func.count()).where(Experience.experience_user_id == owner_id)
-    ) or 0
+    position = db.scalar(select(func.count()).where(Experience.experience_user_id == owner_id)) or 0
     db_experience = Experience(
-        **experience.model_dump(exclude={'position_number'}),
+        **experience.model_dump(exclude={"position_number"}),
         experience_user_id=owner_id,
         position_number=position,
     )

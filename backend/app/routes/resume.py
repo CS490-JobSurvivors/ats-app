@@ -49,9 +49,7 @@ def generate_resume(
     if profile is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
 
-    job = db.scalar(
-        select(Job).where(Job.job_id == body.job_id, Job.job_poster_id == owner_id)
-    )
+    job = db.scalar(select(Job).where(Job.job_id == body.job_id, Job.job_poster_id == owner_id))
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
 
@@ -68,14 +66,10 @@ def generate_resume(
     ).all()
 
     skills = db.scalars(
-        select(Skill)
-        .where(Skill.skill_user_id == owner_id)
-        .order_by(Skill.position_number.asc())
+        select(Skill).where(Skill.skill_user_id == owner_id).order_by(Skill.position_number.asc())
     ).all()
 
-    career_pref = db.scalar(
-        select(CareerPreference).where(CareerPreference.user_id == owner_id)
-    )
+    career_pref = db.scalar(select(CareerPreference).where(CareerPreference.user_id == owner_id))
 
     exp_lines = []
     for e in experiences:
@@ -113,11 +107,14 @@ def generate_resume(
         if career_pref.salary_minimum is not None:
             pref_lines.append(f"Minimum Salary: ${int(career_pref.salary_minimum):,}")
 
-    pref_section = (
-        "\n\n## Career Preferences\n" + "\n".join(pref_lines) if pref_lines else ""
-    )
+    pref_section = "\n\n## Career Preferences\n" + "\n".join(pref_lines) if pref_lines else ""
 
-    prompt = f"""You are a professional resume writer. Generate a tailored resume for the following candidate applying to a specific job.
+    prompt = f"""
+You are a professional resume writer helping a real job eeeker create a resume for a specific job.
+Your role is to rewrite, reorder, and reframe their actual information to best match the job.
+You are to not invent or fabricate anything.
+
+Use ONLY the information provided below.
 
 ## Candidate Profile
 Name: {profile.first_name} {profile.last_name}
@@ -140,7 +137,15 @@ Company: {job.company_name}
 Description: {job.job_description}
 Location: {job.job_location}
 
-Write a complete, professional resume tailored to this job. Include all sections: Summary, Experience, Education, Skills. Format it clearly in plain text."""
+Using only the real candidate information above, write an optimized, tailored resume for this job.
+Your job is to:
+- Write a targeted summary that connects the candidate's background directly to what this role needs
+- Reorder and reframe experience bullet points to lead with the most job-relevant aspects
+- Prioritize and regroup skills that align with the job description
+- Use strong, active language to present real experience in the most compelling way for this role
+
+Do NOT invent experiences, credentials, or skills not present above. Do NOT add placeholder text.
+Only rewrite and reorder what is actually there. Format clearly in plain text."""
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:

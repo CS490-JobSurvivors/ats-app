@@ -177,12 +177,14 @@ def update_job(
     updates = job_update.model_dump(exclude_unset=True)
     new_stage = updates.get("job_stage")
     if new_stage and new_stage != db_job.job_stage:
-        db.add(JobStageHistory(
-            job_id=db_job.job_id,
-            from_stage=db_job.job_stage,
-            to_stage=new_stage,
-            changed_by=owner_id,
-        ))
+        db.add(
+            JobStageHistory(
+                job_id=db_job.job_id,
+                from_stage=db_job.job_stage,
+                to_stage=new_stage,
+                changed_by=owner_id,
+            )
+        )
 
     for field, value in updates.items():
         setattr(db_job, field, value)

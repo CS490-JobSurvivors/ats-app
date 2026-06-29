@@ -883,9 +883,14 @@ const JobDetailDialog = ({
       >
         <DialogTitle>Generated Resume</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>
-            {generatedResume}
-          </Typography>
+          <TextField
+            multiline
+            fullWidth
+            minRows={20}
+            value={generatedResume ?? ''}
+            onChange={(e) => setGeneratedResume(e.target.value)}
+            inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+          />
         </DialogContent>
         <DialogActions>
           <Button
