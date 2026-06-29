@@ -25,19 +25,28 @@ import {
   listJobs,
   listJobActivity,
   listJobInterviews,
+  getJobMetrics,
+  listJobFollowUps,
   createJob,
   updateJob,
   deleteJob,
   deleteJobStageHistory,
   createJobInterview,
   updateJobInterview,
+  createJobFollowUp,
+  updateJobFollowUp,
+  deleteJobFollowUp,
   InterviewPayload,
   InterviewRecord,
+  FollowUpPayload,
+  FollowUpRecord,
   JobActivityEvent,
+  JobMetrics,
   JobRecord,
   JobPayload,
   JobStage,
 } from '../api/jobs';
+import { stageColors } from '../utils/stageColors';
 import JobCard from '../components/JobCard';
 import JobFormDialog from '../components/JobFormDialog';
 import JobDetailDialog from '../components/JobDetailDialog';
@@ -55,6 +64,15 @@ const sortOptions: Array<{ value: SortBy; label: string }> = [
 
 const stageFilterOptions: Array<JobStage | 'All'> = [
   'All',
+  'Interested',
+  'Applied',
+  'Interview',
+  'Offer',
+  'Rejected',
+  'Archived',
+];
+
+const ALL_JOB_STAGES: JobStage[] = [
   'Interested',
   'Applied',
   'Interview',
@@ -96,9 +114,12 @@ const DashboardPage = () => {
   const [isActivityLoading, setIsActivityLoading] = useState(false);
   const [selectedJobInterviews, setSelectedJobInterviews] = useState<InterviewRecord[]>([]);
   const [isInterviewsLoading, setIsInterviewsLoading] = useState(false);
+  const [selectedJobFollowUps, setSelectedJobFollowUps] = useState<FollowUpRecord[]>([]);
+  const [isFollowUpsLoading, setIsFollowUpsLoading] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('last_activity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+  const [metrics, setMetrics] = useState<JobMetrics | null>(null);
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -119,13 +140,22 @@ const DashboardPage = () => {
     }
   }, []);
 
+  const fetchMetrics = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    try {
+      const result = await getJobMetrics(token);
+      setMetrics(result);
+    } catch {
+      setMetrics(null);
+    }
+  }, []);
+
   useEffect(() => {
     fetchJobs();
-  }, [fetchJobs]);
-
-  const totalApplications = jobs.length;
-  const interviewCount = jobs.filter((job) => job.job_stage === 'Interview').length;
-  const offerCount = jobs.filter((job) => job.job_stage === 'Offer').length;
+    fetchMetrics();
+  }, [fetchJobs, fetchMetrics]);
 
   const locationOptions = useMemo<string[]>(() => {
     const locations = jobs
@@ -233,12 +263,33 @@ const DashboardPage = () => {
     }
   };
 
+  const loadJobFollowUps = async (jobId: string) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setIsFollowUpsLoading(true);
+    try {
+      const followUps = await listJobFollowUps(token, jobId);
+      setSelectedJobFollowUps(followUps);
+    } catch {
+      setSelectedJobFollowUps([]);
+    } finally {
+      setIsFollowUpsLoading(false);
+    }
+  };
+
   const openDetailDialog = async (job: JobRecord) => {
     setSelectedJob(job);
     setSelectedJobActivity([]);
     setSelectedJobInterviews([]);
+    setSelectedJobFollowUps([]);
     setDetailOpen(true);
-    await Promise.all([loadJobActivity(job.job_id), loadJobInterviews(job.job_id)]);
+    await Promise.all([
+      loadJobActivity(job.job_id),
+      loadJobInterviews(job.job_id),
+      loadJobFollowUps(job.job_id),
+    ]);
   };
 
   const handleDelete = async () => {
@@ -250,6 +301,7 @@ const DashboardPage = () => {
     setJobs((prev) => prev.filter((j) => j.job_id !== selectedJob.job_id));
     setConfirmDeleteOpen(false);
     setDetailOpen(false);
+    await fetchMetrics();
   };
 
   const handleDetailSave = async (payload: JobPayload) => {
@@ -277,6 +329,7 @@ const DashboardPage = () => {
         setSelectedJob(refreshedSelectedJob);
       }
       await loadJobActivity(selectedJob.job_id);
+      await fetchMetrics();
     } catch {
       setErrorMessage('Unable to delete that stage history. Please try again.');
     }
@@ -305,6 +358,47 @@ const DashboardPage = () => {
     }
   };
 
+  const handleSaveFollowUp = async (payload: FollowUpPayload, followUpId?: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      if (followUpId) {
+        await updateJobFollowUp(token, selectedJob.job_id, followUpId, payload);
+      } else {
+        await createJobFollowUp(token, selectedJob.job_id, payload);
+      }
+      await Promise.all([
+        loadJobFollowUps(selectedJob.job_id),
+        loadJobActivity(selectedJob.job_id),
+      ]);
+    } catch {
+      setErrorMessage('Unable to save that follow-up. Please try again.');
+      throw new Error('Unable to save follow-up.');
+    }
+  };
+
+  const handleDeleteFollowUp = async (followUpId: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      await deleteJobFollowUp(token, selectedJob.job_id, followUpId);
+      await Promise.all([
+        loadJobFollowUps(selectedJob.job_id),
+        loadJobActivity(selectedJob.job_id),
+      ]);
+    } catch {
+      setErrorMessage('Unable to delete that follow-up. Please try again.');
+    }
+  };
+
   const handleDialogSubmit = async (payload: JobPayload) => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -312,6 +406,7 @@ const DashboardPage = () => {
     await createJob(token, payload);
     setDialogOpen(false);
     await fetchJobs();
+    await fetchMetrics();
   };
 
   return (
@@ -323,32 +418,53 @@ const DashboardPage = () => {
         Track your applications and activity at a glance.
       </Typography>
 
-      <Box sx={{ display: 'flex', gap: 3, mb: 4 }}>
+      <Box sx={{ display: 'flex', gap: 3, mb: 3 }}>
         <Paper sx={{ p: 3, textAlign: 'center', flex: 1 }}>
           <Typography variant="h6" fontWeight={600} mb={1}>
             Total Applications
           </Typography>
           <Typography variant="h3" fontWeight={700}>
-            {totalApplications}
+            {metrics?.total_applications ?? 0}
           </Typography>
         </Paper>
         <Paper sx={{ p: 3, textAlign: 'center', flex: 1 }}>
           <Typography variant="h6" fontWeight={600} mb={1}>
-            Interviews
+            Awaiting Response
           </Typography>
           <Typography variant="h3" fontWeight={700}>
-            {interviewCount}
+            {metrics?.awaiting_response ?? 0}
           </Typography>
         </Paper>
         <Paper sx={{ p: 3, textAlign: 'center', flex: 1 }}>
           <Typography variant="h6" fontWeight={600} mb={1}>
-            Offers
+            Responded
           </Typography>
           <Typography variant="h3" fontWeight={700}>
-            {offerCount}
+            {metrics?.responded ?? 0}
           </Typography>
         </Paper>
       </Box>
+
+      <Paper sx={{ p: 3, mb: 4 }}>
+        <Typography variant="h6" fontWeight={600} mb={2} textAlign="center">
+          Applications by Stage
+        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 3, flexWrap: 'wrap' }}>
+          {ALL_JOB_STAGES.map((stage) => {
+            const style = stageColors[stage] ?? { color: '#424242', bgcolor: '#F5F5F5' };
+            return (
+              <Box key={stage} sx={{ textAlign: 'center', minWidth: 90 }}>
+                <Typography variant="body2" sx={{ color: style.color, fontWeight: 600 }}>
+                  {stage}
+                </Typography>
+                <Typography variant="h5" fontWeight={700}>
+                  {metrics?.stage_counts[stage] ?? 0}
+                </Typography>
+              </Box>
+            );
+          })}
+        </Box>
+      </Paper>
 
       <Box
         sx={{
@@ -544,6 +660,10 @@ const DashboardPage = () => {
         onSaveInterview={handleSaveInterview}
         interviews={selectedJobInterviews}
         isInterviewsLoading={isInterviewsLoading}
+        onSaveFollowUp={handleSaveFollowUp}
+        onDeleteFollowUp={handleDeleteFollowUp}
+        followUps={selectedJobFollowUps}
+        isFollowUpsLoading={isFollowUpsLoading}
         onStageChange={async (newStage) => {
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;
@@ -552,6 +672,7 @@ const DashboardPage = () => {
           setJobs((prev) => prev.map((j) => (j.job_id === updated.job_id ? updated : j)));
           setSelectedJob(updated);
           await loadJobActivity(updated.job_id);
+          await fetchMetrics();
         }}
         activityEvents={selectedJobActivity}
         isActivityLoading={isActivityLoading}
