@@ -107,10 +107,14 @@ def generate_resume(
         if career_pref.salary_minimum is not None:
             pref_lines.append(f"Minimum Salary: ${int(career_pref.salary_minimum):,}")
 
-    pref_section = "\n\n## Career Preferences\n" + "\n".join(pref_lines) if pref_lines else ""
+    pref_heading = (
+        "\n\n## Career Preferences"
+        " (use as context only — do not print preferences directly in the resume)\n"
+    )
+    pref_section = (pref_heading + "\n".join(pref_lines)) if pref_lines else ""
 
     prompt = f"""
-You are a professional resume writer helping a real job eeeker create a resume for a specific job.
+You are a professional resume writer helping a real job seeker create a resume for a specific job.
 Your role is to rewrite, reorder, and reframe their actual information to best match the job.
 You are to not invent or fabricate anything.
 
@@ -120,7 +124,7 @@ Use ONLY the information provided below.
 Name: {profile.first_name} {profile.last_name}
 City: {profile.city}
 Phone: {profile.phone_number}
-Summary: {profile.summary}{pref_section}
+Summary: {profile.summary}
 
 ## Work Experience
 {chr(10).join(exp_lines) if exp_lines else "No work experience listed."}
@@ -129,7 +133,7 @@ Summary: {profile.summary}{pref_section}
 {chr(10).join(edu_lines) if edu_lines else "No education listed."}
 
 ## Skills
-{", ".join(skill_parts) if skill_parts else "No skills listed."}
+{", ".join(skill_parts) if skill_parts else "No skills listed."}{pref_section}
 
 ## Job They Are Applying To
 Title: {job.job_title}
@@ -145,7 +149,7 @@ Your job is to:
 - Use strong, active language to present real experience in the most compelling way for this role
 
 Do NOT invent experiences, credentials, or skills not present above. Do NOT add placeholder text.
-Only rewrite and reorder what is actually there. Format clearly in plain text."""
+Only rewrite and reorder what is actually there. Format using markdown."""
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
