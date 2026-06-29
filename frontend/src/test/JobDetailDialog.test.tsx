@@ -528,4 +528,89 @@ describe('JobDetailDialog', () => {
     fireEvent.click(screen.getByText('Edit'));
     expect(screen.queryByLabelText('Outcome Notes')).not.toBeInTheDocument();
   });
+
+  const archivedActivityEvents = [
+    ...activityEvents.slice(0, -1),
+    {
+      event_id: 'activity-6',
+      event_type: 'outcome' as const,
+      title: 'Archived',
+      description: 'Offer to Archived',
+      occurred_at: '2026-06-26T00:00:00Z',
+      can_delete: true,
+    },
+  ];
+
+  it('shows an Archive button for jobs that are not archived', () => {
+    renderDialog();
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument();
+  });
+
+  it('opens the non-forward warning when archiving from a non-Offer stage', async () => {
+    renderDialog();
+    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    expect(screen.getByText(/non-standard transition/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
+    expect(mockOnStageChange).toHaveBeenCalledWith('Archived');
+  });
+
+  it('shows a Restore button and confirmation for an archived job with a deletable archive event', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={{ ...mockJob, job_stage: 'Archived' }}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={archivedActivityEvents}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    expect(screen.getByText(/restore job/i)).toBeInTheDocument();
+    expect(screen.getByText('Offer')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /^restore$/i }));
+    expect(mockOnDeleteStageHistory).toHaveBeenCalledWith('activity-6');
+  });
+
+  it('does not call onDeleteStageHistory when restore is cancelled', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={{ ...mockJob, job_stage: 'Archived' }}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={archivedActivityEvents}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
+    expect(mockOnDeleteStageHistory).not.toHaveBeenCalled();
+  });
+
+  it('does not show a Restore button when an archived job has no deletable archive history', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={{ ...mockJob, job_stage: 'Archived' }}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onDeleteStageHistory={mockOnDeleteStageHistory}
+        activityEvents={[activityEvents[0]]}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument();
+  });
 });

@@ -147,6 +147,7 @@ const JobDetailDialog = ({
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [interviewFormOpen, setInterviewFormOpen] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<string | undefined>();
   const [interviewForm, setInterviewForm] = useState(emptyInterviewForm);
@@ -186,6 +187,13 @@ const JobDetailDialog = ({
 
   const stageStyle = stageColors[job.job_stage] ?? { color: '#424242', bgcolor: '#F5F5F5' };
 
+  const latestActivityEvent = activityEvents[activityEvents.length - 1] ?? null;
+  const canRestoreFromArchive =
+    job.job_stage === 'Archived' &&
+    !!latestActivityEvent?.can_delete &&
+    getEventStage(latestActivityEvent) === 'Archived';
+  const restoreTargetStage = latestActivityEvent?.description?.split(' to ')[0];
+
   const handleStageSelect = (selected: JobStage) => {
     if (selected === job.job_stage) return;
     if (isForwardTransition(job.job_stage, selected)) {
@@ -205,6 +213,13 @@ const JobDetailDialog = ({
       onDeleteStageHistory(pendingDeleteEvent.event_id);
     }
     setPendingDeleteEvent(null);
+  };
+
+  const confirmRestore = () => {
+    if (latestActivityEvent && onDeleteStageHistory) {
+      onDeleteStageHistory(latestActivityEvent.event_id);
+    }
+    setRestoreConfirmOpen(false);
   };
 
   const openInterviewForm = (interview?: InterviewRecord) => {
@@ -786,11 +801,43 @@ const JobDetailDialog = ({
           ) : (
             <>
               <Button onClick={onClose}>Close</Button>
+              {job.job_stage !== 'Archived' && (
+                <Button onClick={() => handleStageSelect('Archived')} color="secondary">
+                  Archive
+                </Button>
+              )}
+              {canRestoreFromArchive && (
+                <Button onClick={() => setRestoreConfirmOpen(true)} color="secondary">
+                  Restore
+                </Button>
+              )}
               <Button onClick={() => setIsEditing(true)} variant="contained">
                 Edit
               </Button>
             </>
           )}
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={restoreConfirmOpen} onClose={() => setRestoreConfirmOpen(false)}>
+        <DialogTitle>Restore job?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This will restore <strong>{job.job_title}</strong> to its previous stage
+            {restoreTargetStage ? (
+              <>
+                {' '}
+                (<strong>{restoreTargetStage}</strong>)
+              </>
+            ) : null}
+            . Interviews and follow-ups will be kept.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRestoreConfirmOpen(false)}>Cancel</Button>
+          <Button onClick={confirmRestore} variant="contained">
+            Restore
+          </Button>
         </DialogActions>
       </Dialog>
 

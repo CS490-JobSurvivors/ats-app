@@ -162,7 +162,7 @@ const DashboardPage = () => {
           [job.job_title, job.company_name, job.job_description].some((value) =>
             (value ?? '').toLowerCase().includes(normalizedQuery)
           )) &&
-        (stageFilter === 'All' || job.job_stage === stageFilter) &&
+        (stageFilter === 'All' ? job.job_stage !== 'Archived' : job.job_stage === stageFilter) &&
         (locationFilter === 'All' || job.job_location?.trim() === locationFilter) &&
         (deadlineFilter === 'All' || getDeadlineState(job.deadline) === deadlineFilter)
     );
