@@ -294,9 +294,13 @@ describe('EducationSection', () => {
     fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2023-01-01' } });
     fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: '2022-01-01' } });
     fireEvent.click(screen.getByText('Save'));
-    expect(await screen.findByText('End date cannot be earlier than start date.')).toBeInTheDocument();
+    expect(
+      await screen.findByText('End date cannot be earlier than start date.')
+    ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: '2024-01-01' } });
-    expect(screen.queryByText('End date cannot be earlier than start date.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('End date cannot be earlier than start date.')
+    ).not.toBeInTheDocument();
   });
 
   it('shows save error as an alert when createEducation fails', async () => {
