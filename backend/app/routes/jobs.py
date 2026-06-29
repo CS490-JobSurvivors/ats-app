@@ -13,6 +13,9 @@ from app.models.job_stage_history import JobStageHistory
 from app.models.jobs import Job
 from app.schemas.jobs import (
     ActivityEventType,
+    FollowUpCreate,
+    FollowUpRead,
+    FollowUpUpdate,
     InterviewCreate,
     InterviewRead,
     InterviewUpdate,
@@ -88,6 +91,27 @@ def get_owned_interview_or_404(
         )
 
     return interview
+
+
+def get_owned_followup_or_404(
+    job_id: UUID, followup_id: UUID, owner_id: UUID, db: Session
+) -> FollowUp:
+    get_owned_job_or_404(job_id, owner_id, db)
+    followup = db.scalar(
+        select(FollowUp).where(
+            FollowUp.followup_id == followup_id,
+            FollowUp.job_id == job_id,
+            FollowUp.user_id == owner_id,
+        )
+    )
+
+    if followup is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Follow-up not found",
+        )
+
+    return followup
 
 
 def as_datetime(value: date | datetime) -> datetime:
@@ -392,3 +416,80 @@ def update_job_interview(
     db.refresh(db_interview)
 
     return db_interview
+
+
+@router.get("/{job_id}/followups", response_model=list[FollowUpRead])
+def list_job_followups(
+    job_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_job_or_404(job_id, owner_id, db)
+
+    return db.scalars(
+        select(FollowUp)
+        .where(FollowUp.job_id == job_id, FollowUp.user_id == owner_id)
+        .order_by(FollowUp.due_date.asc())
+    ).all()
+
+
+@router.post(
+    "/{job_id}/followups",
+    response_model=FollowUpRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_job_followup(
+    job_id: UUID,
+    followup: FollowUpCreate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_job_or_404(job_id, owner_id, db)
+    db_followup = FollowUp(
+        **followup.model_dump(),
+        job_id=job_id,
+        user_id=owner_id,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    db.add(db_followup)
+    db.commit()
+    db.refresh(db_followup)
+
+    return db_followup
+
+
+@router.patch("/{job_id}/followups/{followup_id}", response_model=FollowUpRead)
+def update_job_followup(
+    job_id: UUID,
+    followup_id: UUID,
+    followup_update: FollowUpUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_followup = get_owned_followup_or_404(job_id, followup_id, owner_id, db)
+
+    for field, value in followup_update.model_dump(exclude_unset=True).items():
+        setattr(db_followup, field, value)
+
+    db.commit()
+    db.refresh(db_followup)
+
+    return db_followup
+
+
+@router.delete("/{job_id}/followups/{followup_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_job_followup(
+    job_id: UUID,
+    followup_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_followup = get_owned_followup_or_404(job_id, followup_id, owner_id, db)
+
+    db.delete(db_followup)
+    db.commit()

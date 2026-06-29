@@ -90,3 +90,28 @@ class InterviewRead(InterviewBase):
     interview_id: UUID
     job_id: UUID
     user_id: UUID
+
+
+class FollowUpBase(BaseModel):
+    due_date: date
+    notes: str | None = None
+    is_completed: bool = False
+
+
+class FollowUpCreate(FollowUpBase):
+    pass
+
+
+class FollowUpUpdate(BaseModel):
+    due_date: date | None = None
+    notes: str | None = None
+    is_completed: bool | None = None
+
+
+class FollowUpRead(FollowUpBase):
+    model_config = ConfigDict(from_attributes=True)
+
+    followup_id: UUID
+    job_id: UUID
+    user_id: UUID
+    created_at: datetime | None = None

@@ -28,7 +28,7 @@ class FakeScalarResult:
 
 
 class FakeDb:
-    def add(self, obj: Job | JobStageHistory | Interview):
+    def add(self, obj: Job | JobStageHistory | Interview | FollowUp):
         if isinstance(obj, JobStageHistory):
             if obj.job_history_id is None:
                 obj.job_history_id = uuid4()
@@ -40,6 +40,13 @@ class FakeDb:
             if obj.interview_id is None:
                 obj.interview_id = uuid4()
             interviews.append(obj)
+            return
+        if isinstance(obj, FollowUp):
+            if obj.followup_id is None:
+                obj.followup_id = uuid4()
+            if obj.created_at is None:
+                obj.created_at = datetime.now(UTC)
+            followups.append(obj)
             return
         if obj.job_id is None:
             obj.job_id = uuid4()
@@ -124,6 +131,17 @@ class FakeDb:
 
             return None
 
+        if entity is FollowUp:
+            for followup in followups:
+                if (
+                    str(followup.followup_id) == str(params["followup_id_1"])
+                    and str(followup.job_id) == str(params["job_id_1"])
+                    and str(followup.user_id) == str(params["user_id_1"])
+                ):
+                    return followup
+
+            return None
+
         for job in jobs:
             if str(job.job_id) == str(params["job_id_1"]) and str(job.job_poster_id) == str(
                 params["job_poster_id_1"]
@@ -132,9 +150,12 @@ class FakeDb:
 
         return None
 
-    def delete(self, obj: Job | JobStageHistory):
+    def delete(self, obj: Job | JobStageHistory | FollowUp):
         if isinstance(obj, JobStageHistory):
             stage_histories.remove(obj)
+            return
+        if isinstance(obj, FollowUp):
+            followups.remove(obj)
             return
 
         jobs.remove(obj)
@@ -701,3 +722,99 @@ def test_update_job_interview_only_updates_owned_interview():
     assert body["scheduled_at_date"] == "2026-07-10"
     assert body["scheduled_at_time"] == "2026-07-10T18:00:00Z"
     assert body["interview_notes"] == "Meet hiring manager."
+
+
+def test_create_and_list_job_followups_for_owned_job():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    followup_response = client.post(
+        f"/jobs/{job_id}/followups",
+        json={
+            "due_date": "2026-07-08",
+            "notes": "Email recruiter.",
+            "is_completed": False,
+        },
+    )
+    list_response = client.get(f"/jobs/{job_id}/followups")
+
+    assert followup_response.status_code == 201
+    body = followup_response.json()
+    assert body["due_date"] == "2026-07-08"
+    assert body["notes"] == "Email recruiter."
+    assert body["is_completed"] is False
+    assert body["job_id"] == job_id
+    assert body["user_id"] == owner_id
+    assert list_response.status_code == 200
+    assert [followup["notes"] for followup in list_response.json()] == ["Email recruiter."]
+
+
+def test_update_job_followup_only_updates_owned_followup():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    followup_response = client.post(
+        f"/jobs/{job_id}/followups",
+        json={
+            "due_date": "2026-07-08",
+            "notes": "Email recruiter.",
+            "is_completed": False,
+        },
+    )
+    followup_id = followup_response.json()["followup_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.patch(
+        f"/jobs/{job_id}/followups/{followup_id}",
+        json={"notes": "Unauthorized"},
+    )
+
+    set_authenticated_user(owner_id)
+    update_response = client.patch(
+        f"/jobs/{job_id}/followups/{followup_id}",
+        json={
+            "due_date": "2026-07-10",
+            "notes": "Sent thank-you note.",
+            "is_completed": True,
+        },
+    )
+
+    assert denied_response.status_code == 404
+    assert update_response.status_code == 200
+    body = update_response.json()
+    assert body["due_date"] == "2026-07-10"
+    assert body["notes"] == "Sent thank-you note."
+    assert body["is_completed"] is True
+
+
+def test_delete_job_followup_only_deletes_owned_followup():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    followup_response = client.post(
+        f"/jobs/{job_id}/followups",
+        json={
+            "due_date": "2026-07-08",
+            "notes": "Email recruiter.",
+            "is_completed": False,
+        },
+    )
+    followup_id = followup_response.json()["followup_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.delete(f"/jobs/{job_id}/followups/{followup_id}")
+
+    set_authenticated_user(owner_id)
+    delete_response = client.delete(f"/jobs/{job_id}/followups/{followup_id}")
+    list_response = client.get(f"/jobs/{job_id}/followups")
+
+    assert denied_response.status_code == 404
+    assert delete_response.status_code == 204
+    assert list_response.status_code == 200
+    assert list_response.json() == []
