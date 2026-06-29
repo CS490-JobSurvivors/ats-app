@@ -8,12 +8,16 @@ import {
   listJobs,
   listJobActivity,
   listJobInterviews,
+  listJobFollowUps,
   createJob,
   updateJob,
   deleteJob,
   deleteJobStageHistory,
   createJobInterview,
   updateJobInterview,
+  createJobFollowUp,
+  updateJobFollowUp,
+  deleteJobFollowUp,
 } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
@@ -28,24 +32,32 @@ jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
   listJobActivity: jest.fn(),
   listJobInterviews: jest.fn(),
+  listJobFollowUps: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
   deleteJob: jest.fn(),
   deleteJobStageHistory: jest.fn(),
   createJobInterview: jest.fn(),
   updateJobInterview: jest.fn(),
+  createJobFollowUp: jest.fn(),
+  updateJobFollowUp: jest.fn(),
+  deleteJobFollowUp: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
 const mockListJobActivity = listJobActivity as jest.Mock;
 const mockListJobInterviews = listJobInterviews as jest.Mock;
+const mockListJobFollowUps = listJobFollowUps as jest.Mock;
 const mockCreateJob = createJob as jest.Mock;
 const mockUpdateJob = updateJob as jest.Mock;
 const mockDeleteJob = deleteJob as jest.Mock;
 const mockDeleteJobStageHistory = deleteJobStageHistory as jest.Mock;
 const mockCreateJobInterview = createJobInterview as jest.Mock;
 const mockUpdateJobInterview = updateJobInterview as jest.Mock;
+const mockCreateJobFollowUp = createJobFollowUp as jest.Mock;
+const mockUpdateJobFollowUp = updateJobFollowUp as jest.Mock;
+const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
 
 const sampleJob = {
   job_id: 'job-1',
@@ -64,12 +76,16 @@ beforeEach(() => {
   mockListJobs.mockResolvedValue([]);
   mockListJobActivity.mockResolvedValue([]);
   mockListJobInterviews.mockResolvedValue([]);
+  mockListJobFollowUps.mockResolvedValue([]);
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
   mockDeleteJob.mockReset();
   mockDeleteJobStageHistory.mockReset();
   mockCreateJobInterview.mockReset();
   mockUpdateJobInterview.mockReset();
+  mockCreateJobFollowUp.mockReset();
+  mockUpdateJobFollowUp.mockReset();
+  mockDeleteJobFollowUp.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -295,6 +311,140 @@ describe('DashboardPage', () => {
       );
     });
     expect(await screen.findByText('Final')).toBeInTheDocument();
+  });
+
+  it('adds a follow-up from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobFollowUps.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        followup_id: 'followup-1',
+        job_id: 'job-1',
+        user_id: 'user-1',
+        due_date: '2026-07-09',
+        notes: 'Email recruiter.',
+        is_completed: false,
+      },
+    ]);
+    mockCreateJobFollowUp.mockResolvedValue({
+      followup_id: 'followup-1',
+      job_id: 'job-1',
+      user_id: 'user-1',
+      due_date: '2026-07-09',
+      notes: 'Email recruiter.',
+      is_completed: false,
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /add follow-up/i }));
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-09' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Email recruiter.' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockCreateJobFollowUp).toHaveBeenCalledWith('test-token', 'job-1', {
+        due_date: '2026-07-09',
+        notes: 'Email recruiter.',
+        is_completed: false,
+      });
+    });
+    expect(await screen.findByText('Email recruiter.')).toBeInTheDocument();
+  });
+
+  it('edits a follow-up from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobFollowUps
+      .mockResolvedValueOnce([
+        {
+          followup_id: 'followup-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          due_date: '2026-07-09',
+          notes: 'Email recruiter.',
+          is_completed: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          followup_id: 'followup-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          due_date: '2026-07-12',
+          notes: 'Followed up.',
+          is_completed: true,
+        },
+      ]);
+    mockUpdateJobFollowUp.mockResolvedValue({
+      followup_id: 'followup-1',
+      job_id: 'job-1',
+      user_id: 'user-1',
+      due_date: '2026-07-12',
+      notes: 'Followed up.',
+      is_completed: true,
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Email recruiter.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-12' } });
+    fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Followed up.' } });
+    await userEvent.click(screen.getByLabelText(/completed/i));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockUpdateJobFollowUp).toHaveBeenCalledWith('test-token', 'job-1', 'followup-1', {
+        due_date: '2026-07-12',
+        notes: 'Followed up.',
+        is_completed: true,
+      });
+    });
+    expect(await screen.findByText('Followed up.')).toBeInTheDocument();
+  });
+
+  it('shows an error when saving a follow-up fails', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockCreateJobFollowUp.mockRejectedValue(new Error('save failed'));
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /add follow-up/i }));
+    fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-09' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(
+      await screen.findByText('Unable to save that follow-up. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByText('Unable to save follow-up. Please try again.')).toBeInTheDocument();
+  });
+
+  it('deletes a follow-up from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobFollowUps
+      .mockResolvedValueOnce([
+        {
+          followup_id: 'followup-1',
+          job_id: 'job-1',
+          user_id: 'user-1',
+          due_date: '2026-07-09',
+          notes: 'Email recruiter.',
+          is_completed: false,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    mockDeleteJobFollowUp.mockResolvedValue(undefined);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Email recruiter.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
+    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockDeleteJobFollowUp).toHaveBeenCalledWith('test-token', 'job-1', 'followup-1');
+    });
+    expect(await screen.findByText('No follow-ups scheduled.')).toBeInTheDocument();
   });
 
   it('deletes a stage history event from the activity timeline', async () => {
