@@ -1040,11 +1040,7 @@ const JobDetailDialog = ({
               }
               label="Completed"
             />
-            {followUpError && (
-              <Alert severity="error">
-                {followUpError}
-              </Alert>
-            )}
+            {followUpError && <Alert severity="error">{followUpError}</Alert>}
           </Box>
         </DialogContent>
         <DialogActions>
