@@ -41,6 +41,22 @@ class JobRead(JobBase):
     created_at: datetime
 
 
+class StageCounts(BaseModel):
+    Interested: int
+    Applied: int
+    Interview: int
+    Offer: int
+    Rejected: int
+    Archived: int
+
+
+class JobMetrics(BaseModel):
+    total_applications: int
+    awaiting_response: int
+    responded: int
+    stage_counts: StageCounts
+
+
 class JobActivityEvent(BaseModel):
     event_id: str
     event_type: ActivityEventType

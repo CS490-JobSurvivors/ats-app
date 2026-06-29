@@ -18,12 +18,16 @@ from app.schemas.jobs import (
     InterviewUpdate,
     JobActivityEvent,
     JobCreate,
+    JobMetrics,
     JobRead,
     JobUpdate,
+    StageCounts,
 )
 from app.services.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+RESPONDED_STAGES = {"Interview", "Offer", "Rejected"}
 
 
 def get_current_user_id(current_user: dict) -> UUID:
@@ -151,6 +155,33 @@ def list_jobs(
     return user_jobs
 
 
+@router.get("/metrics", response_model=JobMetrics)
+def get_job_metrics(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    user_jobs = db.scalars(select(Job).where(Job.job_poster_id == owner_id)).all()
+    has_stage_updates = False
+
+    for db_job in user_jobs:
+        has_stage_updates = sync_job_stage_with_history(db_job, db) or has_stage_updates
+
+    if has_stage_updates:
+        db.commit()
+
+    stage_counts = dict.fromkeys(StageCounts.model_fields, 0)
+    for db_job in user_jobs:
+        stage_counts[db_job.job_stage] += 1
+
+    return JobMetrics(
+        total_applications=len(user_jobs),
+        awaiting_response=stage_counts["Applied"],
+        responded=sum(count for stage, count in stage_counts.items() if stage in RESPONDED_STAGES),
+        stage_counts=StageCounts(**stage_counts),
+    )
+
+
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_job(
     job_id: UUID,
@@ -177,12 +208,14 @@ def update_job(
     updates = job_update.model_dump(exclude_unset=True)
     new_stage = updates.get("job_stage")
     if new_stage and new_stage != db_job.job_stage:
-        db.add(JobStageHistory(
-            job_id=db_job.job_id,
-            from_stage=db_job.job_stage,
-            to_stage=new_stage,
-            changed_by=owner_id,
-        ))
+        db.add(
+            JobStageHistory(
+                job_id=db_job.job_id,
+                from_stage=db_job.job_stage,
+                to_stage=new_stage,
+                changed_by=owner_id,
+            )
+        )
 
     for field, value in updates.items():
         setattr(db_job, field, value)
