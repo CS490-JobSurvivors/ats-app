@@ -289,43 +289,61 @@ const EducationSection = ({
         <DialogTitle>{editingId ? 'Edit Education' : 'Add Education'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            {saveError && (
-              <Typography color="error" variant="body2">
-                {saveError}
-              </Typography>
-            )}
+            {saveError && <Alert severity="error">{saveError}</Alert>}
             <TextField
               label="Institution Name"
               value={form.institution_name}
-              onChange={(e) => setForm((f) => ({ ...f, institution_name: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, institution_name: e.target.value }));
+                if (fieldErrors.institution_name)
+                  setFieldErrors((errs) => ({ ...errs, institution_name: '' }));
+              }}
               error={!!fieldErrors.institution_name}
               helperText={fieldErrors.institution_name}
               fullWidth
               required
+              inputProps={{ maxLength: 150 }}
             />
             <TextField
               label="Degree"
               value={form.degree}
-              onChange={(e) => setForm((f) => ({ ...f, degree: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, degree: e.target.value }));
+                if (fieldErrors.degree) setFieldErrors((errs) => ({ ...errs, degree: '' }));
+              }}
               error={!!fieldErrors.degree}
               helperText={fieldErrors.degree}
               fullWidth
               required
+              inputProps={{ maxLength: 100 }}
             />
             <TextField
               label="Major"
               value={form.major}
-              onChange={(e) => setForm((f) => ({ ...f, major: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, major: e.target.value }));
+                if (fieldErrors.major) setFieldErrors((errs) => ({ ...errs, major: '' }));
+              }}
               error={!!fieldErrors.major}
               helperText={fieldErrors.major}
               fullWidth
               required
+              inputProps={{ maxLength: 100 }}
             />
             <TextField
               label="Start Date"
               type="date"
               value={form.start_date}
-              onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
+              onChange={(e) => {
+                const val = e.target.value;
+                setForm((f) => ({ ...f, start_date: val }));
+                setFieldErrors((errs) => ({
+                  ...errs,
+                  start_date: val ? '' : errs.start_date,
+                  end_date:
+                    !form.is_current && form.end_date && form.end_date >= val ? '' : errs.end_date,
+                }));
+              }}
               error={!!fieldErrors.start_date}
               helperText={fieldErrors.start_date}
               fullWidth
@@ -348,7 +366,14 @@ const EducationSection = ({
                 label="End Date"
                 type="date"
                 value={form.end_date ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value || null }))}
+                onChange={(e) => {
+                  const val = e.target.value || null;
+                  setForm((f) => ({ ...f, end_date: val }));
+                  if (fieldErrors.end_date) {
+                    const isValid = !val || !form.start_date || val >= form.start_date;
+                    if (isValid) setFieldErrors((errs) => ({ ...errs, end_date: '' }));
+                  }
+                }}
                 error={!!fieldErrors.end_date}
                 helperText={fieldErrors.end_date}
                 fullWidth
