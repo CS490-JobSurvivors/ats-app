@@ -37,6 +37,10 @@ class ResumeResponse(BaseModel):
     resume: str
 
 
+class CoverLetterResponse(BaseModel):
+    cover_letter: str
+
+
 @router.post("/generate", response_model=ResumeResponse)
 def generate_resume(
     body: ResumeRequest,
@@ -167,3 +171,137 @@ Only rewrite and reorder what is actually there. Format using markdown."""
 
     resume_text = message.content[0].text
     return ResumeResponse(resume=resume_text)
+
+
+@router.post("/cover-letter/generate", response_model=CoverLetterResponse)
+def generate_cover_letter(
+    body: ResumeRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+
+    profile = db.scalar(select(Profile).where(Profile.user_id == owner_id))
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profile not found")
+
+    job = db.scalar(select(Job).where(Job.job_id == body.job_id, Job.job_poster_id == owner_id))
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found")
+
+    experiences = db.scalars(
+        select(Experience)
+        .where(Experience.experience_user_id == owner_id)
+        .order_by(Experience.position_number.asc())
+    ).all()
+
+    educations = db.scalars(
+        select(Education)
+        .where(Education.education_user_id == owner_id)
+        .order_by(Education.position_number.asc())
+    ).all()
+
+    skills = db.scalars(
+        select(Skill).where(Skill.skill_user_id == owner_id).order_by(Skill.position_number.asc())
+    ).all()
+
+    career_pref = db.scalar(select(CareerPreference).where(CareerPreference.user_id == owner_id))
+
+    exp_lines = []
+    for e in experiences:
+        end = "Present" if e.is_current else (str(e.end_date) if e.end_date else "")
+        line = f"- {e.title} at {e.company} ({e.start_date} — {end})"
+        if e.experience_description:
+            line += f"\n  {e.experience_description}"
+        exp_lines.append(line)
+
+    edu_lines = []
+    for e in educations:
+        end = "Present" if e.is_current else (str(e.end_date) if e.end_date else "")
+        line = f"- {e.degree} in {e.major} at {e.institution_name} ({e.start_date} — {end})"
+        if e.GPA is not None:
+            line += f", GPA: {e.GPA}"
+        edu_lines.append(line)
+
+    skill_parts = []
+    for s in skills:
+        part = s.skill_name
+        if s.category:
+            part += f" [{s.category}]"
+        if s.proficiency:
+            part += f" ({s.proficiency})"
+        skill_parts.append(part)
+
+    pref_lines = []
+    if career_pref:
+        if career_pref.target_roles:
+            pref_lines.append(f"Target Roles: {', '.join(career_pref.target_roles)}")
+        if career_pref.location_preference:
+            pref_lines.append(f"Location Preference: {career_pref.location_preference}")
+        if career_pref.work_mode:
+            pref_lines.append(f"Work Mode: {career_pref.work_mode}")
+        if career_pref.salary_minimum is not None:
+            pref_lines.append(f"Minimum Salary: ${int(career_pref.salary_minimum):,}")
+
+    pref_heading = (
+        "\n\n## Career Preferences"
+        " (use as context only — do not print preferences directly in the cover letter)\n"
+    )
+    pref_section = (pref_heading + "\n".join(pref_lines)) if pref_lines else ""
+
+    prompt = f"""
+You are a professional cover letter writer helping a real job seeker apply to a specific job.
+Your role is to write a concise, tailored cover letter using the candidate's real profile and job
+context.
+You are to not invent or fabricate anything.
+
+Use ONLY the information provided below.
+
+## Candidate Profile
+Name: {profile.first_name} {profile.last_name}
+City: {profile.city}
+Phone: {profile.phone_number}
+Summary: {profile.summary}
+
+## Work Experience
+{chr(10).join(exp_lines) if exp_lines else "No work experience listed."}
+
+## Education
+{chr(10).join(edu_lines) if edu_lines else "No education listed."}
+
+## Skills
+{", ".join(skill_parts) if skill_parts else "No skills listed."}{pref_section}
+
+## Job They Are Applying To
+Title: {job.job_title}
+Company: {job.company_name}
+Description: {job.job_description}
+Location: {job.job_location}
+
+Using only the real candidate information above, write a tailored cover letter for this job.
+Your job is to:
+- Open with a professional greeting; if no recipient is provided, use a generic hiring-team greeting
+- Connect the candidate's background directly to the role and company
+- Highlight the most relevant real experience, education, and skills
+- Keep the tone professional, specific, and concise
+- Close with a clear statement of interest
+
+Do NOT invent experiences, credentials, metrics, recipient names, or skills not present above.
+Do NOT add placeholder text. Format using markdown."""
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ANTHROPIC_API_KEY is not configured",
+        )
+
+    client = anthropic.Anthropic(api_key=api_key)
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1600,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    cover_letter_text = message.content[0].text
+    return CoverLetterResponse(cover_letter=cover_letter_text)

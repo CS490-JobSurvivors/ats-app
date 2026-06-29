@@ -15,3 +15,19 @@ export const generateResume = async (
   if (!response.ok) throw new Error('Failed to generate resume. Please try again.');
   return response.json();
 };
+
+export const generateCoverLetter = async (
+  accessToken: string,
+  jobId: string
+): Promise<{ cover_letter: string }> => {
+  const response = await fetch(`${API_URL}/resume/cover-letter/generate`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ job_id: jobId }),
+  });
+  if (!response.ok) throw new Error('Failed to generate cover letter. Please try again.');
+  return response.json();
+};

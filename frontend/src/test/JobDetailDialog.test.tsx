@@ -25,6 +25,7 @@ const mockOnDeleteStageHistory = jest.fn();
 const mockOnSaveInterview = jest.fn();
 const mockOnSaveFollowUp = jest.fn();
 const mockOnDeleteFollowUp = jest.fn();
+const mockOnGenerateCoverLetter = jest.fn();
 const interviews: InterviewRecord[] = [
   {
     interview_id: 'interview-1',
@@ -112,6 +113,7 @@ describe('JobDetailDialog', () => {
     mockOnSaveInterview.mockResolvedValue(undefined);
     mockOnSaveFollowUp.mockResolvedValue(undefined);
     mockOnDeleteFollowUp.mockResolvedValue(undefined);
+    mockOnGenerateCoverLetter.mockResolvedValue('Dear Hiring Team,\n\nI am excited to apply.');
   });
 
   it('renders job details when open', () => {
@@ -248,6 +250,47 @@ describe('JobDetailDialog', () => {
     );
 
     expect(screen.getByText(/loading activity/i)).toBeInTheDocument();
+  });
+
+  it('generates and displays a cover letter draft', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onGenerateCoverLetter={mockOnGenerateCoverLetter}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /generate cover letter/i }));
+
+    expect(mockOnGenerateCoverLetter).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Generated Cover Letter')).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/dear hiring team/i)).toBeInTheDocument();
+  });
+
+  it('shows an error when cover letter generation fails', async () => {
+    mockOnGenerateCoverLetter.mockRejectedValue(new Error('generation failed'));
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onGenerateCoverLetter={mockOnGenerateCoverLetter}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /generate cover letter/i }));
+
+    expect(
+      await screen.findByText('Failed to generate cover letter. Please try again.')
+    ).toBeInTheDocument();
   });
 
   it('submits a new follow-up from the add follow-up form', async () => {

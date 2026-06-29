@@ -20,6 +20,7 @@ import {
   updateJobFollowUp,
   deleteJobFollowUp,
 } from '../api/jobs';
+import { generateCoverLetter, generateResume } from '../api/resume';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -46,6 +47,11 @@ jest.mock('../api/jobs', () => ({
   deleteJobFollowUp: jest.fn(),
 }));
 
+jest.mock('../api/resume', () => ({
+  generateResume: jest.fn(),
+  generateCoverLetter: jest.fn(),
+}));
+
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListJobs = listJobs as jest.Mock;
 const mockListJobActivity = listJobActivity as jest.Mock;
@@ -61,6 +67,8 @@ const mockUpdateJobInterview = updateJobInterview as jest.Mock;
 const mockCreateJobFollowUp = createJobFollowUp as jest.Mock;
 const mockUpdateJobFollowUp = updateJobFollowUp as jest.Mock;
 const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
+const mockGenerateResume = generateResume as jest.Mock;
+const mockGenerateCoverLetter = generateCoverLetter as jest.Mock;
 
 const zeroMetrics = {
   total_applications: 0,
@@ -104,6 +112,8 @@ beforeEach(() => {
   mockCreateJobFollowUp.mockReset();
   mockUpdateJobFollowUp.mockReset();
   mockDeleteJobFollowUp.mockReset();
+  mockGenerateResume.mockReset();
+  mockGenerateCoverLetter.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -256,6 +266,23 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByText('Software Engineer'));
     expect(await screen.findByText('Applied')).toBeInTheDocument();
     expect(mockListJobActivity).toHaveBeenCalledWith('test-token', 'job-1');
+  });
+
+  it('generates a cover letter from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockGenerateCoverLetter.mockResolvedValue({
+      cover_letter: 'Dear Hiring Team,\n\nI am excited to apply.',
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+
+    await userEvent.click(await screen.findByRole('button', { name: /generate cover letter/i }));
+
+    await waitFor(() => {
+      expect(mockGenerateCoverLetter).toHaveBeenCalledWith('test-token', 'job-1');
+    });
+    expect(await screen.findByText('Generated Cover Letter')).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/dear hiring team/i)).toBeInTheDocument();
   });
 
   it('adds an interview from job detail', async () => {
