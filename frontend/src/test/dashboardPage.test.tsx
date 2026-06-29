@@ -143,7 +143,7 @@ describe('DashboardPage', () => {
     mockListJobs.mockResolvedValue([
       { ...sampleJob, job_id: 'job-1', job_stage: 'Interested' },
       { ...sampleJob, job_id: 'job-2', job_stage: 'Applied' },
-      { ...sampleJob, job_id: 'job-3', job_stage: 'Archived' },
+      { ...sampleJob, job_id: 'job-3', job_stage: 'Offer' },
       { ...sampleJob, job_id: 'job-4', job_stage: 'Rejected' },
     ]);
     mockGetJobMetrics.mockResolvedValue({
@@ -154,9 +154,9 @@ describe('DashboardPage', () => {
         Interested: 1,
         Applied: 1,
         Interview: 0,
-        Offer: 0,
+        Offer: 1,
         Rejected: 1,
-        Archived: 1,
+        Archived: 0,
       },
     });
     render(<DashboardPage />);
