@@ -19,7 +19,9 @@ import {
   IconButton,
   Checkbox,
   FormControlLabel,
+  Menu,
 } from '@mui/material';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
@@ -177,6 +179,7 @@ const JobDetailDialog = ({
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+  const [kebabAnchor, setKebabAnchor] = useState<null | HTMLElement>(null);
   const [interviewFormOpen, setInterviewFormOpen] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<string | undefined>();
   const [interviewForm, setInterviewForm] = useState(emptyInterviewForm);
@@ -962,9 +965,39 @@ const JobDetailDialog = ({
         </DialogContent>
 
         <DialogActions>
-          <Button onClick={onDelete} color="error" sx={{ mr: 'auto' }}>
-            Delete
-          </Button>
+          <IconButton
+            onClick={(e) => setKebabAnchor(e.currentTarget)}
+            sx={{ mr: 'auto' }}
+            aria-label="more actions"
+          >
+            <MoreVertIcon />
+          </IconButton>
+          <Menu
+            anchorEl={kebabAnchor}
+            open={Boolean(kebabAnchor)}
+            onClose={() => setKebabAnchor(null)}
+          >
+            <MenuItem
+              onClick={() => { setKebabAnchor(null); onDelete(); }}
+              sx={{ color: 'error.main' }}
+            >
+              Delete
+            </MenuItem>
+            {job.job_stage !== 'Archived' && (
+              <MenuItem
+                onClick={() => { setKebabAnchor(null); handleStageSelect('Archived'); }}
+              >
+                Archive
+              </MenuItem>
+            )}
+            {canRestoreFromArchive && (
+              <MenuItem
+                onClick={() => { setKebabAnchor(null); setRestoreConfirmOpen(true); }}
+              >
+                Restore
+              </MenuItem>
+            )}
+          </Menu>
           {isEditing ? (
             <>
               <Button onClick={() => setIsEditing(false)} disabled={isSaving}>
@@ -997,16 +1030,6 @@ const JobDetailDialog = ({
                 </Button>
               )}
               <Button onClick={onClose}>Close</Button>
-              {job.job_stage !== 'Archived' && (
-                <Button onClick={() => handleStageSelect('Archived')} color="secondary">
-                  Archive
-                </Button>
-              )}
-              {canRestoreFromArchive && (
-                <Button onClick={() => setRestoreConfirmOpen(true)} color="secondary">
-                  Restore
-                </Button>
-              )}
               <Button onClick={() => setIsEditing(true)} variant="contained">
                 Edit
               </Button>
