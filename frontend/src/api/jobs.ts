@@ -94,6 +94,25 @@ export interface FollowUpPayload {
 
 export type FollowUpUpdatePayload = Partial<FollowUpPayload>;
 
+export type DocType = 'resume' | 'cover_letter';
+
+export interface DocumentRecord {
+  document_id: string;
+  user_id: string;
+  job_id: string | null;
+  doc_type: DocType | null;
+  doc_title: string;
+  content: string | null;
+  doc_version: number;
+  created_at: string;
+}
+
+export interface DocumentPayload {
+  doc_type: DocType;
+  doc_title: string;
+  content?: string | null;
+}
+
 const authHeaders = (accessToken: string) => ({
   Authorization: `Bearer ${accessToken}`,
 });
@@ -325,5 +344,57 @@ export const deleteJobFollowUp = async (
 
   if (!response.ok) {
     throw new Error('Unable to delete follow-up.');
+  }
+};
+
+export const listJobDocuments = async (
+  accessToken: string,
+  jobId: string
+): Promise<DocumentRecord[]> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load saved documents.');
+  }
+
+  return await response.json();
+};
+
+export const createJobDocument = async (
+  accessToken: string,
+  jobId: string,
+  document: DocumentPayload
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(document),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to save document.');
+  }
+
+  return await response.json();
+};
+
+export const deleteJobDocument = async (
+  accessToken: string,
+  jobId: string,
+  documentId: string
+): Promise<void> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents/${documentId}`, {
+    method: 'DELETE',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to delete document.');
   }
 };

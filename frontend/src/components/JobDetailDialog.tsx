@@ -30,6 +30,8 @@ import FlagIcon from '@mui/icons-material/Flag';
 import SendIcon from '@mui/icons-material/Send';
 import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
 import {
+  DocumentPayload,
+  DocumentRecord,
   FollowUpPayload,
   FollowUpRecord,
   InterviewPayload,
@@ -73,6 +75,10 @@ interface JobDetailDialogProps {
   onDeleteFollowUp?: (followUpId: string) => Promise<void>;
   activityEvents?: JobActivityEvent[];
   isActivityLoading?: boolean;
+  onSaveDocument?: (payload: DocumentPayload) => Promise<void>;
+  savedDocuments?: DocumentRecord[];
+  isSavedDocumentsLoading?: boolean;
+  onDeleteDocument?: (documentId: string) => Promise<void>;
 }
 
 const emptyInterviewForm = {
@@ -175,6 +181,10 @@ const JobDetailDialog = ({
   onDeleteFollowUp,
   activityEvents = [],
   isActivityLoading = false,
+  onSaveDocument,
+  savedDocuments = [],
+  isSavedDocumentsLoading = false,
+  onDeleteDocument,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
@@ -212,6 +222,8 @@ const JobDetailDialog = ({
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
   const [generatedCoverLetter, setGeneratedCoverLetter] = useState<string | null>(null);
   const [coverLetterError, setCoverLetterError] = useState('');
+  const [isSavingDocument, setIsSavingDocument] = useState(false);
+  const [pendingDeleteDocument, setPendingDeleteDocument] = useState<DocumentRecord | null>(null);
 
   useEffect(() => {
     if (job) {
@@ -267,6 +279,27 @@ const JobDetailDialog = ({
       onDeleteStageHistory(latestActivityEvent.event_id);
     }
     setRestoreConfirmOpen(false);
+  };
+
+  const buildDocTitle = (docType: 'resume' | 'cover_letter') => {
+    const label = docType === 'resume' ? 'Resume' : 'Cover Letter';
+    return `${label} - ${job.job_title} at ${job.company_name}`;
+  };
+
+  const saveDocument = async (docType: 'resume' | 'cover_letter', content: string) => {
+    if (!onSaveDocument) return;
+    setIsSavingDocument(true);
+    try {
+      await onSaveDocument({ doc_type: docType, doc_title: buildDocTitle(docType), content });
+    } finally {
+      setIsSavingDocument(false);
+    }
+  };
+
+  const confirmDeleteDocument = async () => {
+    if (!pendingDeleteDocument || !onDeleteDocument) return;
+    await onDeleteDocument(pendingDeleteDocument.document_id);
+    setPendingDeleteDocument(null);
   };
 
   const openInterviewForm = (interview?: InterviewRecord) => {
@@ -786,6 +819,67 @@ const JobDetailDialog = ({
               <Divider sx={{ mb: 2 }} />
 
               <Typography variant="subtitle2" gutterBottom>
+                Saved Drafts
+              </Typography>
+              {isSavedDocumentsLoading ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
+                  <CircularProgress size={18} />
+                  <Typography variant="body2" color="text.secondary">
+                    Loading saved drafts...
+                  </Typography>
+                </Box>
+              ) : savedDocuments.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  No saved drafts yet.
+                </Typography>
+              ) : (
+                <Box sx={{ display: 'grid', gap: 1, mb: 2 }}>
+                  {savedDocuments.map((document) => (
+                    <Box
+                      key={document.document_id}
+                      sx={{
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        p: 1.5,
+                        bgcolor: 'background.default',
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: 1,
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="body2" fontWeight={700}>
+                            {document.doc_title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" display="block">
+                            v{document.doc_version} &middot;{' '}
+                            {formatActivityDate(document.created_at)}
+                          </Typography>
+                        </Box>
+                        {onDeleteDocument && (
+                          <Button
+                            size="small"
+                            color="error"
+                            onClick={() => setPendingDeleteDocument(document)}
+                          >
+                            Delete
+                          </Button>
+                        )}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              )}
+
+              <Divider sx={{ mb: 2 }} />
+
+              <Typography variant="subtitle2" gutterBottom>
                 Activity Timeline
               </Typography>
               {isActivityLoading ? (
@@ -1191,6 +1285,18 @@ const JobDetailDialog = ({
               Copy
             </Button>
           )}
+          {onSaveDocument && generatedResume !== null && !isGenerating && (
+            <Button
+              onClick={() => {
+                const text = (showImproved ? improvedResume : generatedResume) ?? '';
+                saveDocument('resume', text);
+              }}
+              disabled={isSavingDocument}
+              startIcon={isSavingDocument ? <CircularProgress size={16} /> : undefined}
+            >
+              {isSavingDocument ? 'Saving...' : 'Save'}
+            </Button>
+          )}
           <Button
             onClick={() => {
               setResumeDialogOpen(false);
@@ -1249,6 +1355,15 @@ const JobDetailDialog = ({
               }}
             >
               Copy
+            </Button>
+          )}
+          {onSaveDocument && generatedCoverLetter && (
+            <Button
+              onClick={() => saveDocument('cover_letter', generatedCoverLetter)}
+              disabled={isSavingDocument}
+              startIcon={isSavingDocument ? <CircularProgress size={16} /> : undefined}
+            >
+              {isSavingDocument ? 'Saving...' : 'Save'}
             </Button>
           )}
           <Button
@@ -1367,6 +1482,26 @@ const JobDetailDialog = ({
         <DialogActions>
           <Button onClick={() => setPendingDeleteFollowUp(null)}>Cancel</Button>
           <Button color="error" variant="contained" onClick={confirmDeleteFollowUp}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pendingDeleteDocument)}
+        onClose={() => setPendingDeleteDocument(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Delete saved draft?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            <strong>{pendingDeleteDocument?.doc_title}</strong> will be permanently removed.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDeleteDocument(null)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={confirmDeleteDocument}>
             Delete
           </Button>
         </DialogActions>

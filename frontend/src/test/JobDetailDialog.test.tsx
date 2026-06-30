@@ -829,4 +829,153 @@ describe('JobDetailDialog', () => {
       await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(IMPROVED));
     });
   });
+
+  describe('Saved documents', () => {
+    const mockOnSaveDocument = jest.fn();
+    const mockOnDeleteDocument = jest.fn();
+    const savedDocuments = [
+      {
+        document_id: 'doc-1',
+        user_id: 'user-1',
+        job_id: '123',
+        doc_type: 'resume' as const,
+        doc_title: 'Resume - Software Engineer at Acme Corp',
+        content: 'Some content',
+        doc_version: 1,
+        created_at: '2026-06-20T00:00:00Z',
+      },
+    ];
+
+    beforeEach(() => {
+      mockOnSaveDocument.mockReset();
+      mockOnDeleteDocument.mockReset();
+      mockOnSaveDocument.mockResolvedValue(undefined);
+      mockOnDeleteDocument.mockResolvedValue(undefined);
+    });
+
+    it('does not show a Save button in the resume dialog when onSaveDocument is not provided', async () => {
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          onGenerateResume={jest.fn().mockResolvedValue('# Resume draft')}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await screen.findByText('Generated Resume');
+      expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
+    });
+
+    it('saves the generated resume with an auto-generated title', async () => {
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          onGenerateResume={jest.fn().mockResolvedValue('# Resume draft')}
+          onSaveDocument={mockOnSaveDocument}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await screen.findByText('Generated Resume');
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(mockOnSaveDocument).toHaveBeenCalledWith({
+        doc_type: 'resume',
+        doc_title: 'Resume - Software Engineer at Acme Corp',
+        content: '# Resume draft',
+      });
+    });
+
+    it('saves the generated cover letter with an auto-generated title', async () => {
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          onGenerateCoverLetter={jest.fn().mockResolvedValue('Dear hiring manager...')}
+          onSaveDocument={mockOnSaveDocument}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /^cover letter$/i }));
+      await screen.findByText('Generated Cover Letter');
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(mockOnSaveDocument).toHaveBeenCalledWith({
+        doc_type: 'cover_letter',
+        doc_title: 'Cover Letter - Software Engineer at Acme Corp',
+        content: 'Dear hiring manager...',
+      });
+    });
+
+    it('shows an empty state when there are no saved drafts', () => {
+      renderDialog();
+      expect(screen.getByText('Saved Drafts')).toBeInTheDocument();
+      expect(screen.getByText('No saved drafts yet.')).toBeInTheDocument();
+    });
+
+    it('renders saved drafts with version and date', () => {
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          savedDocuments={savedDocuments}
+        />
+      );
+      expect(screen.getByText('Resume - Software Engineer at Acme Corp')).toBeInTheDocument();
+      expect(screen.getByText(/v1/)).toBeInTheDocument();
+    });
+
+    it('asks for confirmation before deleting a saved draft', async () => {
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          savedDocuments={savedDocuments}
+          onDeleteDocument={mockOnDeleteDocument}
+        />
+      );
+      await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
+      expect(screen.getByText(/delete saved draft/i)).toBeInTheDocument();
+      expect(mockOnDeleteDocument).not.toHaveBeenCalled();
+    });
+
+    it('calls onDeleteDocument after confirming deletion', async () => {
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          savedDocuments={savedDocuments}
+          onDeleteDocument={mockOnDeleteDocument}
+        />
+      );
+      await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
+      const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
+      await userEvent.click(deleteButtons[deleteButtons.length - 1]);
+
+      expect(mockOnDeleteDocument).toHaveBeenCalledWith('doc-1');
+    });
+  });
 });

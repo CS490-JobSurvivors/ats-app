@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.main import app
+from app.models.document import Document
 from app.models.followup import FollowUp
 from app.models.interviews import Interview
 from app.models.job_stage_history import JobStageHistory
@@ -16,6 +17,7 @@ jobs: list[Job] = []
 stage_histories: list[JobStageHistory] = []
 followups: list[FollowUp] = []
 interviews: list[Interview] = []
+documents: list[Document] = []
 active_user_id = ""
 
 
@@ -28,7 +30,7 @@ class FakeScalarResult:
 
 
 class FakeDb:
-    def add(self, obj: Job | JobStageHistory | Interview | FollowUp):
+    def add(self, obj: Job | JobStageHistory | Interview | FollowUp | Document):
         if isinstance(obj, JobStageHistory):
             if obj.job_history_id is None:
                 obj.job_history_id = uuid4()
@@ -47,6 +49,13 @@ class FakeDb:
             if obj.created_at is None:
                 obj.created_at = datetime.now(UTC)
             followups.append(obj)
+            return
+        if isinstance(obj, Document):
+            if obj.document_id is None:
+                obj.document_id = uuid4()
+            if obj.created_at is None:
+                obj.created_at = datetime.now(UTC)
+            documents.append(obj)
             return
         if obj.job_id is None:
             obj.job_id = uuid4()
@@ -97,6 +106,18 @@ class FakeDb:
                 sorted(results, key=lambda interview: interview.scheduled_at_date)
             )
 
+        if entity is Document:
+            job_id = str(params["job_id_1"])
+            user_id = str(params["user_id_1"])
+            results = [
+                document
+                for document in documents
+                if str(document.job_id) == job_id and str(document.user_id) == user_id
+            ]
+            return FakeScalarResult(
+                sorted(results, key=lambda document: document.created_at, reverse=True)
+            )
+
         return FakeScalarResult([])
 
     def scalar(self, query):
@@ -142,6 +163,27 @@ class FakeDb:
 
             return None
 
+        if entity is Document:
+            if "document_id_1" not in params:
+                versions = [
+                    document.doc_version
+                    for document in documents
+                    if str(document.job_id) == str(params["job_id_1"])
+                    and str(document.user_id) == str(params["user_id_1"])
+                    and document.doc_type == params["doc_type_1"]
+                ]
+                return max(versions) if versions else None
+
+            for document in documents:
+                if (
+                    str(document.document_id) == str(params["document_id_1"])
+                    and str(document.job_id) == str(params["job_id_1"])
+                    and str(document.user_id) == str(params["user_id_1"])
+                ):
+                    return document
+
+            return None
+
         for job in jobs:
             if str(job.job_id) == str(params["job_id_1"]) and str(job.job_poster_id) == str(
                 params["job_poster_id_1"]
@@ -150,12 +192,15 @@ class FakeDb:
 
         return None
 
-    def delete(self, obj: Job | JobStageHistory | FollowUp):
+    def delete(self, obj: Job | JobStageHistory | FollowUp | Document):
         if isinstance(obj, JobStageHistory):
             stage_histories.remove(obj)
             return
         if isinstance(obj, FollowUp):
             followups.remove(obj)
+            return
+        if isinstance(obj, Document):
+            documents.remove(obj)
             return
 
         jobs.remove(obj)
@@ -192,6 +237,7 @@ def setup_function():
     stage_histories.clear()
     followups.clear()
     interviews.clear()
+    documents.clear()
     app.dependency_overrides[get_db] = override_db
 
 
@@ -869,6 +915,120 @@ def test_delete_job_followup_only_deletes_owned_followup():
     set_authenticated_user(owner_id)
     delete_response = client.delete(f"/jobs/{job_id}/followups/{followup_id}")
     list_response = client.get(f"/jobs/{job_id}/followups")
+
+    assert denied_response.status_code == 404
+    assert delete_response.status_code == 204
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+
+def test_create_job_document_starts_at_version_one():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={
+            "doc_type": "resume",
+            "doc_title": "Resume - Software Engineer at Acme",
+            "content": "## Resume\nTailored content.",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["doc_type"] == "resume"
+    assert body["doc_title"] == "Resume - Software Engineer at Acme"
+    assert body["content"] == "## Resume\nTailored content."
+    assert body["doc_version"] == 1
+    assert body["job_id"] == job_id
+    assert body["user_id"] == user_id
+
+
+def test_saving_same_doc_type_increments_version():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    first = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume v1", "content": "First draft."},
+    )
+    second = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume v2", "content": "Second draft."},
+    )
+
+    assert first.json()["doc_version"] == 1
+    assert second.json()["doc_version"] == 2
+
+
+def test_different_doc_types_version_independently():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+
+    resume_response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume", "content": "Resume draft."},
+    )
+    cover_letter_response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={
+            "doc_type": "cover_letter",
+            "doc_title": "Cover Letter",
+            "content": "Cover letter draft.",
+        },
+    )
+
+    assert resume_response.json()["doc_version"] == 1
+    assert cover_letter_response.json()["doc_version"] == 1
+
+
+def test_list_job_documents_returns_only_that_jobs_documents():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    first_job = client.post("/jobs", json=create_job_payload("First Co")).json()["job_id"]
+    second_job = client.post("/jobs", json=create_job_payload("Second Co")).json()["job_id"]
+
+    client.post(
+        f"/jobs/{first_job}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume for First Co", "content": "Draft."},
+    )
+    client.post(
+        f"/jobs/{second_job}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume for Second Co", "content": "Draft."},
+    )
+
+    response = client.get(f"/jobs/{first_job}/documents")
+
+    assert response.status_code == 200
+    titles = [document["doc_title"] for document in response.json()]
+    assert titles == ["Resume for First Co"]
+
+
+def test_delete_job_document_only_deletes_owned_document():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    document_response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume", "content": "Draft."},
+    )
+    document_id = document_response.json()["document_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.delete(f"/jobs/{job_id}/documents/{document_id}")
+
+    set_authenticated_user(owner_id)
+    delete_response = client.delete(f"/jobs/{job_id}/documents/{document_id}")
+    list_response = client.get(f"/jobs/{job_id}/documents")
 
     assert denied_response.status_code == 404
     assert delete_response.status_code == 204

@@ -27,6 +27,7 @@ import {
   listJobInterviews,
   getJobMetrics,
   listJobFollowUps,
+  listJobDocuments,
   createJob,
   updateJob,
   deleteJob,
@@ -36,10 +37,14 @@ import {
   createJobFollowUp,
   updateJobFollowUp,
   deleteJobFollowUp,
+  createJobDocument,
+  deleteJobDocument,
   InterviewPayload,
   InterviewRecord,
   FollowUpPayload,
   FollowUpRecord,
+  DocumentPayload,
+  DocumentRecord,
   JobActivityEvent,
   JobMetrics,
   JobRecord,
@@ -116,6 +121,8 @@ const DashboardPage = () => {
   const [isInterviewsLoading, setIsInterviewsLoading] = useState(false);
   const [selectedJobFollowUps, setSelectedJobFollowUps] = useState<FollowUpRecord[]>([]);
   const [isFollowUpsLoading, setIsFollowUpsLoading] = useState(false);
+  const [selectedJobDocuments, setSelectedJobDocuments] = useState<DocumentRecord[]>([]);
+  const [isDocumentsLoading, setIsDocumentsLoading] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('last_activity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -279,16 +286,34 @@ const DashboardPage = () => {
     }
   };
 
+  const loadJobDocuments = async (jobId: string) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setIsDocumentsLoading(true);
+    try {
+      const documents = await listJobDocuments(token, jobId);
+      setSelectedJobDocuments(documents);
+    } catch {
+      setSelectedJobDocuments([]);
+    } finally {
+      setIsDocumentsLoading(false);
+    }
+  };
+
   const openDetailDialog = async (job: JobRecord) => {
     setSelectedJob(job);
     setSelectedJobActivity([]);
     setSelectedJobInterviews([]);
     setSelectedJobFollowUps([]);
+    setSelectedJobDocuments([]);
     setDetailOpen(true);
     await Promise.all([
       loadJobActivity(job.job_id),
       loadJobInterviews(job.job_id),
       loadJobFollowUps(job.job_id),
+      loadJobDocuments(job.job_id),
     ]);
   };
 
@@ -396,6 +421,37 @@ const DashboardPage = () => {
       ]);
     } catch {
       setErrorMessage('Unable to delete that follow-up. Please try again.');
+    }
+  };
+
+  const handleSaveDocument = async (payload: DocumentPayload) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      await createJobDocument(token, selectedJob.job_id, payload);
+      await loadJobDocuments(selectedJob.job_id);
+    } catch {
+      setErrorMessage('Unable to save that document. Please try again.');
+      throw new Error('Unable to save document.');
+    }
+  };
+
+  const handleDeleteDocument = async (documentId: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      await deleteJobDocument(token, selectedJob.job_id, documentId);
+      await loadJobDocuments(selectedJob.job_id);
+    } catch {
+      setErrorMessage('Unable to delete that document. Please try again.');
     }
   };
 
@@ -664,6 +720,10 @@ const DashboardPage = () => {
         onDeleteFollowUp={handleDeleteFollowUp}
         followUps={selectedJobFollowUps}
         isFollowUpsLoading={isFollowUpsLoading}
+        onSaveDocument={handleSaveDocument}
+        onDeleteDocument={handleDeleteDocument}
+        savedDocuments={selectedJobDocuments}
+        isSavedDocumentsLoading={isDocumentsLoading}
         onStageChange={async (newStage) => {
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;

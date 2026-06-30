@@ -10,6 +10,7 @@ import {
   listJobInterviews,
   getJobMetrics,
   listJobFollowUps,
+  listJobDocuments,
   createJob,
   updateJob,
   deleteJob,
@@ -19,7 +20,10 @@ import {
   createJobFollowUp,
   updateJobFollowUp,
   deleteJobFollowUp,
+  createJobDocument,
+  deleteJobDocument,
 } from '../api/jobs';
+import { generateResume } from '../api/resume';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -29,12 +33,19 @@ jest.mock('../utils/supabaseClient', () => ({
   },
 }));
 
+jest.mock('../api/resume', () => ({
+  generateResume: jest.fn(),
+  improveResume: jest.fn(),
+  generateCoverLetter: jest.fn(),
+}));
+
 jest.mock('../api/jobs', () => ({
   listJobs: jest.fn(),
   listJobActivity: jest.fn(),
   listJobInterviews: jest.fn(),
   getJobMetrics: jest.fn(),
   listJobFollowUps: jest.fn(),
+  listJobDocuments: jest.fn(),
   createJob: jest.fn(),
   updateJob: jest.fn(),
   deleteJob: jest.fn(),
@@ -44,6 +55,8 @@ jest.mock('../api/jobs', () => ({
   createJobFollowUp: jest.fn(),
   updateJobFollowUp: jest.fn(),
   deleteJobFollowUp: jest.fn(),
+  createJobDocument: jest.fn(),
+  deleteJobDocument: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
@@ -52,6 +65,7 @@ const mockListJobActivity = listJobActivity as jest.Mock;
 const mockListJobInterviews = listJobInterviews as jest.Mock;
 const mockGetJobMetrics = getJobMetrics as jest.Mock;
 const mockListJobFollowUps = listJobFollowUps as jest.Mock;
+const mockListJobDocuments = listJobDocuments as jest.Mock;
 const mockCreateJob = createJob as jest.Mock;
 const mockUpdateJob = updateJob as jest.Mock;
 const mockDeleteJob = deleteJob as jest.Mock;
@@ -61,6 +75,9 @@ const mockUpdateJobInterview = updateJobInterview as jest.Mock;
 const mockCreateJobFollowUp = createJobFollowUp as jest.Mock;
 const mockUpdateJobFollowUp = updateJobFollowUp as jest.Mock;
 const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
+const mockCreateJobDocument = createJobDocument as jest.Mock;
+const mockDeleteJobDocument = deleteJobDocument as jest.Mock;
+const mockGenerateResume = generateResume as jest.Mock;
 
 const zeroMetrics = {
   total_applications: 0,
@@ -95,6 +112,7 @@ beforeEach(() => {
   mockListJobInterviews.mockResolvedValue([]);
   mockGetJobMetrics.mockResolvedValue(zeroMetrics);
   mockListJobFollowUps.mockResolvedValue([]);
+  mockListJobDocuments.mockResolvedValue([]);
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
   mockDeleteJob.mockReset();
@@ -104,6 +122,9 @@ beforeEach(() => {
   mockCreateJobFollowUp.mockReset();
   mockUpdateJobFollowUp.mockReset();
   mockDeleteJobFollowUp.mockReset();
+  mockCreateJobDocument.mockReset();
+  mockDeleteJobDocument.mockReset();
+  mockGenerateResume.mockReset();
 });
 
 describe('DashboardPage', () => {
@@ -520,6 +541,80 @@ describe('DashboardPage', () => {
       expect(mockDeleteJobFollowUp).toHaveBeenCalledWith('test-token', 'job-1', 'followup-1');
     });
     expect(await screen.findByText('No follow-ups scheduled.')).toBeInTheDocument();
+  });
+
+  it('saves a generated resume as a document from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockGenerateResume.mockResolvedValue({ resume: '# Resume draft' });
+    mockListJobDocuments.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        document_id: 'doc-1',
+        user_id: 'user-1',
+        job_id: 'job-1',
+        doc_type: 'resume',
+        doc_title: 'Resume - Software Engineer at Test Co',
+        content: '# Resume draft',
+        doc_version: 1,
+        created_at: '2026-06-20T00:00:00Z',
+      },
+    ]);
+    mockCreateJobDocument.mockResolvedValue({
+      document_id: 'doc-1',
+      user_id: 'user-1',
+      job_id: 'job-1',
+      doc_type: 'resume',
+      doc_title: 'Resume - Software Engineer at Test Co',
+      content: '# Resume draft',
+      doc_version: 1,
+      created_at: '2026-06-20T00:00:00Z',
+    });
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('No saved drafts yet.')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+    await screen.findByText('Generated Resume');
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockCreateJobDocument).toHaveBeenCalledWith('test-token', 'job-1', {
+        doc_type: 'resume',
+        doc_title: 'Resume - Software Engineer at Test Co',
+        content: '# Resume draft',
+      });
+    });
+    expect(await screen.findByText('Resume - Software Engineer at Test Co')).toBeInTheDocument();
+  });
+
+  it('deletes a saved document from job detail', async () => {
+    mockListJobs.mockResolvedValue([sampleJob]);
+    mockListJobDocuments
+      .mockResolvedValueOnce([
+        {
+          document_id: 'doc-1',
+          user_id: 'user-1',
+          job_id: 'job-1',
+          doc_type: 'resume',
+          doc_title: 'Resume - Software Engineer at Test Co',
+          content: '# Resume draft',
+          doc_version: 1,
+          created_at: '2026-06-20T00:00:00Z',
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    mockDeleteJobDocument.mockResolvedValue(undefined);
+    render(<DashboardPage />);
+    await userEvent.click(await screen.findByText('Software Engineer'));
+    expect(await screen.findByText('Resume - Software Engineer at Test Co')).toBeInTheDocument();
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
+    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockDeleteJobDocument).toHaveBeenCalledWith('test-token', 'job-1', 'doc-1');
+    });
+    expect(await screen.findByText('No saved drafts yet.')).toBeInTheDocument();
   });
 
   it('deletes a stage history event from the activity timeline', async () => {

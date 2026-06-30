@@ -3,14 +3,16 @@ from typing import cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.document import Document
 from app.models.followup import FollowUp
 from app.models.interviews import Interview
 from app.models.job_stage_history import JobStageHistory
 from app.models.jobs import Job
+from app.schemas.document import DocumentCreate, DocumentRead
 from app.schemas.jobs import (
     ActivityEventType,
     FollowUpCreate,
@@ -112,6 +114,27 @@ def get_owned_followup_or_404(
         )
 
     return followup
+
+
+def get_owned_document_or_404(
+    job_id: UUID, document_id: UUID, owner_id: UUID, db: Session
+) -> Document:
+    get_owned_job_or_404(job_id, owner_id, db)
+    document = db.scalar(
+        select(Document).where(
+            Document.document_id == document_id,
+            Document.job_id == job_id,
+            Document.user_id == owner_id,
+        )
+    )
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    return document
 
 
 def as_datetime(value: date | datetime) -> datetime:
@@ -492,4 +515,70 @@ def delete_job_followup(
     db_followup = get_owned_followup_or_404(job_id, followup_id, owner_id, db)
 
     db.delete(db_followup)
+    db.commit()
+
+
+@router.get("/{job_id}/documents", response_model=list[DocumentRead])
+def list_job_documents(
+    job_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_job_or_404(job_id, owner_id, db)
+
+    return db.scalars(
+        select(Document)
+        .where(Document.job_id == job_id, Document.user_id == owner_id)
+        .order_by(Document.created_at.desc())
+    ).all()
+
+
+@router.post(
+    "/{job_id}/documents",
+    response_model=DocumentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_job_document(
+    job_id: UUID,
+    document: DocumentCreate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_job_or_404(job_id, owner_id, db)
+
+    latest_version = db.scalar(
+        select(func.max(Document.doc_version)).where(
+            Document.job_id == job_id,
+            Document.user_id == owner_id,
+            Document.doc_type == document.doc_type,
+        )
+    )
+
+    db_document = Document(
+        **document.model_dump(),
+        job_id=job_id,
+        user_id=owner_id,
+        doc_version=(latest_version or 0) + 1,
+    )
+
+    db.add(db_document)
+    db.commit()
+    db.refresh(db_document)
+
+    return db_document
+
+
+@router.delete("/{job_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_job_document(
+    job_id: UUID,
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_document_or_404(job_id, document_id, owner_id, db)
+
+    db.delete(db_document)
     db.commit()
