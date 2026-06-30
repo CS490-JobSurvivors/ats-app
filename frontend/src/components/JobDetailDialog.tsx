@@ -224,6 +224,7 @@ const JobDetailDialog = ({
   const [coverLetterError, setCoverLetterError] = useState('');
   const [isSavingDocument, setIsSavingDocument] = useState(false);
   const [pendingDeleteDocument, setPendingDeleteDocument] = useState<DocumentRecord | null>(null);
+  const [viewingDocument, setViewingDocument] = useState<DocumentRecord | null>(null);
 
   useEffect(() => {
     if (job) {
@@ -862,15 +863,20 @@ const JobDetailDialog = ({
                             {formatActivityDate(document.created_at)}
                           </Typography>
                         </Box>
-                        {onDeleteDocument && (
-                          <Button
-                            size="small"
-                            color="error"
-                            onClick={() => setPendingDeleteDocument(document)}
-                          >
-                            Delete
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Button size="small" onClick={() => setViewingDocument(document)}>
+                            View
                           </Button>
-                        )}
+                          {onDeleteDocument && (
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => setPendingDeleteDocument(document)}
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </Box>
                       </Box>
                     </Box>
                   ))}
@@ -1504,6 +1510,45 @@ const JobDetailDialog = ({
           <Button color="error" variant="contained" onClick={confirmDeleteDocument}>
             Delete
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(viewingDocument)}
+        onClose={() => setViewingDocument(null)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle
+          sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+        >
+          <Box>
+            {viewingDocument?.doc_title}
+            <Typography variant="caption" color="text.secondary" display="block">
+              v{viewingDocument?.doc_version} &middot;{' '}
+              {viewingDocument ? formatActivityDate(viewingDocument.created_at) : ''}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setViewingDocument(null)}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            multiline
+            fullWidth
+            value={viewingDocument?.content ?? ''}
+            InputProps={{ readOnly: true }}
+            minRows={12}
+            maxRows={24}
+            sx={{ fontFamily: 'monospace' }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => navigator.clipboard.writeText(viewingDocument?.content ?? '')}>
+            Copy
+          </Button>
+          <Button onClick={() => setViewingDocument(null)}>Close</Button>
         </DialogActions>
       </Dialog>
     </>
