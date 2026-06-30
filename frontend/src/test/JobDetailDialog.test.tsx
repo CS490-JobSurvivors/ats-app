@@ -783,7 +783,8 @@ describe('JobDetailDialog', () => {
 
     it('does not show Improve Draft button when onImproveResume is not provided', async () => {
       renderWithResume(jest.fn().mockResolvedValue(GENERATED));
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      fireEvent.click(screen.getByRole('button', { name: /generate/i }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /resume/i }));
       await screen.findByText('Generated Resume');
       expect(screen.queryByRole('button', { name: /improve draft/i })).not.toBeInTheDocument();
     });
@@ -793,7 +794,8 @@ describe('JobDetailDialog', () => {
         jest.fn().mockResolvedValue(GENERATED),
         jest.fn().mockResolvedValue(IMPROVED)
       );
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      fireEvent.click(screen.getByRole('button', { name: /generate/i }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /resume/i }));
       await screen.findByText('Generated Resume');
       expect(screen.getByRole('button', { name: /improve draft/i })).toBeInTheDocument();
     });
@@ -802,7 +804,8 @@ describe('JobDetailDialog', () => {
       const mockImprove = jest.fn().mockResolvedValue(IMPROVED);
       renderWithResume(jest.fn().mockResolvedValue(GENERATED), mockImprove);
 
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      fireEvent.click(screen.getByRole('button', { name: /generate/i }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /resume/i }));
       await screen.findByText('Generated Resume');
       fireEvent.click(screen.getByRole('button', { name: /improve draft/i }));
 
@@ -817,7 +820,8 @@ describe('JobDetailDialog', () => {
       const mockImprove = jest.fn().mockResolvedValue(IMPROVED);
       renderWithResume(jest.fn().mockResolvedValue(GENERATED), mockImprove);
 
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      fireEvent.click(screen.getByRole('button', { name: /generate/i }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: /resume/i }));
       await screen.findByText('Generated Resume');
       fireEvent.click(screen.getByRole('button', { name: /improve draft/i }));
       await screen.findByRole('button', { name: /^original$/i });

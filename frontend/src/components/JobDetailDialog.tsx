@@ -182,6 +182,7 @@ const JobDetailDialog = ({
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
   const [kebabAnchor, setKebabAnchor] = useState<null | HTMLElement>(null);
+  const [generateAnchor, setGenerateAnchor] = useState<null | HTMLElement>(null);
   const [interviewFormOpen, setInterviewFormOpen] = useState(false);
   const [editingInterviewId, setEditingInterviewId] = useState<string | undefined>();
   const [interviewForm, setInterviewForm] = useState(emptyInterviewForm);
@@ -393,7 +394,7 @@ const JobDetailDialog = ({
 
   return (
     <>
-      <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+      <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm" PaperProps={{ sx: { maxHeight: '85vh' } }}>
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">{isEditing ? 'Edit Job' : job.job_title}</Typography>
@@ -410,7 +411,7 @@ const JobDetailDialog = ({
           )}
         </DialogTitle>
 
-        <DialogContent>
+        <DialogContent sx={{ overflowY: 'auto' }}>
           <Divider sx={{ mb: 2 }} />
 
           {!isEditing && (
@@ -974,7 +975,7 @@ const JobDetailDialog = ({
         <DialogActions>
           <IconButton
             onClick={(e) => setKebabAnchor(e.currentTarget)}
-            sx={{ mr: 'auto' }}
+            sx={{ mr: 'auto', color: 'text.primary' }}
             aria-label="more actions"
           >
             <MoreVertIcon />
@@ -985,21 +986,30 @@ const JobDetailDialog = ({
             onClose={() => setKebabAnchor(null)}
           >
             <MenuItem
-              onClick={() => { setKebabAnchor(null); onDelete(); }}
+              onClick={() => {
+                setKebabAnchor(null);
+                onDelete();
+              }}
               sx={{ color: 'error.main' }}
             >
               Delete
             </MenuItem>
             {job.job_stage !== 'Archived' && (
               <MenuItem
-                onClick={() => { setKebabAnchor(null); handleStageSelect('Archived'); }}
+                onClick={() => {
+                  setKebabAnchor(null);
+                  handleStageSelect('Archived');
+                }}
               >
                 Archive
               </MenuItem>
             )}
             {canRestoreFromArchive && (
               <MenuItem
-                onClick={() => { setKebabAnchor(null); setRestoreConfirmOpen(true); }}
+                onClick={() => {
+                  setKebabAnchor(null);
+                  setRestoreConfirmOpen(true);
+                }}
               >
                 Restore
               </MenuItem>
@@ -1016,52 +1026,70 @@ const JobDetailDialog = ({
             </>
           ) : (
             <>
-              {onGenerateResume && (
-                <Button
-                  onClick={() => {
-                    setResumeError('');
-                    setGeneratedResume(null);
-                    setImprovedResume(null);
-                    setShowImproved(false);
-                    setResumeDialogOpen(true);
-                    setIsGenerating(true);
-                    onGenerateResume()
-                      .then((text) => setGeneratedResume(text))
-                      .catch(() =>
-                        setResumeError('Failed to generate resume. Please try again.')
-                      )
-                      .finally(() => setIsGenerating(false));
-                  }}
-                  disabled={isGenerating}
-                >
-                  Generate Resume
-                </Button>
+              {(onGenerateResume || onGenerateCoverLetter) && (
+                <>
+                  <Button
+                    onClick={(e) => setGenerateAnchor(e.currentTarget)}
+                    disabled={isGenerating || isGeneratingCoverLetter}
+                    endIcon={<span>▾</span>}
+                  >
+                    {isGenerating || isGeneratingCoverLetter ? 'Generating...' : 'Generate'}
+                  </Button>
+                  <Menu
+                    anchorEl={generateAnchor}
+                    open={Boolean(generateAnchor)}
+                    onClose={() => setGenerateAnchor(null)}
+                  >
+                    {onGenerateResume && (
+                      <MenuItem
+                        onClick={() => {
+                          setGenerateAnchor(null);
+                          setResumeError('');
+                          setGeneratedResume(null);
+                          setImprovedResume(null);
+                          setShowImproved(false);
+                          setResumeDialogOpen(true);
+                          setIsGenerating(true);
+                          onGenerateResume()
+                            .then((text) => setGeneratedResume(text))
+                            .catch(() =>
+                              setResumeError('Failed to generate resume. Please try again.')
+                            )
+                            .finally(() => setIsGenerating(false));
+                        }}
+                      >
+                        Resume
+                      </MenuItem>
+                    )}
+                    {onGenerateCoverLetter && (
+                      <MenuItem
+                        onClick={async () => {
+                          setGenerateAnchor(null);
+                          setCoverLetterError('');
+                          setGeneratedCoverLetter(null);
+                          setCoverLetterDialogOpen(true);
+                          setIsGeneratingCoverLetter(true);
+                          try {
+                            const text = await onGenerateCoverLetter();
+                            setGeneratedCoverLetter(text);
+                          } catch {
+                            setCoverLetterError(
+                              'Failed to generate cover letter. Please try again.'
+                            );
+                          } finally {
+                            setIsGeneratingCoverLetter(false);
+                          }
+                        }}
+                      >
+                        Cover Letter
+                      </MenuItem>
+                    )}
+                  </Menu>
+                </>
               )}
-              {onGenerateCoverLetter && (
-                <Button
-                  onClick={async () => {
-                    setCoverLetterError('');
-                    setGeneratedCoverLetter(null);
-                    setCoverLetterDialogOpen(true);
-                    setIsGeneratingCoverLetter(true);
-                    try {
-                      const text = await onGenerateCoverLetter();
-                      setGeneratedCoverLetter(text);
-                    } catch {
-                      setCoverLetterError('Failed to generate cover letter. Please try again.');
-                    } finally {
-                      setIsGeneratingCoverLetter(false);
-                    }
-                  }}
-                  disabled={isGeneratingCoverLetter}
-                  startIcon={isGeneratingCoverLetter ? <CircularProgress size={16} /> : undefined}
-                >
-                  {isGeneratingCoverLetter ? 'Generating...' : 'Cover Letter'}
-                </Button>
-              )}
-              <Button onClick={onClose}>Close</Button>
-              <Button onClick={() => setIsEditing(true)} variant="contained">
-                Edit
+              <Button onClick={() => setIsEditing(true)}>Edit</Button>
+              <Button onClick={onClose} variant="contained">
+                Close
               </Button>
             </>
           )}
