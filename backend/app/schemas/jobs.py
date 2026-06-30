@@ -15,6 +15,7 @@ class JobBase(BaseModel):
     application_link: str | None = None
     job_location: str | None = None
     deadline: date | None = None
+    recruiter_notes: str | None = None
     outcome_notes: str | None = None
     job_stage: JobStage = "Interested"
 
@@ -30,13 +31,13 @@ class JobUpdate(BaseModel):
     application_link: str | None = None
     job_location: str | None = None
     deadline: date | None = None
+    recruiter_notes: str | None = None
     outcome_notes: str | None = None
     job_stage: JobStage | None = None
 
 
 class JobRead(JobBase):
     model_config = ConfigDict(from_attributes=True)
-
     job_id: UUID
     job_poster_id: UUID
     updated_at: datetime
