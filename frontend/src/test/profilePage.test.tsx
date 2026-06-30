@@ -92,7 +92,9 @@ describe('ProfilePage', () => {
   test('renders the profile fields without account identity fields', () => {
     render(<ProfilePage />);
 
-    expect(screen.getByRole('heading', { name: /complete your profile/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: /complete your basic profile/i })
+    ).toBeInTheDocument();
     expect(screen.getByLabelText(/about/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/first name/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/last name/i)).toBeInTheDocument();

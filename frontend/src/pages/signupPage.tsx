@@ -102,6 +102,8 @@ const SignupPage = () => {
                 type="email"
                 placeholder="Enter Email"
                 label="Email"
+                name="email"
+                autoComplete="email"
                 onChange={(e) => {
                   setEmail(e.target.value.trim());
                 }}
@@ -112,6 +114,8 @@ const SignupPage = () => {
                 type={showPassword ? 'text' : 'password'}
                 placeholder="Enter Password"
                 label="Password"
+                name="password"
+                autoComplete="new-password"
                 onChange={(e) => {
                   setPassword(e.target.value);
                 }}
@@ -135,6 +139,8 @@ const SignupPage = () => {
                 type={showConfirmPassword ? 'text' : 'password'}
                 placeholder="Retype Password"
                 label="Confirm password"
+                name="confirm-password"
+                autoComplete="new-password"
                 onChange={(e) => {
                   setConfirmedPassword(e.target.value);
                 }}

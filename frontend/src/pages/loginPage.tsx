@@ -86,6 +86,8 @@ const LoginPage = () => {
                 placeholder="Enter Email"
                 onChange={(e) => setEmail(e.target.value.trim())}
                 label="Email"
+                name="email"
+                autoComplete="email"
               />
               <TextField
                 required
@@ -94,6 +96,8 @@ const LoginPage = () => {
                 placeholder="Enter Password"
                 onChange={(e) => setPassword(e.target.value)}
                 label="Password"
+                name="password"
+                autoComplete="current-password"
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">

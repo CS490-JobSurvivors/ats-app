@@ -36,7 +36,7 @@ describe('NavigationBar', () => {
   it('renders the brand name', () => {
     mockGetSession.mockResolvedValue({ data: { session: null } });
     renderNavBar();
-    expect(screen.getByText('JobSurvivors')).toBeInTheDocument();
+    expect(screen.getByText('Job Survivors')).toBeInTheDocument();
   });
 
   it('shows Login and Sign Up links when no session exists', async () => {

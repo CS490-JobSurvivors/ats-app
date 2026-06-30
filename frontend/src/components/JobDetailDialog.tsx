@@ -252,7 +252,9 @@ const JobDetailDialog = ({
     job.job_stage === 'Archived' &&
     !!latestActivityEvent?.can_delete &&
     getEventStage(latestActivityEvent) === 'Archived';
-  const restoreTargetStage = latestActivityEvent?.description?.split(' to ')[0];
+  const KNOWN_STAGES = ['Interested', 'Applied', 'Interview', 'Offer', 'Rejected', 'Archived'];
+  const parsedStage = latestActivityEvent?.description?.split(' to ')[0] ?? '';
+  const restoreTargetStage = KNOWN_STAGES.includes(parsedStage) ? parsedStage : undefined;
 
   const handleStageSelect = (selected: JobStage) => {
     if (selected === job.job_stage) return;

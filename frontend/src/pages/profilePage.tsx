@@ -291,10 +291,10 @@ function ProfilePage() {
   return (
     <Box sx={{ maxWidth: 900, mx: 'auto', px: 3, py: 5 }}>
       <Typography variant="h4" fontWeight={700} mb={0.5}>
-        Complete your profile
+        Complete your basic profile
       </Typography>
       <Typography variant="body1" color="text.secondary" mb={3}>
-        Fill in your details to finish setting up your account.
+        Fill in your basic details to finish setting up your account.
       </Typography>
 
       <Card sx={{ mb: 3 }}>

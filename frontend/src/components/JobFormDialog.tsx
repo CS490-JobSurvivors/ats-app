@@ -74,7 +74,7 @@ const JobFormDialog = ({ open, job, onClose, onSubmit }: JobFormDialogProps) => 
     setIsSubmitting(true);
     setErrorMessage('');
     try {
-      await onSubmit(form);
+      await onSubmit({ ...form, deadline: form.deadline || null });
     } catch {
       setErrorMessage('Unable to save job. Please try again.');
     } finally {
