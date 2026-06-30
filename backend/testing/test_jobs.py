@@ -192,9 +192,12 @@ class FakeDb:
 
         return None
 
-    def delete(self, obj: Job | JobStageHistory | FollowUp | Document):
+    def delete(self, obj: Job | JobStageHistory | Interview | FollowUp | Document):
         if isinstance(obj, JobStageHistory):
             stage_histories.remove(obj)
+            return
+        if isinstance(obj, Interview):
+            interviews.remove(obj)
             return
         if isinstance(obj, FollowUp):
             followups.remove(obj)
@@ -768,6 +771,51 @@ def test_update_job_interview_only_updates_owned_interview():
     assert body["scheduled_at_date"] == "2026-07-10"
     assert body["scheduled_at_time"] == "2026-07-10T18:00:00Z"
     assert body["interview_notes"] == "Meet hiring manager."
+
+
+def test_delete_job_interview_removes_owned_interview():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    interview_id = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Technical",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+        },
+    ).json()["interview_id"]
+
+    delete_response = client.delete(f"/jobs/{job_id}/interviews/{interview_id}")
+    list_response = client.get(f"/jobs/{job_id}/interviews")
+
+    assert delete_response.status_code == 204
+    assert list_response.status_code == 200
+    assert list_response.json() == []
+
+
+def test_delete_job_interview_rejects_non_owner():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    interview_id = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Phone screen",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+        },
+    ).json()["interview_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.delete(f"/jobs/{job_id}/interviews/{interview_id}")
+
+    set_authenticated_user(owner_id)
+    still_exists = client.get(f"/jobs/{job_id}/interviews")
+
+    assert denied_response.status_code == 404
+    assert len(still_exists.json()) == 1
 
 
 def test_create_job_with_recruiter_notes():

@@ -73,6 +73,7 @@ interface JobDetailDialogProps {
   followUps?: FollowUpRecord[];
   isFollowUpsLoading?: boolean;
   onDeleteFollowUp?: (followUpId: string) => Promise<void>;
+  onDeleteInterview?: (interviewId: string) => Promise<void>;
   activityEvents?: JobActivityEvent[];
   isActivityLoading?: boolean;
   onSaveDocument?: (payload: DocumentPayload) => Promise<void>;
@@ -179,6 +180,7 @@ const JobDetailDialog = ({
   followUps = [],
   isFollowUpsLoading = false,
   onDeleteFollowUp,
+  onDeleteInterview,
   activityEvents = [],
   isActivityLoading = false,
   onSaveDocument,
@@ -198,6 +200,9 @@ const JobDetailDialog = ({
   const [followUpForm, setFollowUpForm] = useState(emptyFollowUpForm);
   const [followUpError, setFollowUpError] = useState('');
   const [pendingDeleteFollowUp, setPendingDeleteFollowUp] = useState<FollowUpRecord | null>(null);
+  const [pendingDeleteInterview, setPendingDeleteInterview] = useState<InterviewRecord | null>(
+    null
+  );
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState({
     job_title: '',
@@ -396,6 +401,12 @@ const JobDetailDialog = ({
     if (!pendingDeleteFollowUp || !onDeleteFollowUp) return;
     await onDeleteFollowUp(pendingDeleteFollowUp.followup_id);
     setPendingDeleteFollowUp(null);
+  };
+
+  const confirmDeleteInterview = async () => {
+    if (!pendingDeleteInterview || !onDeleteInterview) return;
+    await onDeleteInterview(pendingDeleteInterview.interview_id);
+    setPendingDeleteInterview(null);
   };
 
   const handleSave = async () => {
@@ -808,11 +819,22 @@ const JobDetailDialog = ({
                             </Typography>
                           )}
                         </Box>
-                        {onSaveInterview && (
-                          <Button size="small" onClick={() => openInterviewForm(interview)}>
-                            Edit
-                          </Button>
-                        )}
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          {onSaveInterview && (
+                            <Button size="small" onClick={() => openInterviewForm(interview)}>
+                              Edit
+                            </Button>
+                          )}
+                          {onDeleteInterview && (
+                            <Button
+                              size="small"
+                              color="error"
+                              onClick={() => setPendingDeleteInterview(interview)}
+                            >
+                              Delete
+                            </Button>
+                          )}
+                        </Box>
                       </Box>
                     </Box>
                   ))}
@@ -1490,6 +1512,27 @@ const JobDetailDialog = ({
         <DialogActions>
           <Button onClick={() => setPendingDeleteFollowUp(null)}>Cancel</Button>
           <Button color="error" variant="contained" onClick={confirmDeleteFollowUp}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pendingDeleteInterview)}
+        onClose={() => setPendingDeleteInterview(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Delete interview?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            <strong>{pendingDeleteInterview?.round_type}</strong> interview will be permanently
+            removed.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDeleteInterview(null)}>Cancel</Button>
+          <Button color="error" variant="contained" onClick={confirmDeleteInterview}>
             Delete
           </Button>
         </DialogActions>
