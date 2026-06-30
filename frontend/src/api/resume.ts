@@ -37,7 +37,7 @@ export const generateCoverLetter = async (
   accessToken: string,
   jobId: string
 ): Promise<{ cover_letter: string }> => {
-  const response = await fetch(`${API_URL}/resume/cover-letter`, {
+  const response = await fetch(`${API_URL}/resume/cover-letter/generate`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,

@@ -207,6 +207,7 @@ const JobDetailDialog = ({
   const [isImproving, setIsImproving] = useState(false);
   const [showImproved, setShowImproved] = useState(false);
   const [resumeError, setResumeError] = useState('');
+  const [coverLetterDialogOpen, setCoverLetterDialogOpen] = useState(false);
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
   const [generatedCoverLetter, setGeneratedCoverLetter] = useState<string | null>(null);
   const [coverLetterError, setCoverLetterError] = useState('');
@@ -1005,6 +1006,8 @@ const JobDetailDialog = ({
                 <Button
                   onClick={async () => {
                     setCoverLetterError('');
+                    setGeneratedCoverLetter(null);
+                    setCoverLetterDialogOpen(true);
                     setIsGeneratingCoverLetter(true);
                     try {
                       const text = await onGenerateCoverLetter();
@@ -1188,38 +1191,58 @@ const JobDetailDialog = ({
         </DialogActions>
       </Dialog>
 
-      {coverLetterError && (
-        <Alert severity="error" onClose={() => setCoverLetterError('')} sx={{ mt: 1 }}>
-          {coverLetterError}
-        </Alert>
-      )}
-
       <Dialog
-        open={generatedCoverLetter !== null}
-        onClose={() => setGeneratedCoverLetter(null)}
+        open={coverLetterDialogOpen}
+        onClose={() => {
+          setCoverLetterDialogOpen(false);
+          setCoverLetterError('');
+        }}
         fullWidth
         maxWidth="md"
       >
         <DialogTitle>Generated Cover Letter</DialogTitle>
         <DialogContent>
-          <TextField
-            multiline
-            fullWidth
-            minRows={15}
-            value={generatedCoverLetter ?? ''}
-            onChange={(e) => setGeneratedCoverLetter(e.target.value)}
-            inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
-          />
+          {coverLetterError && (
+            <Alert severity="error" onClose={() => setCoverLetterError('')} sx={{ mb: 2 }}>
+              {coverLetterError}
+            </Alert>
+          )}
+          {isGeneratingCoverLetter && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="text.secondary">
+                Generating cover letter...
+              </Typography>
+            </Box>
+          )}
+          {generatedCoverLetter !== null && !isGeneratingCoverLetter && (
+            <TextField
+              multiline
+              fullWidth
+              minRows={15}
+              value={generatedCoverLetter}
+              onChange={(e) => setGeneratedCoverLetter(e.target.value)}
+              inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
+            />
+          )}
         </DialogContent>
         <DialogActions>
+          {generatedCoverLetter && (
+            <Button
+              onClick={() => {
+                if (generatedCoverLetter) navigator.clipboard.writeText(generatedCoverLetter);
+              }}
+            >
+              Copy
+            </Button>
+          )}
           <Button
             onClick={() => {
-              if (generatedCoverLetter) navigator.clipboard.writeText(generatedCoverLetter);
+              setCoverLetterDialogOpen(false);
+              setCoverLetterError('');
             }}
+            variant="contained"
           >
-            Copy
-          </Button>
-          <Button onClick={() => setGeneratedCoverLetter(null)} variant="contained">
             Close
           </Button>
         </DialogActions>
