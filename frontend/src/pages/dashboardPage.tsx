@@ -155,7 +155,7 @@ const DashboardPage = () => {
       const result = await getJobMetrics(token);
       setMetrics(result);
     } catch {
-      setMetrics(null);
+      // keep existing metrics visible on error
     }
   }, []);
 
@@ -248,7 +248,7 @@ const DashboardPage = () => {
       const activity = await listJobActivity(token, jobId);
       setSelectedJobActivity(activity);
     } catch {
-      setSelectedJobActivity([]);
+      // keep existing activity visible on error
     } finally {
       setIsActivityLoading(false);
     }
@@ -280,7 +280,7 @@ const DashboardPage = () => {
       const followUps = await listJobFollowUps(token, jobId);
       setSelectedJobFollowUps(followUps);
     } catch {
-      setSelectedJobFollowUps([]);
+      // keep existing follow-ups visible on error
     } finally {
       setIsFollowUpsLoading(false);
     }
