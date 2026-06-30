@@ -241,6 +241,7 @@ def improve_resume(
     return ImproveResponse(improved=message.content[0].text)
 
 
+
 @router.post("/cover-letter", response_model=CoverLetterResponse)
 def generate_cover_letter(
     body: ResumeRequest,

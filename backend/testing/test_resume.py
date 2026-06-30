@@ -327,7 +327,7 @@ def test_generate_cover_letter_returns_generated_text_on_happy_path(mock_anthrop
         GENERATED_COVER_LETTER
     )
 
-    response = client.post("/resume/cover-letter/generate", json={"job_id": str(job.job_id)})
+    response = client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
 
     assert response.status_code == 200
     assert response.json() == {"cover_letter": GENERATED_COVER_LETTER}
@@ -344,7 +344,7 @@ def test_generate_cover_letter_calls_anthropic_with_expected_model(mock_anthropi
         GENERATED_COVER_LETTER
     )
 
-    client.post("/resume/cover-letter/generate", json={"job_id": str(job.job_id)})
+    client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
 
     mock_anthropic.assert_called_once_with(api_key="test-key")
     _, kwargs = mock_anthropic.return_value.messages.create.call_args
@@ -366,7 +366,7 @@ def test_generate_cover_letter_user_message_includes_profile_and_job_data(
         GENERATED_COVER_LETTER
     )
 
-    client.post("/resume/cover-letter/generate", json={"job_id": str(job.job_id)})
+    client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
 
     _, kwargs = mock_anthropic.return_value.messages.create.call_args
     content = kwargs["messages"][0]["content"]
@@ -388,7 +388,7 @@ def test_generate_cover_letter_uses_system_parameter_with_guardrails(
         GENERATED_COVER_LETTER
     )
 
-    client.post("/resume/cover-letter/generate", json={"job_id": str(job.job_id)})
+    client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
 
     _, kwargs = mock_anthropic.return_value.messages.create.call_args
     assert "system" in kwargs
@@ -405,7 +405,7 @@ def test_generate_cover_letter_returns_404_when_profile_missing(mock_anthropic, 
     set_authenticated_user(user_id)
     job = add_job(user_id)
 
-    response = client.post("/resume/cover-letter/generate", json={"job_id": str(job.job_id)})
+    response = client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Profile not found"
@@ -419,7 +419,7 @@ def test_generate_cover_letter_returns_404_when_job_missing(mock_anthropic, monk
     set_authenticated_user(user_id)
     add_profile(user_id)
 
-    response = client.post("/resume/cover-letter/generate", json={"job_id": str(uuid4())})
+    response = client.post("/resume/cover-letter", json={"job_id": str(uuid4())})
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Job not found"
@@ -435,7 +435,7 @@ def test_generate_cover_letter_returns_404_for_another_users_job(mock_anthropic,
     job = add_job(owner_id)
     set_authenticated_user(other_id)
 
-    response = client.post("/resume/cover-letter/generate", json={"job_id": str(job.job_id)})
+    response = client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Job not found"
@@ -452,7 +452,7 @@ def test_generate_cover_letter_returns_503_when_api_key_not_configured(
     add_profile(user_id)
     job = add_job(user_id)
 
-    response = client.post("/resume/cover-letter/generate", json={"job_id": str(job.job_id)})
+    response = client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
 
     assert response.status_code == 503
     assert response.json()["detail"] == "ANTHROPIC_API_KEY is not configured"
@@ -463,7 +463,7 @@ def test_generate_cover_letter_rejects_invalid_job_id():
     user_id = str(uuid4())
     set_authenticated_user(user_id)
 
-    response = client.post("/resume/cover-letter/generate", json={"job_id": "not-a-uuid"})
+    response = client.post("/resume/cover-letter", json={"job_id": "not-a-uuid"})
 
     assert response.status_code == 422
 
