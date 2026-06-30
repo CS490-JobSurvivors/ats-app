@@ -10,6 +10,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -277,34 +278,47 @@ const ExperienceSection = ({
         <DialogTitle>{editingId ? 'Edit Experience' : 'Add Experience'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            {saveError && (
-              <Typography color="error" variant="body2">
-                {saveError}
-              </Typography>
-            )}
+            {saveError && <Alert severity="error">{saveError}</Alert>}
             <TextField
               label="Company"
               value={form.company}
-              onChange={(e) => setForm((f) => ({ ...f, company: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, company: e.target.value }));
+                if (fieldErrors.company) setFieldErrors((errs) => ({ ...errs, company: '' }));
+              }}
               error={!!fieldErrors.company}
               helperText={fieldErrors.company}
               fullWidth
               required
+              inputProps={{ maxLength: 100 }}
             />
             <TextField
               label="Title"
               value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, title: e.target.value }));
+                if (fieldErrors.title) setFieldErrors((errs) => ({ ...errs, title: '' }));
+              }}
               error={!!fieldErrors.title}
               helperText={fieldErrors.title}
               fullWidth
               required
+              inputProps={{ maxLength: 100 }}
             />
             <TextField
               label="Start Date"
               type="date"
               value={form.start_date}
-              onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))}
+              onChange={(e) => {
+                const val = e.target.value;
+                setForm((f) => ({ ...f, start_date: val }));
+                setFieldErrors((errs) => ({
+                  ...errs,
+                  start_date: val ? '' : errs.start_date,
+                  end_date:
+                    !form.is_current && form.end_date && form.end_date >= val ? '' : errs.end_date,
+                }));
+              }}
               error={!!fieldErrors.start_date}
               helperText={fieldErrors.start_date}
               fullWidth
@@ -327,7 +341,14 @@ const ExperienceSection = ({
                 label="End Date"
                 type="date"
                 value={form.end_date ?? ''}
-                onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value || null }))}
+                onChange={(e) => {
+                  const val = e.target.value || null;
+                  setForm((f) => ({ ...f, end_date: val }));
+                  if (fieldErrors.end_date) {
+                    const isValid = !val || !form.start_date || val >= form.start_date;
+                    if (isValid) setFieldErrors((errs) => ({ ...errs, end_date: '' }));
+                  }
+                }}
                 error={!!fieldErrors.end_date}
                 helperText={fieldErrors.end_date}
                 fullWidth
@@ -342,7 +363,9 @@ const ExperienceSection = ({
               }
               fullWidth
               multiline
-              rows={3}
+              rows={6}
+              inputProps={{ maxLength: 2000 }}
+              helperText={`${(form.experience_description ?? '').length}/2000`}
             />
           </Box>
         </DialogContent>

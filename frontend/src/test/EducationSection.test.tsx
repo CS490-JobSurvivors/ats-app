@@ -256,4 +256,63 @@ describe('EducationSection', () => {
     expect(mockCreateEducation).not.toHaveBeenCalled();
     expect(mockOnChange).not.toHaveBeenCalled();
   });
+
+  it('clears institution name error inline when user types after failed save', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.click(screen.getByText('Save'));
+    expect(await screen.findByText('Institution name is required.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/institution name/i), { target: { value: 'MIT' } });
+    expect(screen.queryByText('Institution name is required.')).not.toBeInTheDocument();
+    expect(screen.getByText('Degree is required.')).toBeInTheDocument();
+  });
+
+  it('clears degree error inline when user types after failed save', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.click(screen.getByText('Save'));
+    expect(await screen.findByText('Degree is required.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^degree/i), { target: { value: 'BS' } });
+    expect(screen.queryByText('Degree is required.')).not.toBeInTheDocument();
+  });
+
+  it('clears major error inline when user types after failed save', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.click(screen.getByText('Save'));
+    expect(await screen.findByText('Major is required.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/major/i), { target: { value: 'CS' } });
+    expect(screen.queryByText('Major is required.')).not.toBeInTheDocument();
+  });
+
+  it('clears end date error inline when end date becomes valid', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.change(screen.getByLabelText(/institution name/i), { target: { value: 'MIT' } });
+    fireEvent.change(screen.getByLabelText(/^degree/i), { target: { value: 'BS' } });
+    fireEvent.change(screen.getByLabelText(/major/i), { target: { value: 'CS' } });
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2023-01-01' } });
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: '2022-01-01' } });
+    fireEvent.click(screen.getByText('Save'));
+    expect(
+      await screen.findByText('End date cannot be earlier than start date.')
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: '2024-01-01' } });
+    expect(
+      screen.queryByText('End date cannot be earlier than start date.')
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows save error as an alert when createEducation fails', async () => {
+    mockCreateEducation.mockRejectedValueOnce(new Error('network error'));
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.change(screen.getByLabelText(/institution name/i), { target: { value: 'MIT' } });
+    fireEvent.change(screen.getByLabelText(/^degree/i), { target: { value: 'BS' } });
+    fireEvent.change(screen.getByLabelText(/major/i), { target: { value: 'CS' } });
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2023-01-01' } });
+    fireEvent.click(screen.getByText('Save'));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/failed to save education record/i);
+  });
 });

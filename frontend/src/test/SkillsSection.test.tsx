@@ -161,4 +161,29 @@ describe('SkillsSection', () => {
     ).toBeInTheDocument();
     expect(mockOnChange).not.toHaveBeenCalled();
   });
+
+  it('clears skill name error inline when user types after failed save', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(await screen.findByText('Skill name is required.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/skill name/i), { target: { value: 'Python' } });
+    expect(screen.queryByText('Skill name is required.')).not.toBeInTheDocument();
+  });
+
+  it('enforces maxLength of 100 on skill name field', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    expect(screen.getByLabelText(/skill name/i)).toHaveAttribute('maxlength', '100');
+  });
+
+  it('shows save error as an alert when createSkill fails with generic error', async () => {
+    mockCreateSkill.mockRejectedValueOnce(new Error('network error'));
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.change(screen.getByLabelText(/skill name/i), { target: { value: 'Python' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('network error');
+  });
 });

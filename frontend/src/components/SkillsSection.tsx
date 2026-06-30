@@ -272,19 +272,19 @@ const SkillsSection = ({ skills, accessToken, onSkillsChange }: SkillsSectionPro
         <DialogTitle>{editingId ? 'Edit Skill' : 'Add Skill'}</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
-            {saveError && (
-              <Typography color="error" variant="body2">
-                {saveError}
-              </Typography>
-            )}
+            {saveError && <Alert severity="error">{saveError}</Alert>}
             <TextField
               label="Skill Name"
               value={form.skill_name}
-              onChange={(e) => setForm((f) => ({ ...f, skill_name: e.target.value }))}
+              onChange={(e) => {
+                setForm((f) => ({ ...f, skill_name: e.target.value }));
+                if (fieldErrors.skill_name) setFieldErrors((errs) => ({ ...errs, skill_name: '' }));
+              }}
               error={!!fieldErrors.skill_name}
               helperText={fieldErrors.skill_name}
               fullWidth
               required
+              inputProps={{ maxLength: 100 }}
             />
             <TextField
               label="Category"
@@ -292,6 +292,7 @@ const SkillsSection = ({ skills, accessToken, onSkillsChange }: SkillsSectionPro
               onChange={(e) => setForm((f) => ({ ...f, category: e.target.value || null }))}
               fullWidth
               placeholder="e.g. Programming, Design, Tools"
+              inputProps={{ maxLength: 100 }}
             />
             <FormControl fullWidth>
               <InputLabel>Proficiency</InputLabel>

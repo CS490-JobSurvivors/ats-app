@@ -163,4 +163,65 @@ describe('ExperienceSection', () => {
     fireEvent.click(screen.getByLabelText(/i currently work here/i));
     expect(screen.queryByLabelText(/end date/i)).not.toBeInTheDocument();
   });
+
+  it('clears company error inline when user types after failed save', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(await screen.findByText('Company is required.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/company/i), { target: { value: 'A' } });
+    expect(screen.queryByText('Company is required.')).not.toBeInTheDocument();
+    expect(screen.getByText('Title is required.')).toBeInTheDocument();
+  });
+
+  it('clears title error inline when user types after failed save', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(await screen.findByText('Title is required.')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: 'Engineer' } });
+    expect(screen.queryByText('Title is required.')).not.toBeInTheDocument();
+  });
+
+  it('clears end date error inline when end date becomes valid', async () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.change(screen.getByLabelText(/company/i), { target: { value: 'Acme' } });
+    fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: 'Engineer' } });
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2023-01-01' } });
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: '2022-01-01' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(await screen.findByText(/end date cannot be earlier/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/end date/i), { target: { value: '2024-01-01' } });
+    expect(screen.queryByText(/end date cannot be earlier/i)).not.toBeInTheDocument();
+  });
+
+  it('shows save error as an alert when createExperience fails', async () => {
+    mockCreateExperience.mockRejectedValueOnce(new Error('network error'));
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    fireEvent.change(screen.getByLabelText(/company/i), { target: { value: 'Acme' } });
+    fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: 'Engineer' } });
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: '2023-01-01' } });
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/failed to save experience/i);
+  });
+
+  it('enforces maxLength of 100 on company and title fields', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    expect(screen.getByLabelText(/company/i)).toHaveAttribute('maxlength', '100');
+    expect(screen.getByLabelText(/^title/i)).toHaveAttribute('maxlength', '100');
+  });
+
+  it('enforces maxLength of 2000 on description and shows character count', () => {
+    renderSection();
+    fireEvent.click(screen.getByText('+ Add'));
+    const desc = screen.getByLabelText(/description/i);
+    expect(desc).toHaveAttribute('maxlength', '2000');
+    expect(screen.getByText('0/2000')).toBeInTheDocument();
+    fireEvent.change(desc, { target: { value: 'Hello' } });
+    expect(screen.getByText('5/2000')).toBeInTheDocument();
+  });
 });
