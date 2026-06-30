@@ -21,6 +21,7 @@ node_modules/
 dist/
 build/
 frontend/build
+package-lock.json
 *.tsbuildinfo
 .env.local
 .env.development.local
