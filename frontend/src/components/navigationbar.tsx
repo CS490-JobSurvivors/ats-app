@@ -36,16 +36,23 @@ const NavigationBar = () => {
   return (
     <AppBar position="static">
       <Toolbar sx={{ px: 4 }}>
-        <Typography
-          variant="h6"
-          sx={{
-            fontWeight: 700,
-            letterSpacing: '0.05em',
-            color: theme.palette.background.default, // matches old #faf7f2 exactly
-          }}
-        >
-          JobSurvivors
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <img
+            src="/logo.png"
+            alt="Job Survivors logo"
+            style={{ height: 28, width: 'auto', display: 'block' }}
+          />
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              letterSpacing: '0.05em',
+              color: theme.palette.background.default,
+            }}
+          >
+            Job Survivors
+          </Typography>
+        </Box>
         <Box
           sx={{
             display: 'flex',
