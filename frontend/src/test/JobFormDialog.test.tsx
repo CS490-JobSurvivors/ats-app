@@ -61,8 +61,6 @@ describe('JobFormDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: /save/i }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({ deadline: '2026-08-01' })
-    );
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ deadline: '2026-08-01' }));
   });
 });
