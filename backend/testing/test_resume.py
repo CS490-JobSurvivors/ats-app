@@ -1,8 +1,6 @@
 # test_resume.py
-# Tests for the resume generation route (app/routes/resume.py) — verifies that
-# POST /resume/generate gathers the authenticated user's profile, job, experience,
-# education, skills, and career preferences, builds an LLM prompt, calls Anthropic,
-# and returns the generated resume. Anthropic is mocked so no real API call is made.
+# Tests for resume and cover letter generation routes (app/routes/resume.py).
+# Anthropic is mocked so no real API calls are made.
 
 from datetime import date
 from types import SimpleNamespace
@@ -31,6 +29,7 @@ skills: list[Skill] = []
 career_prefs: list[CareerPreference] = []
 
 GENERATED_RESUME = "JOHN DOE\n\nSummary tailored for the role.\n\nExperience..."
+GENERATED_COVER_LETTER = "Dear Hiring Team,\n\nI am excited to apply..."
 
 
 # ---------------------------------------------------------------------------
@@ -47,8 +46,6 @@ class FakeScalarResult:
 
 
 class FakeDb:
-    """Inspects the compiled SQLAlchemy query to serve fake rows per entity."""
-
     def scalar(self, query):
         entity = query.column_descriptions[0]["entity"]
         params = query.compile().params
@@ -98,16 +95,12 @@ def override_db():
 
 
 # ---------------------------------------------------------------------------
-# Test helpers
+# Helpers
 # ---------------------------------------------------------------------------
 
 
-def auth_user(user_id: str):
-    return {"sub": user_id, "email": "resume-owner@example.com"}
-
-
 def set_authenticated_user(user_id: str):
-    app.dependency_overrides[get_current_user] = lambda: auth_user(user_id)
+    app.dependency_overrides[get_current_user] = lambda: {"sub": user_id}
 
 
 def add_profile(user_id: str, first_name: str = "John", last_name: str = "Doe"):
@@ -138,7 +131,7 @@ def add_job(user_id: str, title: str = "Senior Engineer"):
 
 
 def add_experience(user_id: str, position_number: int = 0):
-    experience = Experience(
+    exp = Experience(
         experience_id=uuid4(),
         experience_user_id=user_id,
         company="OldCo",
@@ -149,18 +142,16 @@ def add_experience(user_id: str, position_number: int = 0):
         is_current=True,
         position_number=position_number,
     )
-    experiences.append(experience)
-    return experience
+    experiences.append(exp)
+    return exp
 
 
-def make_anthropic_mock(resume_text: str = GENERATED_RESUME):
-    """Builds a MagicMock standing in for anthropic.Anthropic that returns resume_text."""
-    fake_message = SimpleNamespace(content=[SimpleNamespace(text=resume_text)])
-    return fake_message
+def make_anthropic_mock(text: str = GENERATED_RESUME):
+    return SimpleNamespace(content=[SimpleNamespace(text=text)])
 
 
 # ---------------------------------------------------------------------------
-# Fixtures (setup / teardown)
+# Fixtures
 # ---------------------------------------------------------------------------
 
 
@@ -179,13 +170,12 @@ def teardown_function():
 
 
 # ---------------------------------------------------------------------------
-# Resume generation route tests
+# Resume generation tests
 # ---------------------------------------------------------------------------
 
 
 @patch("app.routes.resume.anthropic.Anthropic")
 def test_generate_resume_returns_generated_text_on_happy_path(mock_anthropic, monkeypatch):
-    # Arrange
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     user_id = str(uuid4())
     set_authenticated_user(user_id)
@@ -194,17 +184,14 @@ def test_generate_resume_returns_generated_text_on_happy_path(mock_anthropic, mo
     add_experience(user_id)
     mock_anthropic.return_value.messages.create.return_value = make_anthropic_mock()
 
-    # Act
     response = client.post("/resume/generate", json={"job_id": str(job.job_id)})
 
-    # Assert
     assert response.status_code == 200
     assert response.json() == {"resume": GENERATED_RESUME}
 
 
 @patch("app.routes.resume.anthropic.Anthropic")
 def test_generate_resume_calls_anthropic_with_expected_model(mock_anthropic, monkeypatch):
-    # Arrange
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     user_id = str(uuid4())
     set_authenticated_user(user_id)
@@ -212,10 +199,8 @@ def test_generate_resume_calls_anthropic_with_expected_model(mock_anthropic, mon
     job = add_job(user_id)
     mock_anthropic.return_value.messages.create.return_value = make_anthropic_mock()
 
-    # Act
     client.post("/resume/generate", json={"job_id": str(job.job_id)})
 
-    # Assert
     mock_anthropic.assert_called_once_with(api_key="test-key")
     _, kwargs = mock_anthropic.return_value.messages.create.call_args
     assert kwargs["model"] == "claude-sonnet-4-6"
@@ -224,7 +209,6 @@ def test_generate_resume_calls_anthropic_with_expected_model(mock_anthropic, mon
 
 @patch("app.routes.resume.anthropic.Anthropic")
 def test_generate_resume_prompt_includes_profile_and_job_data(mock_anthropic, monkeypatch):
-    # Arrange
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     user_id = str(uuid4())
     set_authenticated_user(user_id)
@@ -233,10 +217,8 @@ def test_generate_resume_prompt_includes_profile_and_job_data(mock_anthropic, mo
     add_experience(user_id)
     mock_anthropic.return_value.messages.create.return_value = make_anthropic_mock()
 
-    # Act
     client.post("/resume/generate", json={"job_id": str(job.job_id)})
 
-    # Assert
     _, kwargs = mock_anthropic.return_value.messages.create.call_args
     prompt = kwargs["messages"][0]["content"]
     assert "Jane Smith" in prompt
@@ -245,17 +227,30 @@ def test_generate_resume_prompt_includes_profile_and_job_data(mock_anthropic, mo
 
 
 @patch("app.routes.resume.anthropic.Anthropic")
-def test_generate_resume_returns_404_when_profile_missing(mock_anthropic, monkeypatch):
-    # Arrange
+def test_generate_resume_uses_system_parameter(mock_anthropic, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     user_id = str(uuid4())
     set_authenticated_user(user_id)
-    job = add_job(user_id)  # job exists but no profile for this user
+    add_profile(user_id)
+    job = add_job(user_id)
+    mock_anthropic.return_value.messages.create.return_value = make_anthropic_mock()
 
-    # Act
+    client.post("/resume/generate", json={"job_id": str(job.job_id)})
+
+    _, kwargs = mock_anthropic.return_value.messages.create.call_args
+    assert "system" in kwargs
+    assert "resume writer" in kwargs["system"].lower()
+
+
+@patch("app.routes.resume.anthropic.Anthropic")
+def test_generate_resume_returns_404_when_profile_missing(mock_anthropic, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job = add_job(user_id)
+
     response = client.post("/resume/generate", json={"job_id": str(job.job_id)})
 
-    # Assert
     assert response.status_code == 404
     assert response.json()["detail"] == "Profile not found"
     mock_anthropic.assert_not_called()
@@ -263,16 +258,13 @@ def test_generate_resume_returns_404_when_profile_missing(mock_anthropic, monkey
 
 @patch("app.routes.resume.anthropic.Anthropic")
 def test_generate_resume_returns_404_when_job_missing(mock_anthropic, monkeypatch):
-    # Arrange
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     user_id = str(uuid4())
     set_authenticated_user(user_id)
     add_profile(user_id)
 
-    # Act
     response = client.post("/resume/generate", json={"job_id": str(uuid4())})
 
-    # Assert
     assert response.status_code == 404
     assert response.json()["detail"] == "Job not found"
     mock_anthropic.assert_not_called()
@@ -280,18 +272,15 @@ def test_generate_resume_returns_404_when_job_missing(mock_anthropic, monkeypatc
 
 @patch("app.routes.resume.anthropic.Anthropic")
 def test_generate_resume_returns_404_for_another_users_job(mock_anthropic, monkeypatch):
-    # Arrange
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     owner_id = str(uuid4())
-    other_user_id = str(uuid4())
-    add_profile(other_user_id)
-    job = add_job(owner_id)  # job belongs to a different user
-    set_authenticated_user(other_user_id)
+    other_id = str(uuid4())
+    add_profile(other_id)
+    job = add_job(owner_id)
+    set_authenticated_user(other_id)
 
-    # Act
     response = client.post("/resume/generate", json={"job_id": str(job.job_id)})
 
-    # Assert
     assert response.status_code == 404
     assert response.json()["detail"] == "Job not found"
     mock_anthropic.assert_not_called()
@@ -299,31 +288,183 @@ def test_generate_resume_returns_404_for_another_users_job(mock_anthropic, monke
 
 @patch("app.routes.resume.anthropic.Anthropic")
 def test_generate_resume_returns_503_when_api_key_not_configured(mock_anthropic, monkeypatch):
-    # Arrange
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     user_id = str(uuid4())
     set_authenticated_user(user_id)
     add_profile(user_id)
     job = add_job(user_id)
 
-    # Act
     response = client.post("/resume/generate", json={"job_id": str(job.job_id)})
 
-    # Assert
     assert response.status_code == 503
     assert response.json()["detail"] == "ANTHROPIC_API_KEY is not configured"
     mock_anthropic.assert_not_called()
 
 
 def test_generate_resume_rejects_invalid_job_id():
-    # Arrange
     user_id = str(uuid4())
     set_authenticated_user(user_id)
 
-    # Act
     response = client.post("/resume/generate", json={"job_id": "not-a-uuid"})
 
-    # Assert
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Cover letter generation tests
+# ---------------------------------------------------------------------------
+
+
+@patch("app.routes.resume.anthropic.Anthropic")
+def test_generate_cover_letter_returns_generated_text_on_happy_path(mock_anthropic, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    add_profile(user_id)
+    job = add_job(user_id)
+    add_experience(user_id)
+    mock_anthropic.return_value.messages.create.return_value = make_anthropic_mock(
+        GENERATED_COVER_LETTER
+    )
+
+    response = client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
+
+    assert response.status_code == 200
+    assert response.json() == {"cover_letter": GENERATED_COVER_LETTER}
+
+
+@patch("app.routes.resume.anthropic.Anthropic")
+def test_generate_cover_letter_calls_anthropic_with_expected_model(mock_anthropic, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    add_profile(user_id)
+    job = add_job(user_id)
+    mock_anthropic.return_value.messages.create.return_value = make_anthropic_mock(
+        GENERATED_COVER_LETTER
+    )
+
+    client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
+
+    mock_anthropic.assert_called_once_with(api_key="test-key")
+    _, kwargs = mock_anthropic.return_value.messages.create.call_args
+    assert kwargs["model"] == "claude-sonnet-4-6"
+    assert kwargs["messages"][0]["role"] == "user"
+
+
+@patch("app.routes.resume.anthropic.Anthropic")
+def test_generate_cover_letter_user_message_includes_profile_and_job_data(
+    mock_anthropic, monkeypatch
+):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    add_profile(user_id, first_name="Jane", last_name="Smith")
+    job = add_job(user_id, title="Staff Engineer")
+    add_experience(user_id)
+    mock_anthropic.return_value.messages.create.return_value = make_anthropic_mock(
+        GENERATED_COVER_LETTER
+    )
+
+    client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
+
+    _, kwargs = mock_anthropic.return_value.messages.create.call_args
+    content = kwargs["messages"][0]["content"]
+    assert "Jane Smith" in content
+    assert "Staff Engineer" in content
+    assert "Engineer at OldCo" in content
+
+
+@patch("app.routes.resume.anthropic.Anthropic")
+def test_generate_cover_letter_uses_system_parameter_with_guardrails(
+    mock_anthropic, monkeypatch
+):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    add_profile(user_id)
+    job = add_job(user_id)
+    mock_anthropic.return_value.messages.create.return_value = make_anthropic_mock(
+        GENERATED_COVER_LETTER
+    )
+
+    client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
+
+    _, kwargs = mock_anthropic.return_value.messages.create.call_args
+    assert "system" in kwargs
+    system = kwargs["system"]
+    assert "cover letter writer" in system.lower()
+    assert "Do NOT invent" in system
+    assert "hiring-team greeting" in system
+
+
+@patch("app.routes.resume.anthropic.Anthropic")
+def test_generate_cover_letter_returns_404_when_profile_missing(mock_anthropic, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job = add_job(user_id)
+
+    response = client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Profile not found"
+    mock_anthropic.assert_not_called()
+
+
+@patch("app.routes.resume.anthropic.Anthropic")
+def test_generate_cover_letter_returns_404_when_job_missing(mock_anthropic, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    add_profile(user_id)
+
+    response = client.post("/resume/cover-letter", json={"job_id": str(uuid4())})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Job not found"
+    mock_anthropic.assert_not_called()
+
+
+@patch("app.routes.resume.anthropic.Anthropic")
+def test_generate_cover_letter_returns_404_for_another_users_job(mock_anthropic, monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    owner_id = str(uuid4())
+    other_id = str(uuid4())
+    add_profile(other_id)
+    job = add_job(owner_id)
+    set_authenticated_user(other_id)
+
+    response = client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Job not found"
+    mock_anthropic.assert_not_called()
+
+
+@patch("app.routes.resume.anthropic.Anthropic")
+def test_generate_cover_letter_returns_503_when_api_key_not_configured(
+    mock_anthropic, monkeypatch
+):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    add_profile(user_id)
+    job = add_job(user_id)
+
+    response = client.post("/resume/cover-letter", json={"job_id": str(job.job_id)})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "ANTHROPIC_API_KEY is not configured"
+    mock_anthropic.assert_not_called()
+
+
+def test_generate_cover_letter_rejects_invalid_job_id():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+
+    response = client.post("/resume/cover-letter", json={"job_id": "not-a-uuid"})
+
     assert response.status_code == 422
 
 

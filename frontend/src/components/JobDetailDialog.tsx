@@ -66,6 +66,7 @@ interface JobDetailDialogProps {
   onSaveInterview?: (payload: InterviewPayload, interviewId?: string) => Promise<void>;
   onGenerateResume?: () => Promise<string>;
   onImproveResume?: (draftText: string) => Promise<string>;
+  onGenerateCoverLetter?: () => Promise<string>;
   interviews?: InterviewRecord[];
   isInterviewsLoading?: boolean;
   onSaveFollowUp?: (payload: FollowUpPayload, followUpId?: string) => Promise<void>;
@@ -167,6 +168,7 @@ const JobDetailDialog = ({
   onSaveInterview,
   onGenerateResume,
   onImproveResume,
+  onGenerateCoverLetter,
   interviews = [],
   isInterviewsLoading = false,
   onSaveFollowUp,
@@ -202,12 +204,17 @@ const JobDetailDialog = ({
   });
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<string | null>(null);
   const [improvedResume, setImprovedResume] = useState<string | null>(null);
   const [isImproving, setIsImproving] = useState(false);
   const [showImproved, setShowImproved] = useState(false);
   const [resumeError, setResumeError] = useState('');
+  const [coverLetterDialogOpen, setCoverLetterDialogOpen] = useState(false);
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+  const [generatedCoverLetter, setGeneratedCoverLetter] = useState<string | null>(null);
+  const [coverLetterError, setCoverLetterError] = useState('');
 
   useEffect(() => {
     if (job) {
@@ -1011,22 +1018,45 @@ const JobDetailDialog = ({
             <>
               {onGenerateResume && (
                 <Button
-                  onClick={async () => {
+                  onClick={() => {
                     setResumeError('');
+                    setGeneratedResume(null);
+                    setImprovedResume(null);
+                    setShowImproved(false);
+                    setResumeDialogOpen(true);
                     setIsGenerating(true);
-                    try {
-                      const text = await onGenerateResume();
-                      setGeneratedResume(text);
-                    } catch {
-                      setResumeError('Failed to generate resume. Please try again.');
-                    } finally {
-                      setIsGenerating(false);
-                    }
+                    onGenerateResume()
+                      .then((text) => setGeneratedResume(text))
+                      .catch(() =>
+                        setResumeError('Failed to generate resume. Please try again.')
+                      )
+                      .finally(() => setIsGenerating(false));
                   }}
                   disabled={isGenerating}
-                  startIcon={isGenerating ? <CircularProgress size={16} /> : undefined}
                 >
-                  {isGenerating ? 'Generating...' : 'Generate Resume'}
+                  Generate Resume
+                </Button>
+              )}
+              {onGenerateCoverLetter && (
+                <Button
+                  onClick={async () => {
+                    setCoverLetterError('');
+                    setGeneratedCoverLetter(null);
+                    setCoverLetterDialogOpen(true);
+                    setIsGeneratingCoverLetter(true);
+                    try {
+                      const text = await onGenerateCoverLetter();
+                      setGeneratedCoverLetter(text);
+                    } catch {
+                      setCoverLetterError('Failed to generate cover letter. Please try again.');
+                    } finally {
+                      setIsGeneratingCoverLetter(false);
+                    }
+                  }}
+                  disabled={isGeneratingCoverLetter}
+                  startIcon={isGeneratingCoverLetter ? <CircularProgress size={16} /> : undefined}
+                >
+                  {isGeneratingCoverLetter ? 'Generating...' : 'Cover Letter'}
                 </Button>
               )}
               <Button onClick={onClose}>Close</Button>
@@ -1092,25 +1122,34 @@ const JobDetailDialog = ({
         </DialogActions>
       </Dialog>
 
-      {resumeError && (
-        <Alert severity="error" onClose={() => setResumeError('')} sx={{ mt: 1 }}>
-          {resumeError}
-        </Alert>
-      )}
-
       <Dialog
-        open={generatedResume !== null}
+        open={resumeDialogOpen}
         onClose={() => {
+          setResumeDialogOpen(false);
           setGeneratedResume(null);
           setImprovedResume(null);
           setShowImproved(false);
+          setResumeError('');
         }}
         fullWidth
         maxWidth="md"
       >
         <DialogTitle>Generated Resume</DialogTitle>
         <DialogContent>
-          {improvedResume && (
+          {resumeError && (
+            <Alert severity="error" onClose={() => setResumeError('')} sx={{ mb: 2 }}>
+              {resumeError}
+            </Alert>
+          )}
+          {isGenerating && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="text.secondary">
+                Generating resume...
+              </Typography>
+            </Box>
+          )}
+          {improvedResume && !isGenerating && (
             <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
               <Button
                 size="small"
@@ -1128,23 +1167,25 @@ const JobDetailDialog = ({
               </Button>
             </Box>
           )}
-          <TextField
-            multiline
-            fullWidth
-            minRows={20}
-            value={(showImproved ? improvedResume : generatedResume) ?? ''}
-            onChange={(e) => {
-              if (showImproved) {
-                setImprovedResume(e.target.value);
-              } else {
-                setGeneratedResume(e.target.value);
-              }
-            }}
-            inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
-          />
+          {generatedResume !== null && !isGenerating && (
+            <TextField
+              multiline
+              fullWidth
+              minRows={20}
+              value={(showImproved ? improvedResume : generatedResume) ?? ''}
+              onChange={(e) => {
+                if (showImproved) {
+                  setImprovedResume(e.target.value);
+                } else {
+                  setGeneratedResume(e.target.value);
+                }
+              }}
+              inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
+            />
+          )}
         </DialogContent>
         <DialogActions>
-          {onImproveResume && (
+          {onImproveResume && generatedResume !== null && !isGenerating && (
             <Button
               onClick={async () => {
                 const currentDraft = (showImproved ? improvedResume : generatedResume) ?? '';
@@ -1165,19 +1206,80 @@ const JobDetailDialog = ({
               {isImproving ? 'Improving...' : 'Improve Draft'}
             </Button>
           )}
+          {generatedResume !== null && !isGenerating && (
+            <Button
+              onClick={() => {
+                const text = (showImproved ? improvedResume : generatedResume) ?? '';
+                if (text) navigator.clipboard.writeText(text);
+              }}
+            >
+              Copy
+            </Button>
+          )}
           <Button
             onClick={() => {
-              const text = (showImproved ? improvedResume : generatedResume) ?? '';
-              if (text) navigator.clipboard.writeText(text);
-            }}
-          >
-            Copy
-          </Button>
-          <Button
-            onClick={() => {
+              setResumeDialogOpen(false);
               setGeneratedResume(null);
               setImprovedResume(null);
               setShowImproved(false);
+              setResumeError('');
+            }}
+            variant="contained"
+          >
+            Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={coverLetterDialogOpen}
+        onClose={() => {
+          setCoverLetterDialogOpen(false);
+          setCoverLetterError('');
+        }}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Generated Cover Letter</DialogTitle>
+        <DialogContent>
+          {coverLetterError && (
+            <Alert severity="error" onClose={() => setCoverLetterError('')} sx={{ mb: 2 }}>
+              {coverLetterError}
+            </Alert>
+          )}
+          {isGeneratingCoverLetter && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 2 }}>
+              <CircularProgress size={20} />
+              <Typography variant="body2" color="text.secondary">
+                Generating cover letter...
+              </Typography>
+            </Box>
+          )}
+          {generatedCoverLetter !== null && !isGeneratingCoverLetter && (
+            <TextField
+              multiline
+              fullWidth
+              minRows={15}
+              value={generatedCoverLetter}
+              onChange={(e) => setGeneratedCoverLetter(e.target.value)}
+              inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          {generatedCoverLetter && (
+            <Button
+              onClick={() => {
+                if (generatedCoverLetter) navigator.clipboard.writeText(generatedCoverLetter);
+              }}
+            >
+              Copy
+            </Button>
+          )}
+          <Button
+            onClick={() => {
+              setCoverLetterDialogOpen(false);
+              setCoverLetterError('');
             }}
             variant="contained"
           >
