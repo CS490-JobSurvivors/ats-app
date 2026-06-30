@@ -994,9 +994,7 @@ const JobDetailDialog = ({
                     setIsGenerating(true);
                     onGenerateResume()
                       .then((text) => setGeneratedResume(text))
-                      .catch(() =>
-                        setResumeError('Failed to generate resume. Please try again.')
-                      )
+                      .catch(() => setResumeError('Failed to generate resume. Please try again.'))
                       .finally(() => setIsGenerating(false));
                   }}
                   disabled={isGenerating}
