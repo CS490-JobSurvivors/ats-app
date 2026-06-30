@@ -421,6 +421,19 @@ def create_job_interview(
     return db_interview
 
 
+@router.delete("/{job_id}/interviews/{interview_id}", status_code=204)
+def delete_job_interview(
+    job_id: UUID,
+    interview_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    owner_id = get_current_user_id(current_user)
+    db_interview = get_owned_interview_or_404(job_id, interview_id, owner_id, db)
+    db.delete(db_interview)
+    db.commit()
+
+
 @router.patch("/{job_id}/interviews/{interview_id}", response_model=InterviewRead)
 def update_job_interview(
     job_id: UUID,
