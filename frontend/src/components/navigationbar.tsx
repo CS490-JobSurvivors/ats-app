@@ -34,7 +34,7 @@ const NavigationBar = () => {
   }, []);
 
   return (
-    <AppBar position="static">
+    <AppBar position="sticky">
       <Toolbar sx={{ px: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <img
