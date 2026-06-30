@@ -273,6 +273,20 @@ export const updateJobInterview = async (
   return await response.json();
 };
 
+export const deleteJobInterview = async (
+  accessToken: string,
+  jobId: string,
+  interviewId: string
+): Promise<void> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/interviews/${interviewId}`, {
+    method: 'DELETE',
+    headers: authHeaders(accessToken),
+  });
+  if (!response.ok) {
+    throw new Error('Unable to delete interview.');
+  }
+};
+
 export const listJobFollowUps = async (
   accessToken: string,
   jobId: string
