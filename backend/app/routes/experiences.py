@@ -97,6 +97,16 @@ def update_experience(
     for field, value in experience_update.model_dump(exclude_unset=True).items():
         setattr(db_experience, field, value)
 
+    if (
+        not db_experience.is_current
+        and db_experience.end_date is not None
+        and db_experience.end_date < db_experience.start_date
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="end_date cannot be earlier than start_date",
+        )
+
     db.commit()
     db.refresh(db_experience)
     return db_experience

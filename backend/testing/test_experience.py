@@ -323,6 +323,21 @@ def test_update_experience_rejects_empty_company():
     assert response.status_code == 422
 
 
+def test_update_experience_rejects_end_date_before_existing_start_date_when_only_end_date_patched():
+    # S2-BR-015: patching only end_date without start_date must still validate
+    # against the stored start_date (schema-level validator skips this case,
+    # so the route re-validates using the persisted record)
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    exp_id = client.post(
+        "/experiences", json=experience_payload(start_date="2020-01-01", end_date="2023-01-01")
+    ).json()["experience_id"]
+
+    response = client.patch(f"/experiences/{exp_id}", json={"end_date": "2018-01-01"})
+
+    assert response.status_code == 422
+
+
 # ---------------------------------------------------------------------------
 # Delete
 # ---------------------------------------------------------------------------
