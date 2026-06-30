@@ -2,20 +2,36 @@
 __pycache__/
 *.py[cod]
 venv/
+.venv/
 .env
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+backend/scratch/
+*.db
+
 
 # Node / TypeScript
 node_modules/
 dist/
 build/
+frontend/build
 *.tsbuildinfo
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+#Supabase
+.supabase/
+
+#Logs
+*.log
 
 # OS
 .DS_Store
@@ -24,3 +40,10 @@ Thumbs.db
 # IDEs
 .vscode/
 .idea/
+
+# Claude Code
+.claude
+
+# Project Runners
+.testProject.sh
+.testProject.ps1
