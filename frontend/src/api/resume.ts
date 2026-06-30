@@ -15,3 +15,20 @@ export const generateResume = async (
   if (!response.ok) throw new Error('Failed to generate resume. Please try again.');
   return response.json();
 };
+
+export const improveResume = async (
+  accessToken: string,
+  jobId: string,
+  draftText: string
+): Promise<{ improved: string }> => {
+  const response = await fetch(`${API_URL}/resume/improve`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ job_id: jobId, draft_text: draftText }),
+  });
+  if (!response.ok) throw new Error('Failed to improve resume. Please try again.');
+  return response.json();
+};

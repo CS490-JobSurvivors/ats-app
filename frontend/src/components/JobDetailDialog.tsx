@@ -63,6 +63,7 @@ interface JobDetailDialogProps {
   onDeleteStageHistory?: (eventId: string) => void;
   onSaveInterview?: (payload: InterviewPayload, interviewId?: string) => Promise<void>;
   onGenerateResume?: () => Promise<string>;
+  onImproveResume?: (draftText: string) => Promise<string>;
   interviews?: InterviewRecord[];
   isInterviewsLoading?: boolean;
   onSaveFollowUp?: (payload: FollowUpPayload, followUpId?: string) => Promise<void>;
@@ -163,6 +164,7 @@ const JobDetailDialog = ({
   onDeleteStageHistory,
   onSaveInterview,
   onGenerateResume,
+  onImproveResume,
   interviews = [],
   isInterviewsLoading = false,
   onSaveFollowUp,
@@ -199,6 +201,9 @@ const JobDetailDialog = ({
   const [errorMessage, setErrorMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<string | null>(null);
+  const [improvedResume, setImprovedResume] = useState<string | null>(null);
+  const [isImproving, setIsImproving] = useState(false);
+  const [showImproved, setShowImproved] = useState(false);
   const [resumeError, setResumeError] = useState('');
 
   useEffect(() => {
@@ -1072,30 +1077,87 @@ const JobDetailDialog = ({
 
       <Dialog
         open={generatedResume !== null}
-        onClose={() => setGeneratedResume(null)}
+        onClose={() => {
+          setGeneratedResume(null);
+          setImprovedResume(null);
+          setShowImproved(false);
+        }}
         fullWidth
         maxWidth="md"
       >
         <DialogTitle>Generated Resume</DialogTitle>
         <DialogContent>
+          {improvedResume && (
+            <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+              <Button
+                size="small"
+                variant={showImproved ? 'outlined' : 'contained'}
+                onClick={() => setShowImproved(false)}
+              >
+                Original
+              </Button>
+              <Button
+                size="small"
+                variant={showImproved ? 'contained' : 'outlined'}
+                onClick={() => setShowImproved(true)}
+              >
+                Improved
+              </Button>
+            </Box>
+          )}
           <TextField
             multiline
             fullWidth
             minRows={20}
-            value={generatedResume ?? ''}
-            onChange={(e) => setGeneratedResume(e.target.value)}
+            value={(showImproved ? improvedResume : generatedResume) ?? ''}
+            onChange={(e) => {
+              if (showImproved) {
+                setImprovedResume(e.target.value);
+              } else {
+                setGeneratedResume(e.target.value);
+              }
+            }}
             inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.8rem' } }}
           />
         </DialogContent>
         <DialogActions>
+          {onImproveResume && (
+            <Button
+              onClick={async () => {
+                const currentDraft = (showImproved ? improvedResume : generatedResume) ?? '';
+                setIsImproving(true);
+                try {
+                  const improved = await onImproveResume(currentDraft);
+                  setImprovedResume(improved);
+                  setShowImproved(true);
+                } catch {
+                  setResumeError('Failed to improve resume. Please try again.');
+                } finally {
+                  setIsImproving(false);
+                }
+              }}
+              disabled={isImproving}
+              startIcon={isImproving ? <CircularProgress size={16} /> : undefined}
+            >
+              {isImproving ? 'Improving...' : 'Improve Draft'}
+            </Button>
+          )}
           <Button
             onClick={() => {
-              if (generatedResume) navigator.clipboard.writeText(generatedResume);
+              const text = (showImproved ? improvedResume : generatedResume) ?? '';
+              if (text) navigator.clipboard.writeText(text);
             }}
           >
             Copy
           </Button>
-          <Button onClick={() => setGeneratedResume(null)} variant="contained">
+          <Button
+            onClick={() => {
+              setGeneratedResume(null);
+              setImprovedResume(null);
+              setShowImproved(false);
+            }}
+            variant="contained"
+          >
             Close
           </Button>
         </DialogActions>

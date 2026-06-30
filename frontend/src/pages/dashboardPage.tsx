@@ -50,7 +50,7 @@ import { stageColors } from '../utils/stageColors';
 import JobCard from '../components/JobCard';
 import JobFormDialog from '../components/JobFormDialog';
 import JobDetailDialog from '../components/JobDetailDialog';
-import { generateResume } from '../api/resume';
+import { generateResume, improveResume } from '../api/resume';
 
 type SortBy = 'last_activity' | 'deadline' | 'company' | 'created_date';
 type SortOrder = 'asc' | 'desc';
@@ -682,6 +682,13 @@ const DashboardPage = () => {
           if (!token || !selectedJob) throw new Error('Not authenticated.');
           const result = await generateResume(token, selectedJob.job_id);
           return result.resume;
+        }}
+        onImproveResume={async (draftText: string) => {
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.access_token;
+          if (!token || !selectedJob) throw new Error('Not authenticated.');
+          const result = await improveResume(token, selectedJob.job_id, draftText);
+          return result.improved;
         }}
       />
 

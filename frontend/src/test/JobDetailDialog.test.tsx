@@ -759,4 +759,74 @@ describe('JobDetailDialog', () => {
 
     expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument();
   });
+
+  describe('AI resume improve', () => {
+    const GENERATED = '# Jane Doe\n\nOriginal summary.';
+    const IMPROVED = '# Jane Doe\n\nPolished summary.';
+
+    const renderWithResume = (
+      onGenerateResume: () => Promise<string>,
+      onImproveResume?: (draft: string) => Promise<string>
+    ) =>
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          onGenerateResume={onGenerateResume}
+          onImproveResume={onImproveResume}
+        />
+      );
+
+    it('does not show Improve Draft button when onImproveResume is not provided', async () => {
+      renderWithResume(jest.fn().mockResolvedValue(GENERATED));
+      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await screen.findByText('Generated Resume');
+      expect(screen.queryByRole('button', { name: /improve draft/i })).not.toBeInTheDocument();
+    });
+
+    it('shows Improve Draft button when onImproveResume is provided', async () => {
+      renderWithResume(
+        jest.fn().mockResolvedValue(GENERATED),
+        jest.fn().mockResolvedValue(IMPROVED)
+      );
+      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await screen.findByText('Generated Resume');
+      expect(screen.getByRole('button', { name: /improve draft/i })).toBeInTheDocument();
+    });
+
+    it('calls onImproveResume with current draft text and shows toggle on success', async () => {
+      const mockImprove = jest.fn().mockResolvedValue(IMPROVED);
+      renderWithResume(jest.fn().mockResolvedValue(GENERATED), mockImprove);
+
+      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await screen.findByText('Generated Resume');
+      fireEvent.click(screen.getByRole('button', { name: /improve draft/i }));
+
+      await waitFor(() => {
+        expect(mockImprove).toHaveBeenCalledWith(GENERATED);
+      });
+      expect(await screen.findByRole('button', { name: /^original$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^improved$/i })).toBeInTheDocument();
+    });
+
+    it('toggles between original and improved text', async () => {
+      const mockImprove = jest.fn().mockResolvedValue(IMPROVED);
+      renderWithResume(jest.fn().mockResolvedValue(GENERATED), mockImprove);
+
+      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await screen.findByText('Generated Resume');
+      fireEvent.click(screen.getByRole('button', { name: /improve draft/i }));
+      await screen.findByRole('button', { name: /^original$/i });
+
+      fireEvent.click(screen.getByRole('button', { name: /^original$/i }));
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(GENERATED));
+
+      fireEvent.click(screen.getByRole('button', { name: /^improved$/i }));
+      await waitFor(() => expect(screen.getByRole('textbox')).toHaveValue(IMPROVED));
+    });
+  });
 });

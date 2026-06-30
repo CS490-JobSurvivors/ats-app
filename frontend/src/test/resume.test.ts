@@ -4,7 +4,7 @@
 // returns the parsed JSON body, and throws on a non-ok response.
 
 import '@testing-library/jest-dom';
-import { generateResume } from '../api/resume';
+import { generateResume, improveResume } from '../api/resume';
 
 // ---------------------------------------------------------------------------
 // Constants & helpers
@@ -90,6 +90,50 @@ describe('resume API', () => {
       await generateResume(ACCESS_TOKEN, JOB_ID).catch(() => undefined);
 
       // Assert
+      expect(response.json).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('improveResume', () => {
+    const IMPROVE_URL = `${API_BASE}/resume/improve`;
+    const DRAFT_TEXT = '# John Doe\n\nSummary...';
+    const IMPROVED_TEXT = '# John Doe\n\nPolished summary...';
+
+    it('should send a POST request to /resume/improve with job_id and draft_text', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse({ improved: IMPROVED_TEXT }));
+
+      await improveResume(ACCESS_TOKEN, JOB_ID, DRAFT_TEXT);
+
+      expect(global.fetch).toHaveBeenCalledWith(IMPROVE_URL, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ job_id: JOB_ID, draft_text: DRAFT_TEXT }),
+      });
+    });
+
+    it('should return the parsed improved payload on success', async () => {
+      const expected = { improved: IMPROVED_TEXT };
+      (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse(expected));
+
+      const result = await improveResume(ACCESS_TOKEN, JOB_ID, DRAFT_TEXT);
+
+      expect(result).toEqual(expected);
+    });
+
+    it('should throw a user-facing error when the response is not ok', async () => {
+      (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse(null, false));
+
+      await expect(improveResume(ACCESS_TOKEN, JOB_ID, DRAFT_TEXT)).rejects.toThrow(
+        'Failed to improve resume. Please try again.'
+      );
+    });
+
+    it('should not parse the body when the response is not ok', async () => {
+      const response = mockFetchResponse(null, false);
+      (global.fetch as jest.Mock).mockResolvedValue(response);
+
+      await improveResume(ACCESS_TOKEN, JOB_ID, DRAFT_TEXT).catch(() => undefined);
+
       expect(response.json).not.toHaveBeenCalled();
     });
   });
