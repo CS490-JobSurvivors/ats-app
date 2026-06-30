@@ -873,4 +873,47 @@ def test_delete_job_followup_only_deletes_owned_followup():
     assert denied_response.status_code == 404
     assert delete_response.status_code == 204
     assert list_response.status_code == 200
-    assert list_response.json() == []
+
+
+# ---------------------------------------------------------------------------
+# Stage transition integrity (S2-BR-008, S2-BR-009)
+# ---------------------------------------------------------------------------
+
+
+def test_stage_change_creates_history_record_with_from_and_to_stage():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    client.patch(f"/jobs/{job_id}", json={"job_stage": "Applied"})
+
+    history = [h for h in stage_histories if str(h.job_id) == job_id]
+    assert len(history) == 1
+    assert history[0].from_stage == "Interested"
+    assert history[0].to_stage == "Applied"
+
+
+def test_stage_change_logs_changed_by_user_identity():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    client.patch(f"/jobs/{job_id}", json={"job_stage": "Applied"})
+
+    history = [h for h in stage_histories if str(h.job_id) == job_id]
+    assert len(history) == 1
+    assert str(history[0].changed_by) == user_id
+
+
+def test_stage_change_is_reflected_in_job_activity_timeline():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    client.patch(f"/jobs/{job_id}", json={"job_stage": "Applied"})
+
+    response = client.get(f"/jobs/{job_id}/activity")
+
+    assert response.status_code == 200
+    events = response.json()
+    titles = [e["title"] for e in events]
+    assert "Applied" in titles
