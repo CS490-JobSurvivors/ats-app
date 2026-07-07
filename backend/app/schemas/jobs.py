@@ -74,6 +74,7 @@ class InterviewBase(BaseModel):
     scheduled_at_date: date
     scheduled_at_time: datetime
     interview_notes: str | None = None
+    prep_notes: str | None = None
 
 
 class InterviewCreate(InterviewBase):
@@ -85,6 +86,7 @@ class InterviewUpdate(BaseModel):
     scheduled_at_date: date | None = None
     scheduled_at_time: datetime | None = None
     interview_notes: str | None = None
+    prep_notes: str | None = None
 
 
 class InterviewRead(InterviewBase):
