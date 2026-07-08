@@ -1,9 +1,9 @@
 import '@testing-library/jest-dom';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DocumentLibraryPage from '../pages/documentLibraryPage';
 import { supabase } from '../utils/supabaseClient';
-import { listDocuments } from '../api/jobs';
+import { listDocuments, uploadDocument } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -15,10 +15,13 @@ jest.mock('../utils/supabaseClient', () => ({
 
 jest.mock('../api/jobs', () => ({
   listDocuments: jest.fn(),
+  uploadDocument: jest.fn(),
+  getDocumentDownloadUrl: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListDocuments = listDocuments as jest.Mock;
+const mockUploadDocument = uploadDocument as jest.Mock;
 
 const documents = [
   {
@@ -92,5 +95,85 @@ describe('DocumentLibraryPage', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByDisplayValue('# Resume')).toBeInTheDocument();
+  });
+
+  it('opens upload dialog and calls uploadDocument on submit', async () => {
+    const uploadedDoc = {
+      document_id: 'doc-3',
+      user_id: 'user-1',
+      job_id: null,
+      doc_type: 'resume',
+      doc_title: 'Uploaded Resume',
+      content: null,
+      file_path: 'user-1/doc-3.pdf',
+      doc_version: 1,
+      created_at: '2026-07-08T10:00:00Z',
+    };
+    mockUploadDocument.mockResolvedValueOnce(uploadedDoc);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    await userEvent.click(screen.getByRole('button', { name: /upload document/i }));
+    expect(screen.getByRole('dialog', { name: /upload document/i })).toBeInTheDocument();
+
+    const titleInput = screen.getByLabelText(/document title/i);
+    fireEvent.change(titleInput, { target: { value: 'Uploaded Resume' } });
+
+    const file = new File(['%PDF-1.4'], 'resume.pdf', { type: 'application/pdf' });
+    const fileInput = screen.getByTestId('file-upload-input') as HTMLInputElement;
+    Object.defineProperty(fileInput, 'files', { value: [file], configurable: true });
+    fireEvent.change(fileInput);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^upload$/i })).not.toBeDisabled()
+    );
+    await userEvent.click(screen.getByRole('button', { name: /^upload$/i }));
+
+    await waitFor(() => expect(mockUploadDocument).toHaveBeenCalledTimes(1));
+    expect(mockUploadDocument).toHaveBeenCalledWith(
+      'test-token',
+      file,
+      'resume',
+      'Uploaded Resume'
+    );
+    expect(await screen.findByText('Uploaded Resume')).toBeInTheDocument();
+  });
+
+  it('shows an error in upload dialog when an unsupported file type is selected', async () => {
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    await userEvent.click(screen.getByRole('button', { name: /upload document/i }));
+
+    const badFile = new File(['data'], 'malware.exe', { type: 'application/octet-stream' });
+    const fileInput = screen.getByTestId('file-upload-input') as HTMLInputElement;
+    Object.defineProperty(fileInput, 'files', { value: [badFile], configurable: true });
+    fireEvent.change(fileInput);
+
+    expect(await screen.findByText(/unsupported file type/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^upload$/i })).toBeDisabled();
+  });
+
+  it('shows Uploaded File chip and Download button for documents with a file_path', async () => {
+    const docWithFile = {
+      document_id: 'doc-4',
+      user_id: 'user-1',
+      job_id: null,
+      doc_type: 'cover_letter',
+      doc_title: 'Uploaded Cover Letter',
+      content: null,
+      file_path: 'user-1/doc-4.pdf',
+      doc_version: 1,
+      created_at: '2026-07-08T09:00:00Z',
+    };
+    mockListDocuments.mockResolvedValueOnce([docWithFile]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Uploaded Cover Letter');
+
+    expect(screen.getByText('Uploaded File')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /download/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /view/i })).not.toBeInTheDocument();
   });
 });

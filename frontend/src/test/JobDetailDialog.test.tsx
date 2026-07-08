@@ -914,6 +914,7 @@ describe('JobDetailDialog', () => {
         doc_type: 'resume' as const,
         doc_title: 'Resume - Software Engineer at Acme Corp',
         content: 'Some content',
+        file_path: null,
         doc_version: 1,
         created_at: '2026-06-20T00:00:00Z',
       },
