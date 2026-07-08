@@ -22,5 +22,6 @@ class DocumentRead(BaseModel):
     doc_type: str | None
     doc_title: str
     content: str | None
+    file_path: str | None
     doc_version: int
     created_at: datetime
