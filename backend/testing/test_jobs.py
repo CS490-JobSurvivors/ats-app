@@ -465,6 +465,7 @@ def test_job_activity_timeline_returns_key_events_for_owned_job():
     )
     assert create_response.status_code == 201
     job_id = create_response.json()["job_id"]
+    jobs[0].created_at = datetime(2026, 7, 1, tzinfo=UTC)
 
     now = datetime.now(UTC)
     stage_histories.append(
