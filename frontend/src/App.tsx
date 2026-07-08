@@ -8,6 +8,7 @@ import ErrorPage from './pages/errorPage';
 import SignupPage from './pages/signupPage';
 import ProfilePage from './pages/profilePage';
 import SettingsPage from './pages/settingsPage';
+import DocumentLibraryPage from './pages/documentLibraryPage';
 import { ProfileProvider } from './contexts/ProfileContext';
 import ResetPasswordPage from './pages/resetPasswordPage';
 import theme from './theme';
@@ -36,6 +37,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <ProfilePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/documents"
+                element={
+                  <ProtectedRoute>
+                    <DocumentLibraryPage />
                   </ProtectedRoute>
                 }
               />

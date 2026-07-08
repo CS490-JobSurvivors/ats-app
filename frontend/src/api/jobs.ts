@@ -379,6 +379,19 @@ export const listJobDocuments = async (
   return await response.json();
 };
 
+export const listDocuments = async (accessToken: string): Promise<DocumentRecord[]> => {
+  const response = await fetch(`${API_URL}/jobs/documents`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load documents.');
+  }
+
+  return await response.json();
+};
+
 export const createJobDocument = async (
   accessToken: string,
   jobId: string,

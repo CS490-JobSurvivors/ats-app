@@ -35,7 +35,7 @@ const NavigationBar = () => {
 
   return (
     <AppBar position="sticky">
-      <Toolbar sx={{ px: 4 }}>
+      <Toolbar sx={{ px: 4, position: 'relative' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <img
             src="/logo.png"
@@ -57,8 +57,10 @@ const NavigationBar = () => {
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: '100px',
-            flex: 1,
+            gap: 8,
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)',
             justifyContent: 'center',
           }}
         >
@@ -71,13 +73,16 @@ const NavigationBar = () => {
               <Link component={NavLink} to="/profile" sx={navLinkSx}>
                 Profile
               </Link>
+              <Link component={NavLink} to="/documents" sx={navLinkSx}>
+                Documents
+              </Link>
               <Link component={NavLink} to="/settings" sx={navLinkSx}>
                 Settings
               </Link>
             </>
           )}
         </Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '40px', ml: 'auto' }}>
           {!session ? (
             <>
               <Link component={NavLink} to="/login" sx={navLinkSx}>

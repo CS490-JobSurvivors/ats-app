@@ -107,13 +107,21 @@ class FakeDb:
             )
 
         if entity is Document:
-            job_id = str(params["job_id_1"])
             user_id = str(params["user_id_1"])
-            results = [
-                document
-                for document in documents
-                if str(document.job_id) == job_id and str(document.user_id) == user_id
-            ]
+            results = [document for document in documents if str(document.user_id) == user_id]
+            if "job_id_1" in params:
+                job_id = str(params["job_id_1"])
+                results = [document for document in results if str(document.job_id) == job_id]
+            if "doc_type_1" in params:
+                allowed_types = set()
+                for key, value in params.items():
+                    if not key.startswith("doc_type_"):
+                        continue
+                    if isinstance(value, (list, tuple, set)):
+                        allowed_types.update(value)
+                    else:
+                        allowed_types.add(value)
+                results = [document for document in results if document.doc_type in allowed_types]
             return FakeScalarResult(
                 sorted(results, key=lambda document: document.created_at, reverse=True)
             )
@@ -1125,6 +1133,76 @@ def test_list_job_documents_returns_only_that_jobs_documents():
     assert response.status_code == 200
     titles = [document["doc_title"] for document in response.json()]
     assert titles == ["Resume for First Co"]
+
+
+def test_list_user_documents_returns_all_owned_resume_and_cover_letter_documents():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    first_job = client.post("/jobs", json=create_job_payload("First Co")).json()["job_id"]
+    second_job = client.post("/jobs", json=create_job_payload("Second Co")).json()["job_id"]
+
+    client.post(
+        f"/jobs/{first_job}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume for First Co", "content": "Draft."},
+    )
+    client.post(
+        f"/jobs/{second_job}/documents",
+        json={
+            "doc_type": "cover_letter",
+            "doc_title": "Cover Letter for Second Co",
+            "content": "Draft.",
+        },
+    )
+
+    set_authenticated_user(other_user_id)
+    other_job = client.post("/jobs", json=create_job_payload("Other Co")).json()["job_id"]
+    client.post(
+        f"/jobs/{other_job}/documents",
+        json={"doc_type": "resume", "doc_title": "Other User Resume", "content": "Draft."},
+    )
+
+    set_authenticated_user(owner_id)
+    response = client.get("/jobs/documents")
+
+    assert response.status_code == 200
+    titles = [document["doc_title"] for document in response.json()]
+    assert titles == ["Cover Letter for Second Co", "Resume for First Co"]
+
+
+def test_list_user_documents_filters_to_supported_business_types():
+    user_id = str(uuid4())
+    job_id = uuid4()
+    set_authenticated_user(user_id)
+    documents.extend(
+        [
+            Document(
+                document_id=uuid4(),
+                user_id=user_id,
+                job_id=job_id,
+                doc_type="resume",
+                doc_title="Resume",
+                content="Draft.",
+                doc_version=1,
+                created_at=datetime(2026, 7, 1, tzinfo=UTC),
+            ),
+            Document(
+                document_id=uuid4(),
+                user_id=user_id,
+                job_id=job_id,
+                doc_type="portfolio",
+                doc_title="Portfolio",
+                content="Draft.",
+                doc_version=1,
+                created_at=datetime(2026, 7, 2, tzinfo=UTC),
+            ),
+        ]
+    )
+
+    response = client.get("/jobs/documents")
+
+    assert response.status_code == 200
+    assert [document["doc_title"] for document in response.json()] == ["Resume"]
 
 
 def test_delete_job_document_only_deletes_owned_document():

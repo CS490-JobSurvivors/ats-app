@@ -229,6 +229,20 @@ def get_job_metrics(
     )
 
 
+@router.get("/documents", response_model=list[DocumentRead])
+def list_user_documents(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+
+    return db.scalars(
+        select(Document)
+        .where(Document.user_id == owner_id, Document.doc_type.in_(("resume", "cover_letter")))
+        .order_by(Document.created_at.desc())
+    ).all()
+
+
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_job(
     job_id: UUID,
