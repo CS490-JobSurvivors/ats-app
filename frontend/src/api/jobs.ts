@@ -105,6 +105,7 @@ export interface DocumentRecord {
   doc_type: DocType | null;
   doc_title: string;
   content: string | null;
+  file_path: string | null;
   doc_version: number;
   created_at: string;
 }
@@ -390,6 +391,48 @@ export const listDocuments = async (accessToken: string): Promise<DocumentRecord
   }
 
   return await response.json();
+};
+
+export const uploadDocument = async (
+  accessToken: string,
+  file: File,
+  docType: DocType,
+  docTitle: string
+): Promise<DocumentRecord> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('doc_type', docType);
+  formData.append('doc_title', docTitle);
+
+  const response = await fetch(`${API_URL}/documents/upload`, {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || 'Upload failed.');
+  }
+
+  return await response.json();
+};
+
+export const getDocumentDownloadUrl = async (
+  accessToken: string,
+  documentId: string
+): Promise<string> => {
+  const response = await fetch(`${API_URL}/documents/download/${documentId}`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to get download link.');
+  }
+
+  const body = await response.json();
+  return body.url as string;
 };
 
 export const createJobDocument = async (
