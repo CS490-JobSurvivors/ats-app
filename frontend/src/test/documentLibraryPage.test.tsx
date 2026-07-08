@@ -1,0 +1,96 @@
+import '@testing-library/jest-dom';
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import DocumentLibraryPage from '../pages/documentLibraryPage';
+import { supabase } from '../utils/supabaseClient';
+import { listDocuments } from '../api/jobs';
+
+jest.mock('../utils/supabaseClient', () => ({
+  supabase: {
+    auth: {
+      getSession: jest.fn(),
+    },
+  },
+}));
+
+jest.mock('../api/jobs', () => ({
+  listDocuments: jest.fn(),
+}));
+
+const mockGetSession = supabase.auth.getSession as jest.Mock;
+const mockListDocuments = listDocuments as jest.Mock;
+
+const documents = [
+  {
+    document_id: 'doc-1',
+    user_id: 'user-1',
+    job_id: 'job-1',
+    doc_type: 'resume',
+    doc_title: 'Resume - Software Engineer at Acme',
+    content: '# Resume',
+    doc_version: 2,
+    created_at: '2026-07-01T12:00:00Z',
+  },
+  {
+    document_id: 'doc-2',
+    user_id: 'user-1',
+    job_id: 'job-2',
+    doc_type: 'cover_letter',
+    doc_title: 'Cover Letter - Designer at Studio',
+    content: '# Cover Letter',
+    doc_version: 1,
+    created_at: '2026-07-02T12:00:00Z',
+  },
+];
+
+describe('DocumentLibraryPage', () => {
+  beforeEach(() => {
+    mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
+    mockListDocuments.mockResolvedValue(documents);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('loads and renders all user documents', async () => {
+    render(<DocumentLibraryPage />);
+
+    expect(screen.getByRole('heading', { name: /document library/i })).toBeInTheDocument();
+    expect(await screen.findByText('Resume - Software Engineer at Acme')).toBeInTheDocument();
+    expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
+    expect(screen.getByText('Version 2 · Created Jul 1, 2026')).toBeInTheDocument();
+    expect(mockListDocuments).toHaveBeenCalledWith('test-token');
+  });
+
+  it('shows an empty state when no documents exist', async () => {
+    mockListDocuments.mockResolvedValueOnce([]);
+
+    render(<DocumentLibraryPage />);
+
+    expect(await screen.findByText('No documents saved yet.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Saved resumes and cover letters will appear here.')
+    ).toBeInTheDocument();
+  });
+
+  it('shows an error when documents fail to load', async () => {
+    mockListDocuments.mockRejectedValueOnce(new Error('network error'));
+
+    render(<DocumentLibraryPage />);
+
+    expect(
+      await screen.findByText('Unable to load your document library. Please try again.')
+    ).toBeInTheDocument();
+  });
+
+  it('opens a read-only view dialog for document content', async () => {
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Resume - Software Engineer at Acme');
+    await userEvent.click(screen.getAllByRole('button', { name: /view/i })[0]);
+
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('# Resume')).toBeInTheDocument();
+  });
+});
