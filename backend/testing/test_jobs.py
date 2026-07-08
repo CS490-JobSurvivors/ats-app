@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -458,13 +458,14 @@ def test_job_activity_timeline_returns_key_events_for_owned_job():
     assert create_response.status_code == 201
     job_id = create_response.json()["job_id"]
 
+    now = datetime.now(UTC)
     stage_histories.append(
         JobStageHistory(
             job_id=job_id,
             from_stage="Interview",
             to_stage="Offer",
             changed_by=owner_id,
-            changed_at=datetime(2026, 7, 4, tzinfo=UTC),
+            changed_at=now + timedelta(days=12),
         )
     )
     followups.append(
@@ -472,7 +473,7 @@ def test_job_activity_timeline_returns_key_events_for_owned_job():
             followup_id=uuid4(),
             job_id=job_id,
             user_id=owner_id,
-            due_date=date(2026, 7, 2),
+            due_date=(now + timedelta(days=10)).date(),
             notes="Email recruiter",
             is_completed=False,
         )
@@ -482,8 +483,8 @@ def test_job_activity_timeline_returns_key_events_for_owned_job():
             interview_id=uuid4(),
             job_id=job_id,
             user_id=owner_id,
-            scheduled_at_date=date(2026, 7, 3),
-            scheduled_at_time=datetime(2026, 7, 3, 15, tzinfo=UTC),
+            scheduled_at_date=(now + timedelta(days=11)).date(),
+            scheduled_at_time=now + timedelta(days=11),
             interview_notes="Technical round",
             round_type="Technical interview",
         )
@@ -493,7 +494,7 @@ def test_job_activity_timeline_returns_key_events_for_owned_job():
             followup_id=uuid4(),
             job_id=job_id,
             user_id=other_user_id,
-            due_date=date(2026, 7, 5),
+            due_date=(now + timedelta(days=13)).date(),
             notes="Other user's reminder",
             is_completed=False,
         )
@@ -816,6 +817,73 @@ def test_delete_job_interview_rejects_non_owner():
 
     assert denied_response.status_code == 404
     assert len(still_exists.json()) == 1
+
+
+# ---------------------------------------------------------------------------
+# S3-013: Interview preparation notes
+# ---------------------------------------------------------------------------
+
+
+def test_create_interview_with_prep_notes_persists_and_returns_prep_notes():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    response = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Technical",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+            "prep_notes": "Review system design patterns and practice LeetCode.",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["prep_notes"] == "Review system design patterns and practice LeetCode."
+
+
+def test_create_interview_without_prep_notes_defaults_to_null():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    response = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Phone screen",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["prep_notes"] is None
+
+
+def test_update_interview_prep_notes_rejects_non_owner():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    interview_id = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Technical",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+            "prep_notes": "Study graphs.",
+        },
+    ).json()["interview_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.patch(
+        f"/jobs/{job_id}/interviews/{interview_id}",
+        json={"prep_notes": "Unauthorized update."},
+    )
+
+    assert denied_response.status_code == 404
+    assert interviews[0].prep_notes == "Study graphs."
 
 
 def test_create_job_with_recruiter_notes():
