@@ -19,6 +19,7 @@ class Job(Base):
     deadline: Mapped[date | None] = mapped_column(Date, nullable=True)
     recruiter_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     outcome_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    company_research_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
