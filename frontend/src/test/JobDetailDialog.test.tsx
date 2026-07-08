@@ -399,7 +399,7 @@ describe('JobDetailDialog', () => {
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
-    fireEvent.change(screen.getByLabelText(/notes/i), {
+    fireEvent.change(screen.getByLabelText(/^notes$/i), {
       target: { value: 'Review system design.' },
     });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -440,7 +440,7 @@ describe('JobDetailDialog', () => {
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Final' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-10' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '18:00' } });
-    fireEvent.change(screen.getByLabelText(/notes/i), {
+    fireEvent.change(screen.getByLabelText(/^notes$/i), {
       target: { value: 'Meet hiring manager.' },
     });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -502,6 +502,79 @@ describe('JobDetailDialog', () => {
       await screen.findByText('Unable to save interview. Please try again.')
     ).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /add interview/i })).toBeInTheDocument();
+  });
+
+  it('includes prep_notes in the interview payload when filled in', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add interview/i }));
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
+    fireEvent.change(screen.getByLabelText(/preparation notes/i), {
+      target: { value: 'Study graphs and dynamic programming.' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockOnSaveInterview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prep_notes: 'Study graphs and dynamic programming.',
+        }),
+        undefined
+      );
+    });
+  });
+
+  it('displays prep_notes on the interview card when present', () => {
+    const interviewWithPrepNotes: InterviewRecord[] = [
+      {
+        ...interviews[0],
+        prep_notes: 'Practice system design questions.',
+      },
+    ];
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+        interviews={interviewWithPrepNotes}
+      />
+    );
+
+    expect(screen.getByText('Prep notes')).toBeInTheDocument();
+    expect(screen.getByText('Practice system design questions.')).toBeInTheDocument();
+  });
+
+  it('does not show prep notes section when interview has no prep_notes', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+        interviews={interviews}
+      />
+    );
+
+    expect(screen.queryByText('Prep notes')).not.toBeInTheDocument();
   });
 
   it('does not render application link when not provided', () => {

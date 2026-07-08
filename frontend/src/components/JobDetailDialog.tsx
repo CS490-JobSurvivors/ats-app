@@ -87,6 +87,7 @@ const emptyInterviewForm = {
   scheduled_at_date: '',
   scheduled_at_time: '',
   interview_notes: '',
+  prep_notes: '',
 };
 
 const emptyFollowUpForm = {
@@ -129,6 +130,7 @@ const buildInterviewPayload = (form: typeof emptyInterviewForm): InterviewPayloa
   scheduled_at_date: form.scheduled_at_date,
   scheduled_at_time: new Date(`${form.scheduled_at_date}T${form.scheduled_at_time}`).toISOString(),
   interview_notes: form.interview_notes.trim() || null,
+  prep_notes: form.prep_notes.trim() || null,
 });
 
 const buildFollowUpPayload = (form: typeof emptyFollowUpForm): FollowUpPayload => ({
@@ -320,6 +322,7 @@ const JobDetailDialog = ({
             scheduled_at_date: interview.scheduled_at_date,
             scheduled_at_time: formatInterviewTimeForInput(interview.scheduled_at_time),
             interview_notes: interview.interview_notes || '',
+            prep_notes: interview.prep_notes || '',
           }
         : emptyInterviewForm
     );
@@ -817,6 +820,16 @@ const JobDetailDialog = ({
                             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
                               {interview.interview_notes}
                             </Typography>
+                          )}
+                          {interview.prep_notes && (
+                            <Box sx={{ mt: 0.5 }}>
+                              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                Prep notes
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {interview.prep_notes}
+                              </Typography>
+                            </Box>
                           )}
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
@@ -1441,6 +1454,14 @@ const JobDetailDialog = ({
               minRows={3}
               value={interviewForm.interview_notes}
               onChange={(event) => updateInterviewForm('interview_notes', event.target.value)}
+            />
+            <TextField
+              label="Preparation Notes"
+              size="small"
+              multiline
+              minRows={3}
+              value={interviewForm.prep_notes}
+              onChange={(event) => updateInterviewForm('prep_notes', event.target.value)}
             />
             {interviewError && (
               <Typography variant="body2" color="error">

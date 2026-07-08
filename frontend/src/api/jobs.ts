@@ -65,6 +65,7 @@ export interface InterviewRecord {
   scheduled_at_date: string;
   scheduled_at_time: string;
   interview_notes?: string | null;
+  prep_notes?: string | null;
 }
 
 export interface InterviewPayload {
@@ -72,6 +73,7 @@ export interface InterviewPayload {
   scheduled_at_date: string;
   scheduled_at_time: string;
   interview_notes?: string | null;
+  prep_notes?: string | null;
 }
 
 export type InterviewUpdatePayload = Partial<InterviewPayload>;

@@ -308,7 +308,7 @@ describe('DashboardPage', () => {
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
-    fireEvent.change(screen.getByLabelText(/notes/i), {
+    fireEvent.change(screen.getByLabelText(/^notes$/i), {
       target: { value: 'Review system design.' },
     });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -388,7 +388,7 @@ describe('DashboardPage', () => {
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Final' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-10' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '18:00' } });
-    fireEvent.change(screen.getByLabelText(/notes/i), {
+    fireEvent.change(screen.getByLabelText(/^notes$/i), {
       target: { value: 'Meet hiring manager.' },
     });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
