@@ -19,6 +19,7 @@ import {
   IconButton,
   Checkbox,
   FormControlLabel,
+  Stack,
 } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -34,6 +35,7 @@ import {
   DocumentPayload,
   DocumentRecord,
   DocumentUpdatePayload,
+  DocumentVersion,
   FollowUpPayload,
   FollowUpRecord,
   InterviewPayload,
@@ -83,6 +85,7 @@ interface JobDetailDialogProps {
   isSavedDocumentsLoading?: boolean;
   onDeleteDocument?: (documentId: string) => Promise<void>;
   onUpdateDocument?: (documentId: string, payload: DocumentUpdatePayload) => Promise<void>;
+  onLoadVersions?: (documentId: string) => Promise<DocumentVersion[]>;
 }
 
 const emptyInterviewForm = {
@@ -193,6 +196,7 @@ const JobDetailDialog = ({
   isSavedDocumentsLoading = false,
   onDeleteDocument,
   onUpdateDocument,
+  onLoadVersions,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
@@ -245,6 +249,8 @@ const JobDetailDialog = ({
   }>({ doc_title: '', status: 'active', tags_input: '' });
   const [isUpdatingDocument, setIsUpdatingDocument] = useState(false);
   const [editDocError, setEditDocError] = useState('');
+  const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
   useEffect(() => {
     if (job) {
@@ -991,7 +997,22 @@ const JobDetailDialog = ({
                           )}
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <Button size="small" onClick={() => setViewingDocument(document)}>
+                          <Button
+                            size="small"
+                            onClick={async () => {
+                              setViewingDocument(document);
+                              setDocumentVersions([]);
+                              if (onLoadVersions) {
+                                setVersionsLoading(true);
+                                try {
+                                  const versions = await onLoadVersions(document.document_id);
+                                  setDocumentVersions(versions);
+                                } finally {
+                                  setVersionsLoading(false);
+                                }
+                              }
+                            }}
+                          >
                             View
                           </Button>
                           {onUpdateDocument && (
@@ -1726,6 +1747,52 @@ const JobDetailDialog = ({
             maxRows={24}
             sx={{ fontFamily: 'monospace' }}
           />
+          {onLoadVersions && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" fontWeight={700} mb={1}>
+                Version History
+              </Typography>
+              {versionsLoading ? (
+                <CircularProgress size={20} />
+              ) : documentVersions.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No version history available.
+                </Typography>
+              ) : (
+                <Stack spacing={0.5}>
+                  {documentVersions.map((v) => (
+                    <Box
+                      key={v.version_id}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        py: 0.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Typography variant="body2">
+                        v{v.version_number} &middot; {formatActivityDate(v.created_at)}
+                      </Typography>
+                      {v.content && (
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setViewingDocument((prev) =>
+                              prev ? { ...prev, content: v.content } : prev
+                            )
+                          }
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => navigator.clipboard.writeText(viewingDocument?.content ?? '')}>

@@ -26,8 +26,10 @@ import {
   DocStatus,
   DocumentRecord,
   DocumentUpdatePayload,
+  DocumentVersion,
   DocType,
   getDocumentDownloadUrl,
+  listDocumentVersions,
   listDocuments,
   updateJobDocument,
   uploadDocument,
@@ -72,6 +74,8 @@ const DocumentLibraryPage = () => {
   }>({ doc_title: '', status: 'active', tags_input: '' });
   const [isUpdatingDocument, setIsUpdatingDocument] = useState(false);
   const [editDocError, setEditDocError] = useState('');
+  const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
   useEffect(() => {
     const loadDocuments = async () => {
@@ -328,7 +332,27 @@ const DocumentLibraryPage = () => {
                   <Button
                     variant="outlined"
                     size="small"
-                    onClick={() => setSelectedDocument(document)}
+                    onClick={async () => {
+                      setSelectedDocument(document);
+                      setDocumentVersions([]);
+                      if (document.job_id) {
+                        setVersionsLoading(true);
+                        try {
+                          const { data } = await supabase.auth.getSession();
+                          const token = data.session?.access_token;
+                          if (token) {
+                            const versions = await listDocumentVersions(
+                              token,
+                              document.job_id,
+                              document.document_id
+                            );
+                            setDocumentVersions(versions);
+                          }
+                        } finally {
+                          setVersionsLoading(false);
+                        }
+                      }
+                    }}
                   >
                     View
                   </Button>
@@ -385,6 +409,57 @@ const DocumentLibraryPage = () => {
             InputProps={{ readOnly: true }}
             inputProps={{ style: { fontFamily: 'monospace', fontSize: '0.85rem' } }}
           />
+          {selectedDocument?.job_id && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" fontWeight={700} mb={1}>
+                Version History
+              </Typography>
+              {versionsLoading ? (
+                <CircularProgress size={20} />
+              ) : documentVersions.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No version history available.
+                </Typography>
+              ) : (
+                <Stack spacing={0.5}>
+                  {documentVersions.map((v) => (
+                    <Box
+                      key={v.version_id}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        py: 0.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Typography variant="body2">
+                        v{v.version_number} &middot;{' '}
+                        {new Date(v.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </Typography>
+                      {v.content && (
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setSelectedDocument((prev) =>
+                              prev ? { ...prev, content: v.content } : prev
+                            )
+                          }
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => navigator.clipboard.writeText(selectedDocument?.content ?? '')}>

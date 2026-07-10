@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DocumentLibraryPage from '../pages/documentLibraryPage';
 import { supabase } from '../utils/supabaseClient';
-import { listDocuments, uploadDocument } from '../api/jobs';
+import { listDocuments, listDocumentVersions, uploadDocument } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -17,11 +17,14 @@ jest.mock('../api/jobs', () => ({
   listDocuments: jest.fn(),
   uploadDocument: jest.fn(),
   getDocumentDownloadUrl: jest.fn(),
+  updateJobDocument: jest.fn(),
+  listDocumentVersions: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListDocuments = listDocuments as jest.Mock;
 const mockUploadDocument = uploadDocument as jest.Mock;
+const mockListDocumentVersions = listDocumentVersions as jest.Mock;
 
 const documents = [
   {
@@ -58,6 +61,7 @@ describe('DocumentLibraryPage', () => {
   beforeEach(() => {
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
     mockListDocuments.mockResolvedValue(documents);
+    mockListDocumentVersions.mockResolvedValue([]);
   });
 
   afterEach(() => {

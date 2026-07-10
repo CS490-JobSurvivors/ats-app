@@ -41,6 +41,8 @@ import {
   createJobDocument,
   deleteJobDocument,
   updateJobDocument,
+  listDocumentVersions,
+  DocumentVersion,
   InterviewPayload,
   InterviewRecord,
   FollowUpPayload,
@@ -491,6 +493,19 @@ const DashboardPage = () => {
     }
   };
 
+  const handleLoadVersions = async (documentId: string): Promise<DocumentVersion[]> => {
+    if (!selectedJob) return [];
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return [];
+
+    try {
+      return await listDocumentVersions(token, selectedJob.job_id, documentId);
+    } catch {
+      return [];
+    }
+  };
+
   const handleDialogSubmit = async (payload: JobPayload) => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -760,6 +775,7 @@ const DashboardPage = () => {
         onSaveDocument={handleSaveDocument}
         onDeleteDocument={handleDeleteDocument}
         onUpdateDocument={handleUpdateDocument}
+        onLoadVersions={handleLoadVersions}
         savedDocuments={selectedJobDocuments}
         isSavedDocumentsLoading={isDocumentsLoading}
         onStageChange={async (newStage) => {

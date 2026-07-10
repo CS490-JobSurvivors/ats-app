@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from app.database import get_db
 from app.main import app
 from app.models.document import Document
+from app.models.document_version import DocumentVersion
 from app.models.followup import FollowUp
 from app.models.interviews import Interview
 from app.models.job_stage_history import JobStageHistory
@@ -19,6 +20,7 @@ stage_histories: list[JobStageHistory] = []
 followups: list[FollowUp] = []
 interviews: list[Interview] = []
 documents: list[Document] = []
+document_versions: list[DocumentVersion] = []
 active_user_id = ""
 
 
@@ -61,6 +63,13 @@ class FakeDb:
             if obj.tags is None:
                 obj.tags = []
             documents.append(obj)
+            return
+        if isinstance(obj, DocumentVersion):
+            if obj.version_id is None:
+                obj.version_id = uuid4()
+            if obj.created_at is None:
+                obj.created_at = datetime.now(UTC)
+            document_versions.append(obj)
             return
         if obj.job_id is None:
             obj.job_id = uuid4()
@@ -133,6 +142,13 @@ class FakeDb:
                 results = [document for document in results if document.doc_type in allowed_types]
             return FakeScalarResult(
                 sorted(results, key=lambda document: document.created_at, reverse=True)
+            )
+
+        if entity is DocumentVersion:
+            document_id = str(params["document_id_1"])
+            results = [v for v in document_versions if str(v.document_id) == document_id]
+            return FakeScalarResult(
+                sorted(results, key=lambda v: v.version_number, reverse=True)
             )
 
         return FakeScalarResult([])
@@ -258,6 +274,7 @@ def setup_function():
     followups.clear()
     interviews.clear()
     documents.clear()
+    document_versions.clear()
     app.dependency_overrides[get_db] = override_db
 
 

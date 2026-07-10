@@ -130,6 +130,16 @@ export interface DocumentUpdatePayload {
   tags?: string[];
 }
 
+export interface DocumentVersion {
+  version_id: string;
+  document_id: string;
+  user_id: string;
+  version_number: number;
+  content: string | null;
+  file_path: string | null;
+  created_at: string;
+}
+
 const authHeaders = (accessToken: string) => ({
   Authorization: `Bearer ${accessToken}`,
 });
@@ -502,6 +512,23 @@ export const updateJobDocument = async (
 
   if (!response.ok) {
     throw new Error('Unable to update document.');
+  }
+
+  return await response.json();
+};
+
+export const listDocumentVersions = async (
+  accessToken: string,
+  jobId: string,
+  documentId: string
+): Promise<DocumentVersion[]> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents/${documentId}/versions`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load document versions.');
   }
 
   return await response.json();
