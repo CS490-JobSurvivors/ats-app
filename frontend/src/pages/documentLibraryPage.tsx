@@ -81,7 +81,9 @@ const DocumentLibraryPage = () => {
     try {
       const token = await getAccessToken();
       const result = await listDocuments(token, includeArchived);
-      setDocuments(result);
+      setDocuments(
+        includeArchived ? result.filter((document) => document.status === 'archived') : result
+      );
     } catch {
       setErrorMessage('Unable to load your document library. Please try again.');
     } finally {
@@ -226,10 +228,12 @@ const DocumentLibraryPage = () => {
         >
           <DescriptionOutlinedIcon sx={{ fontSize: 44, color: 'text.secondary', mb: 1 }} />
           <Typography variant="h6" fontWeight={600}>
-            No documents saved yet.
+            {includeArchived ? 'No archived documents.' : 'No documents saved yet.'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Saved resumes and cover letters will appear here.
+            {includeArchived
+              ? 'Archived resumes and cover letters will appear here.'
+              : 'Saved resumes and cover letters will appear here.'}
           </Typography>
         </Paper>
       ) : (

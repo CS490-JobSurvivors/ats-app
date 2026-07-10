@@ -213,7 +213,9 @@ describe('DocumentLibraryPage', () => {
   });
 
   it('loads archived documents when the archived toggle is enabled', async () => {
-    mockListDocuments.mockResolvedValueOnce(documents).mockResolvedValueOnce([archivedDocument]);
+    mockListDocuments
+      .mockResolvedValueOnce(documents)
+      .mockResolvedValueOnce([...documents, archivedDocument]);
 
     render(<DocumentLibraryPage />);
 
@@ -221,6 +223,8 @@ describe('DocumentLibraryPage', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /show archived/i }));
 
     expect(await screen.findByText('Archived Resume')).toBeInTheDocument();
+    expect(screen.queryByText('Resume - Software Engineer at Acme')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cover Letter - Designer at Studio')).not.toBeInTheDocument();
     expect(screen.getByText('Archived')).toBeInTheDocument();
     expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', true);
   });
