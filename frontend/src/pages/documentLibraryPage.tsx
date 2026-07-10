@@ -37,6 +37,8 @@ import {
   restoreDocument,
   updateJobDocument,
   uploadDocument,
+  renameDocument,
+  duplicateDocument,
 } from '../api/jobs';
 
 const documentTypeLabel = (type: DocumentRecord['doc_type']) => {
@@ -87,6 +89,11 @@ const DocumentLibraryPage = () => {
   const visibleDocuments = filterStatus
     ? documents.filter((d) => d.status === filterStatus)
     : documents;
+
+  const [renamingDocument, setRenamingDocument] = useState<DocumentRecord | null>(null);
+  const [renameTitle, setRenameTitle] = useState('');
+  const [renameError, setRenameError] = useState('');
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
   const [editDocForm, setEditDocForm] = useState<{
@@ -253,6 +260,38 @@ const DocumentLibraryPage = () => {
       setDocumentVersions(versions);
     } finally {
       setVersionsLoading(false);
+    }
+  };
+
+  const handleRenameSubmit = async () => {
+    if (!renamingDocument || !renameTitle.trim()) return;
+    setRenameError('');
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('No active session.');
+      const updated = await renameDocument(token, renamingDocument.document_id, renameTitle.trim());
+      setDocuments((prev) =>
+        prev.map((d) => (d.document_id === updated.document_id ? updated : d))
+      );
+      setRenamingDocument(null);
+    } catch {
+      setRenameError('Unable to rename document. Please try again.');
+    }
+  };
+
+  const handleDuplicate = async (doc: DocumentRecord) => {
+    setDuplicatingId(doc.document_id);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('No active session.');
+      const copy = await duplicateDocument(token, doc.document_id);
+      setDocuments((prev) => [copy, ...prev]);
+    } catch {
+      setErrorMessage('Unable to duplicate document. Please try again.');
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -466,6 +505,25 @@ const DocumentLibraryPage = () => {
                   onClick={() => handleArchiveToggle(document)}
                 >
                   {document.status === 'archived' ? 'Restore' : 'Archive'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    setRenamingDocument(document);
+                    setRenameTitle(document.doc_title);
+                    setRenameError('');
+                  }}
+                >
+                  Rename
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={duplicatingId === document.document_id}
+                  onClick={() => handleDuplicate(document)}
+                >
+                  {duplicatingId === document.document_id ? 'Duplicating...' : 'Duplicate'}
                 </Button>
               </Stack>
             </Paper>
@@ -713,6 +771,40 @@ const DocumentLibraryPage = () => {
             disabled={!uploadFile || !uploadDocTitle.trim() || isUploading}
           >
             {isUploading ? 'Uploading...' : 'Upload'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Rename dialog */}
+      <Dialog
+        open={Boolean(renamingDocument)}
+        onClose={() => setRenamingDocument(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Rename Document</DialogTitle>
+        <Divider />
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {renameError && <Alert severity="error">{renameError}</Alert>}
+            <TextField
+              label="New Title"
+              value={renameTitle}
+              onChange={(e) => setRenameTitle(e.target.value)}
+              fullWidth
+              size="small"
+              autoFocus
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenamingDocument(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={handleRenameSubmit}
+            disabled={!renameTitle.trim()}
+          >
+            Save
           </Button>
         </DialogActions>
       </Dialog>

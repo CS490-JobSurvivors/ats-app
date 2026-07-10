@@ -28,6 +28,10 @@ class DocumentUpdate(BaseModel):
         return self
 
 
+class DocumentRename(BaseModel):
+    doc_title: str = Field(..., min_length=1)
+
+
 class DocumentRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

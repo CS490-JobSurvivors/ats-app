@@ -40,18 +40,18 @@ class FakeDb:
         entity = query.column_descriptions[0]["entity"]
         if entity is Document:
             for clause in query.whereclause.clauses:
-                for val in getattr(clause, "right", None) or []:
-                    if isinstance(val, UUID):
-                        match = next(
-                            (
-                                d
-                                for d in documents
-                                if str(d.document_id) == str(val)
-                                and str(d.user_id) == active_user_id
-                            ),
-                            None,
-                        )
-                        return match
+                right = getattr(clause, "right", None)
+                val = getattr(right, "value", None)
+                if isinstance(val, UUID):
+                    return next(
+                        (
+                            d
+                            for d in documents
+                            if str(d.document_id) == str(val)
+                            and str(d.user_id) == active_user_id
+                        ),
+                        None,
+                    )
         return None
 
 
@@ -167,3 +167,105 @@ def test_upload_document_leaves_updated_at_unset():
 
     # Assert
     assert response.json()["updated_at"] is None
+
+
+# ---------------------------------------------------------------------------
+# S3-007 tests
+# ---------------------------------------------------------------------------
+
+
+def test_rename_document_updates_title():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    documents.clear()
+
+    doc = Document(
+        document_id=uuid4(),
+        user_id=UUID(user_id),
+        doc_type="resume",
+        doc_title="Old Title",
+        content="# Resume",
+        doc_version=1,
+    )
+    documents.append(doc)
+
+    response = client.patch(
+        f"/documents/{doc.document_id}",
+        json={"doc_title": "New Title"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["doc_title"] == "New Title"
+    assert doc.doc_title == "New Title"
+
+
+def test_rename_document_rejects_non_owner():
+    owner_id = str(uuid4())
+    other_id = str(uuid4())
+    documents.clear()
+
+    doc = Document(
+        document_id=uuid4(),
+        user_id=UUID(owner_id),
+        doc_type="resume",
+        doc_title="Owner's Doc",
+        content="# Resume",
+        doc_version=1,
+    )
+    documents.append(doc)
+
+    set_authenticated_user(other_id)
+    response = client.patch(
+        f"/documents/{doc.document_id}",
+        json={"doc_title": "Stolen Title"},
+    )
+
+    assert response.status_code == 404
+    assert doc.doc_title == "Owner's Doc"
+
+
+def test_duplicate_document_creates_copy_with_prefixed_title():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    documents.clear()
+
+    doc = Document(
+        document_id=uuid4(),
+        user_id=UUID(user_id),
+        doc_type="cover_letter",
+        doc_title="My Cover Letter",
+        content="# Cover Letter",
+        doc_version=2,
+    )
+    documents.append(doc)
+
+    response = client.post(f"/documents/{doc.document_id}/duplicate")
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["doc_title"] == "Copy of My Cover Letter"
+    assert body["doc_type"] == "cover_letter"
+    assert body["doc_version"] == 1
+    assert len(documents) == 2
+
+
+def test_duplicate_document_rejects_non_owner():
+    owner_id = str(uuid4())
+    other_id = str(uuid4())
+    documents.clear()
+
+    doc = Document(
+        document_id=uuid4(),
+        user_id=UUID(owner_id),
+        doc_type="resume",
+        doc_title="Owner's Resume",
+        content="# Resume",
+        doc_version=1,
+    )
+    documents.append(doc)
+
+    set_authenticated_user(other_id)
+    response = client.post(f"/documents/{doc.document_id}/duplicate")
+
+    assert response.status_code == 404
+    assert len(documents) == 1

@@ -503,6 +503,32 @@ export const restoreDocument = async (
   return await response.json();
 };
 
+export const renameDocument = async (
+  accessToken: string,
+  documentId: string,
+  docTitle: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/documents/${documentId}`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(accessToken), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doc_title: docTitle }),
+  });
+  if (!response.ok) throw new Error('Unable to rename document.');
+  return response.json();
+};
+
+export const duplicateDocument = async (
+  accessToken: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/documents/${documentId}/duplicate`, {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+  });
+  if (!response.ok) throw new Error('Unable to duplicate document.');
+  return response.json();
+};
+
 export const createJobDocument = async (
   accessToken: string,
   jobId: string,
