@@ -139,6 +139,36 @@ def get_owned_document_or_404(
     return document
 
 
+def get_owned_library_document_or_404(document_id: UUID, owner_id: UUID, db: Session) -> Document:
+    document = db.scalar(
+        select(Document).where(
+            Document.document_id == document_id,
+            Document.user_id == owner_id,
+        )
+    )
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    return document
+
+
+def archive_document_record(document: Document) -> Document:
+    now = datetime.now(timezone.utc)
+    document.status = "archived"
+    document.updated_at = now
+    return document
+
+
+def restore_document_record(document: Document) -> Document:
+    document.status = "active"
+    document.updated_at = datetime.now(timezone.utc)
+    return document
+
+
 def as_datetime(value: date | datetime) -> datetime:
     if isinstance(value, datetime):
         return value
@@ -233,16 +263,51 @@ def get_job_metrics(
 
 @router.get("/documents", response_model=list[DocumentRead])
 def list_user_documents(
+    include_archived: bool = False,
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     owner_id = get_current_user_id(current_user)
+    query = select(Document).where(
+        Document.user_id == owner_id,
+        Document.doc_type.in_(("resume", "cover_letter")),
+    )
+    if not include_archived:
+        query = query.where(Document.status == "active")
 
-    return db.scalars(
-        select(Document)
-        .where(Document.user_id == owner_id, Document.doc_type.in_(("resume", "cover_letter")))
-        .order_by(Document.created_at.desc())
-    ).all()
+    return db.scalars(query.order_by(Document.created_at.desc())).all()
+
+
+@router.patch("/documents/{document_id}/archive", response_model=DocumentRead)
+def archive_user_document(
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_library_document_or_404(document_id, owner_id, db)
+    archive_document_record(db_document)
+
+    db.commit()
+    db.refresh(db_document)
+
+    return db_document
+
+
+@router.patch("/documents/{document_id}/restore", response_model=DocumentRead)
+def restore_user_document(
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_library_document_or_404(document_id, owner_id, db)
+    restore_document_record(db_document)
+
+    db.commit()
+    db.refresh(db_document)
+
+    return db_document
 
 
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -558,7 +623,11 @@ def list_job_documents(
 
     return db.scalars(
         select(Document)
-        .where(Document.job_id == job_id, Document.user_id == owner_id)
+        .where(
+            Document.job_id == job_id,
+            Document.user_id == owner_id,
+            Document.status == "active",
+        )
         .order_by(Document.created_at.desc())
     ).all()
 
@@ -683,5 +752,5 @@ def delete_job_document(
     owner_id = get_current_user_id(current_user)
     db_document = get_owned_document_or_404(job_id, document_id, owner_id, db)
 
-    db.delete(db_document)
+    archive_document_record(db_document)
     db.commit()

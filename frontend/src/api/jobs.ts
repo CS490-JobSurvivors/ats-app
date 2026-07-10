@@ -404,8 +404,11 @@ export const listJobDocuments = async (
   return await response.json();
 };
 
-export const listDocuments = async (accessToken: string): Promise<DocumentRecord[]> => {
-  const response = await fetch(`${API_URL}/jobs/documents`, {
+export const listDocuments = async (
+  accessToken: string,
+  includeArchived = false
+): Promise<DocumentRecord[]> => {
+  const response = await fetch(`${API_URL}/jobs/documents?include_archived=${includeArchived}`, {
     method: 'GET',
     headers: authHeaders(accessToken),
   });
@@ -442,6 +445,22 @@ export const uploadDocument = async (
   return await response.json();
 };
 
+export const archiveDocument = async (
+  accessToken: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/documents/${documentId}/archive`, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to archive document.');
+  }
+
+  return await response.json();
+};
+
 export const getDocumentDownloadUrl = async (
   accessToken: string,
   documentId: string
@@ -457,6 +476,22 @@ export const getDocumentDownloadUrl = async (
 
   const body = await response.json();
   return body.url as string;
+};
+
+export const restoreDocument = async (
+  accessToken: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/documents/${documentId}/restore`, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to restore document.');
+  }
+
+  return await response.json();
 };
 
 export const createJobDocument = async (

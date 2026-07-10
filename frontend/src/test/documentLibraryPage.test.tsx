@@ -3,7 +3,15 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DocumentLibraryPage from '../pages/documentLibraryPage';
 import { supabase } from '../utils/supabaseClient';
-import { listDocuments, listDocumentVersions, uploadDocument } from '../api/jobs';
+import {
+  archiveDocument,
+  getDocumentDownloadUrl,
+  listDocumentVersions,
+  listDocuments,
+  restoreDocument,
+  updateJobDocument,
+  uploadDocument,
+} from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -14,17 +22,23 @@ jest.mock('../utils/supabaseClient', () => ({
 }));
 
 jest.mock('../api/jobs', () => ({
-  listDocuments: jest.fn(),
-  uploadDocument: jest.fn(),
+  archiveDocument: jest.fn(),
   getDocumentDownloadUrl: jest.fn(),
-  updateJobDocument: jest.fn(),
   listDocumentVersions: jest.fn(),
+  listDocuments: jest.fn(),
+  restoreDocument: jest.fn(),
+  updateJobDocument: jest.fn(),
+  uploadDocument: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
-const mockListDocuments = listDocuments as jest.Mock;
-const mockUploadDocument = uploadDocument as jest.Mock;
+const mockArchiveDocument = archiveDocument as jest.Mock;
+const mockGetDocumentDownloadUrl = getDocumentDownloadUrl as jest.Mock;
 const mockListDocumentVersions = listDocumentVersions as jest.Mock;
+const mockListDocuments = listDocuments as jest.Mock;
+const mockRestoreDocument = restoreDocument as jest.Mock;
+const mockUpdateJobDocument = updateJobDocument as jest.Mock;
+const mockUploadDocument = uploadDocument as jest.Mock;
 
 const documents = [
   {
@@ -51,17 +65,29 @@ const documents = [
     file_path: null,
     doc_version: 1,
     status: 'active',
-    tags: [],
+    tags: ['design'],
     updated_at: null,
     created_at: '2026-07-02T12:00:00Z',
   },
 ];
+
+const archivedDocument = {
+  ...documents[0],
+  document_id: 'doc-archived',
+  doc_title: 'Archived Resume',
+  status: 'archived',
+  updated_at: '2026-07-03T12:00:00Z',
+};
 
 describe('DocumentLibraryPage', () => {
   beforeEach(() => {
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
     mockListDocuments.mockResolvedValue(documents);
     mockListDocumentVersions.mockResolvedValue([]);
+    mockArchiveDocument.mockResolvedValue({ ...documents[0], status: 'archived' });
+    mockRestoreDocument.mockResolvedValue({ ...archivedDocument, status: 'active' });
+    mockUpdateJobDocument.mockResolvedValue({ ...documents[0], doc_title: 'Updated Resume' });
+    mockGetDocumentDownloadUrl.mockResolvedValue('https://example.com/signed-download');
   });
 
   afterEach(() => {
@@ -75,7 +101,8 @@ describe('DocumentLibraryPage', () => {
     expect(await screen.findByText('Resume - Software Engineer at Acme')).toBeInTheDocument();
     expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
     expect(screen.getByText('Version 2 · Created Jul 1, 2026')).toBeInTheDocument();
-    expect(mockListDocuments).toHaveBeenCalledWith('test-token');
+    expect(screen.getByText('design')).toBeInTheDocument();
+    expect(mockListDocuments).toHaveBeenCalledWith('test-token', false);
   });
 
   it('shows an empty state when no documents exist', async () => {
@@ -99,7 +126,18 @@ describe('DocumentLibraryPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('opens a read-only view dialog for document content', async () => {
+  it('opens a read-only view dialog and loads version history for document content', async () => {
+    mockListDocumentVersions.mockResolvedValueOnce([
+      {
+        version_id: 'version-1',
+        document_id: 'doc-1',
+        user_id: 'user-1',
+        version_number: 1,
+        content: '# Old Resume',
+        file_path: null,
+        created_at: '2026-07-01T12:00:00Z',
+      },
+    ]);
     render(<DocumentLibraryPage />);
 
     await screen.findByText('Resume - Software Engineer at Acme');
@@ -107,6 +145,8 @@ describe('DocumentLibraryPage', () => {
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByDisplayValue('# Resume')).toBeInTheDocument();
+    expect(await screen.findByText(/v1/)).toBeInTheDocument();
+    expect(mockListDocumentVersions).toHaveBeenCalledWith('test-token', 'job-1', 'doc-1');
   });
 
   it('opens upload dialog and calls uploadDocument on submit', async () => {
@@ -124,6 +164,9 @@ describe('DocumentLibraryPage', () => {
       updated_at: null,
       created_at: '2026-07-08T10:00:00Z',
     };
+    mockListDocuments
+      .mockResolvedValueOnce(documents)
+      .mockResolvedValueOnce([uploadedDoc, ...documents]);
     mockUploadDocument.mockResolvedValueOnce(uploadedDoc);
 
     render(<DocumentLibraryPage />);
@@ -193,5 +236,77 @@ describe('DocumentLibraryPage', () => {
     expect(screen.getByText('Uploaded File')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /view/i })).not.toBeInTheDocument();
+  });
+
+  it('loads archived documents when the archived toggle is enabled', async () => {
+    mockListDocuments
+      .mockResolvedValueOnce(documents)
+      .mockResolvedValueOnce([...documents, archivedDocument]);
+
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Resume - Software Engineer at Acme');
+    await userEvent.click(screen.getByRole('checkbox', { name: /show archived/i }));
+
+    expect(await screen.findByText('Archived Resume')).toBeInTheDocument();
+    expect(screen.queryByText('Resume - Software Engineer at Acme')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cover Letter - Designer at Studio')).not.toBeInTheDocument();
+    expect(screen.getByText('archived')).toBeInTheDocument();
+    expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', true);
+  });
+
+  it('archives an active document and reloads the library', async () => {
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Resume - Software Engineer at Acme');
+    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[0]);
+
+    await waitFor(() => expect(mockArchiveDocument).toHaveBeenCalledWith('test-token', 'doc-1'));
+    expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', false);
+  });
+
+  it('restores an archived document and reloads the library', async () => {
+    mockListDocuments.mockResolvedValue([archivedDocument]);
+
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Archived Resume');
+    await userEvent.click(screen.getByRole('button', { name: /restore/i }));
+
+    await waitFor(() =>
+      expect(mockRestoreDocument).toHaveBeenCalledWith('test-token', 'doc-archived')
+    );
+    expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', false);
+  });
+
+  it('updates document metadata from the edit dialog', async () => {
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Resume - Software Engineer at Acme');
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Updated Resume' } });
+    fireEvent.change(screen.getByLabelText(/tags/i), { target: { value: 'backend, remote' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateJobDocument).toHaveBeenCalledWith('test-token', 'job-1', 'doc-1', {
+        doc_title: 'Updated Resume',
+        status: 'active',
+        tags: ['backend', 'remote'],
+      })
+    );
+  });
+
+  it('shows an error when archive or restore fails', async () => {
+    mockArchiveDocument.mockRejectedValueOnce(new Error('network error'));
+
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Resume - Software Engineer at Acme');
+    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[0]);
+
+    expect(
+      await screen.findByText('Unable to update document status. Please try again.')
+    ).toBeInTheDocument();
   });
 });
