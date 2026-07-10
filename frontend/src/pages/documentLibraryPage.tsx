@@ -10,6 +10,8 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
+  FormControl,
+  InputLabel,
   MenuItem,
   Paper,
   Select,
@@ -21,10 +23,13 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { supabase } from '../utils/supabaseClient';
 import {
+  DocStatus,
   DocumentRecord,
+  DocumentUpdatePayload,
   DocType,
   getDocumentDownloadUrl,
   listDocuments,
+  updateJobDocument,
   uploadDocument,
 } from '../api/jobs';
 
@@ -58,6 +63,15 @@ const DocumentLibraryPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
+  const [editDocForm, setEditDocForm] = useState<{
+    doc_title: string;
+    status: DocStatus;
+    tags_input: string;
+  }>({ doc_title: '', status: 'active', tags_input: '' });
+  const [isUpdatingDocument, setIsUpdatingDocument] = useState(false);
+  const [editDocError, setEditDocError] = useState('');
 
   useEffect(() => {
     const loadDocuments = async () => {
@@ -131,6 +145,51 @@ const DocumentLibraryPage = () => {
       // silently fail — user can retry
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const openEditDocument = (doc: DocumentRecord) => {
+    setEditDocError('');
+    setEditingDocument(doc);
+    setEditDocForm({
+      doc_title: doc.doc_title,
+      status: doc.status as DocStatus,
+      tags_input: doc.tags.join(', '),
+    });
+  };
+
+  const saveEditDocument = async () => {
+    if (!editingDocument?.job_id) return;
+    setIsUpdatingDocument(true);
+    setEditDocError('');
+    try {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error('No active session.');
+
+      const tags = editDocForm.tags_input
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const payload: DocumentUpdatePayload = {
+        doc_title: editDocForm.doc_title,
+        status: editDocForm.status,
+        tags,
+      };
+      const updated = await updateJobDocument(
+        token,
+        editingDocument.job_id,
+        editingDocument.document_id,
+        payload
+      );
+      setDocuments((prev) =>
+        prev.map((d) => (d.document_id === updated.document_id ? updated : d))
+      );
+      setEditingDocument(null);
+    } catch {
+      setEditDocError('Failed to update document.');
+    } finally {
+      setIsUpdatingDocument(false);
     }
   };
 
@@ -210,7 +269,7 @@ const DocumentLibraryPage = () => {
             >
               <Box>
                 <Box
-                  sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 1 }}
+                  sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}
                 >
                   <Typography variant="h6" fontWeight={700}>
                     {document.doc_title}
@@ -219,13 +278,42 @@ const DocumentLibraryPage = () => {
                   {document.file_path && (
                     <Chip size="small" label="Uploaded File" color="primary" variant="outlined" />
                   )}
+                  <Chip
+                    size="small"
+                    label={document.status}
+                    variant="outlined"
+                    color={
+                      document.status === 'archived'
+                        ? 'error'
+                        : document.status === 'draft'
+                          ? 'warning'
+                          : 'default'
+                    }
+                  />
                 </Box>
+                {document.tags.length > 0 && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
+                    {document.tags.map((tag) => (
+                      <Chip key={tag} label={tag} size="small" />
+                    ))}
+                  </Box>
+                )}
                 <Typography variant="body2" color="text.secondary">
                   Version {document.doc_version} &middot; Created{' '}
                   {formatCreatedAt(document.created_at)}
+                  {document.updated_at ? ` · Updated ${formatCreatedAt(document.updated_at)}` : ''}
                 </Typography>
               </Box>
               <Stack direction="row" spacing={1}>
+                {document.job_id && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() => openEditDocument(document)}
+                  >
+                    Edit
+                  </Button>
+                )}
                 {document.file_path && (
                   <Button
                     variant="outlined"
@@ -282,6 +370,59 @@ const DocumentLibraryPage = () => {
           </Button>
           <Button variant="contained" onClick={() => setSelectedDocument(null)}>
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Edit document dialog */}
+      <Dialog
+        open={Boolean(editingDocument)}
+        onClose={() => setEditingDocument(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Edit Document</DialogTitle>
+        <Divider />
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {editDocError && <Alert severity="error">{editDocError}</Alert>}
+            <TextField
+              label="Title"
+              fullWidth
+              value={editDocForm.doc_title}
+              onChange={(e) => setEditDocForm((f) => ({ ...f, doc_title: e.target.value }))}
+            />
+            <FormControl fullWidth>
+              <InputLabel>Status</InputLabel>
+              <Select
+                label="Status"
+                value={editDocForm.status}
+                onChange={(e) =>
+                  setEditDocForm((f) => ({ ...f, status: e.target.value as DocStatus }))
+                }
+              >
+                <MenuItem value="active">Active</MenuItem>
+                <MenuItem value="draft">Draft</MenuItem>
+                <MenuItem value="archived">Archived</MenuItem>
+              </Select>
+            </FormControl>
+            <TextField
+              label="Tags"
+              fullWidth
+              value={editDocForm.tags_input}
+              onChange={(e) => setEditDocForm((f) => ({ ...f, tags_input: e.target.value }))}
+              helperText="Separate with commas"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingDocument(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={saveEditDocument}
+            disabled={isUpdatingDocument || !editDocForm.doc_title.trim()}
+          >
+            Save
           </Button>
         </DialogActions>
       </Dialog>
