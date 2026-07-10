@@ -1132,8 +1132,11 @@ describe('JobDetailDialog', () => {
      * button for the job itself, so row-scoping is required to disambiguate.
      */
     const getDocumentRow = (title = DOCUMENT_TITLE): HTMLElement => {
+      // eslint-disable-next-line testing-library/no-node-access
       let element = screen.getByText(title).parentElement;
+      // eslint-disable-next-line testing-library/no-node-access
       while (element && !within(element).queryByRole('button', { name: /^view$/i })) {
+        // eslint-disable-next-line testing-library/no-node-access
         element = element.parentElement;
       }
       return element as HTMLElement;
@@ -1141,6 +1144,7 @@ describe('JobDetailDialog', () => {
 
     /** Scopes queries to the "Edit Document" modal, which is portaled alongside others. */
     const getEditDialog = () =>
+      // eslint-disable-next-line testing-library/no-node-access
       screen.getByText('Edit Document').closest('[role="dialog"]') as HTMLElement;
 
     const openEditDialog = async () => {

@@ -4,11 +4,7 @@
 // body, returns the parsed DocumentRecord, and throws when the response is not ok.
 
 import '@testing-library/jest-dom';
-import {
-  updateJobDocument,
-  DocumentRecord,
-  DocumentUpdatePayload,
-} from '../api/jobs';
+import { updateJobDocument, DocumentRecord, DocumentUpdatePayload } from '../api/jobs';
 
 // ---------------------------------------------------------------------------
 // Constants & helpers

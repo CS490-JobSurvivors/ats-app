@@ -351,7 +351,29 @@ const DocumentLibraryPage = () => {
           <Typography variant="body2" color="text.secondary">
             {documentTypeLabel(selectedDocument?.doc_type ?? null)} &middot; Version{' '}
             {selectedDocument?.doc_version}
+            {selectedDocument?.updated_at
+              ? ` · Updated ${formatCreatedAt(selectedDocument.updated_at)}`
+              : ''}
           </Typography>
+          {selectedDocument && (
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+              <Chip
+                size="small"
+                label={selectedDocument.status}
+                variant="outlined"
+                color={
+                  selectedDocument.status === 'archived'
+                    ? 'error'
+                    : selectedDocument.status === 'draft'
+                      ? 'warning'
+                      : 'default'
+                }
+              />
+              {selectedDocument.tags.map((tag) => (
+                <Chip key={tag} label={tag} size="small" />
+              ))}
+            </Box>
+          )}
         </DialogTitle>
         <Divider />
         <DialogContent>

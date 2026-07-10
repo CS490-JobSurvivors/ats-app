@@ -764,8 +764,11 @@ describe('DashboardPage', () => {
      * renders its own "Edit" button, so row-scoping is required to disambiguate.
      */
     const getDocumentRow = (): HTMLElement => {
+      // eslint-disable-next-line testing-library/no-node-access
       let element = screen.getByText(DOCUMENT_TITLE).parentElement;
+      // eslint-disable-next-line testing-library/no-node-access
       while (element && !within(element).queryByRole('button', { name: /^view$/i })) {
+        // eslint-disable-next-line testing-library/no-node-access
         element = element.parentElement;
       }
       return element as HTMLElement;
@@ -776,6 +779,7 @@ describe('DashboardPage', () => {
       await userEvent.click(await screen.findByText('Software Engineer'));
       expect(await screen.findByText(DOCUMENT_TITLE)).toBeInTheDocument();
       await userEvent.click(within(getDocumentRow()).getByRole('button', { name: /^edit$/i }));
+      // eslint-disable-next-line testing-library/no-node-access
       return screen.getByText('Edit Document').closest('[role="dialog"]') as HTMLElement;
     };
 
