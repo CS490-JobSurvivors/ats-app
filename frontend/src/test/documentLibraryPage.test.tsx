@@ -141,7 +141,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
 
     await screen.findByText('Resume - Software Engineer at Acme');
-    await userEvent.click(screen.getAllByRole('button', { name: /view/i })[0]);
+    // default sort is newest-first; doc-2 (Jul 2) renders before doc-1 (Jul 1)
+    await userEvent.click(screen.getAllByRole('button', { name: /view/i })[1]);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByDisplayValue('# Resume')).toBeInTheDocument();

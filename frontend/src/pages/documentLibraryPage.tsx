@@ -78,6 +78,15 @@ const DocumentLibraryPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<'' | DocType>('');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+
+  const visibleDocuments = documents
+    .filter((d) => (filterType ? d.doc_type === filterType : true))
+    .sort((a, b) => {
+      const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return sortOrder === 'desc' ? -diff : diff;
+    });
 
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
   const [editDocForm, setEditDocForm] = useState<{
@@ -293,6 +302,36 @@ const DocumentLibraryPage = () => {
         />
       </Box>
 
+      {!isLoading && documents.length > 0 && (
+        <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel id="filter-type-label">Type</InputLabel>
+            <Select
+              labelId="filter-type-label"
+              label="Type"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as '' | DocType)}
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="resume">Resume</MenuItem>
+              <MenuItem value="cover_letter">Cover Letter</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel id="sort-order-label">Sort by Date</InputLabel>
+            <Select
+              labelId="sort-order-label"
+              label="Sort by Date"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}
+            >
+              <MenuItem value="desc">Newest First</MenuItem>
+              <MenuItem value="asc">Oldest First</MenuItem>
+            </Select>
+          </FormControl>
+        </Stack>
+      )}
+
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress aria-label="Loading documents" />
@@ -318,9 +357,11 @@ const DocumentLibraryPage = () => {
               : 'Saved resumes and cover letters will appear here.'}
           </Typography>
         </Paper>
+      ) : visibleDocuments.length === 0 ? (
+        <Typography color="text.secondary">No documents match the selected filter.</Typography>
       ) : (
         <Stack spacing={2}>
-          {documents.map((document) => (
+          {visibleDocuments.map((document) => (
             <Paper
               key={document.document_id}
               elevation={0}
