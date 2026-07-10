@@ -7,7 +7,7 @@
 - Database: Supabase PostgreSQL
 - ORM: SQLAlchemy
 - AI: Ollama (planned for future sprint)
-- Deployment: AWS (planned for future sprint)
+- Deployment: AWS Fargate ECS with ATD
 
 ## Structure
 - `frontend/` - React + TypeScript
@@ -94,4 +94,4 @@ pytest testing/test_health.py
 1. Secrets are managed using GitHub Secrets.
 
 ### Prod (AWS deployment)
-1. Secrets are stored using AWS Secrets Manager or AWS env (TBD)
+1. Secrets are stored using AWS Secrets Manager
