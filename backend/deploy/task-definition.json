@@ -1,0 +1,50 @@
+{
+  "family": "ats-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::225482707015:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "ats-backend",
+      "image": "225482707015.dkr.ecr.us-east-1.amazonaws.com/ats-backend:latest",
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "SUPABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:225482707015:secret:ats/SUPABASE_URL-MVQFtP"
+        },
+        {
+          "name": "SUPABASE_JWKS_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:225482707015:secret:ats/SUPABASE_JWKS_URL-TBHJyt"
+        },
+        {
+          "name": "DATABASE_URL",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:225482707015:secret:ats/DATABASE_URL-YIyl9n"
+        },
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:225482707015:secret:ats/ANTHROPIC_API_KEY-DmSbv3"
+        },
+        {
+          "name": "ALLOWED_ORIGINS",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:225482707015:secret:ats/ALLOWED_ORIGINS-iBVH7g"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/ats-backend",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
