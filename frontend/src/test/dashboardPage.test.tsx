@@ -555,6 +555,8 @@ describe('DashboardPage', () => {
         doc_title: 'Resume - Software Engineer at Test Co',
         content: '# Resume draft',
         doc_version: 1,
+        status: 'active',
+        updated_at: null,
         created_at: '2026-06-20T00:00:00Z',
       },
     ]);
@@ -566,6 +568,8 @@ describe('DashboardPage', () => {
       doc_title: 'Resume - Software Engineer at Test Co',
       content: '# Resume draft',
       doc_version: 1,
+      status: 'active',
+      updated_at: null,
       created_at: '2026-06-20T00:00:00Z',
     });
     render(<DashboardPage />);
@@ -598,6 +602,8 @@ describe('DashboardPage', () => {
           doc_title: 'Resume - Software Engineer at Test Co',
           content: '# Resume draft',
           doc_version: 1,
+          status: 'active',
+          updated_at: null,
           created_at: '2026-06-20T00:00:00Z',
         },
       ])

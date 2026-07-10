@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 DocType = Literal["resume", "cover_letter"]
+DocumentStatus = Literal["active", "archived"]
 
 
 class DocumentCreate(BaseModel):
@@ -24,4 +25,8 @@ class DocumentRead(BaseModel):
     content: str | None
     file_path: str | None
     doc_version: int
+    file_path: str | None = None
+    status: DocumentStatus = "active"
+    tags: str | None = None
     created_at: datetime
+    updated_at: datetime | None = None

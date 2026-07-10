@@ -83,6 +83,7 @@ async def upload_document(
         doc_type=doc_type,
         doc_title=doc_title.strip(),
         file_path=storage_path,
+        status="active",
     )
     db.add(doc)
     db.commit()

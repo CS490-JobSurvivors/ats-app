@@ -916,6 +916,8 @@ describe('JobDetailDialog', () => {
         content: 'Some content',
         file_path: null,
         doc_version: 1,
+        status: 'active' as const,
+        updated_at: null,
         created_at: '2026-06-20T00:00:00Z',
       },
     ];

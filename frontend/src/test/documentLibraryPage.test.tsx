@@ -3,7 +3,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DocumentLibraryPage from '../pages/documentLibraryPage';
 import { supabase } from '../utils/supabaseClient';
-import { listDocuments, uploadDocument } from '../api/jobs';
+import {
+  archiveDocument,
+  getDocumentDownloadUrl,
+  listDocuments,
+  restoreDocument,
+  uploadDocument,
+} from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -14,13 +20,18 @@ jest.mock('../utils/supabaseClient', () => ({
 }));
 
 jest.mock('../api/jobs', () => ({
-  listDocuments: jest.fn(),
-  uploadDocument: jest.fn(),
+  archiveDocument: jest.fn(),
   getDocumentDownloadUrl: jest.fn(),
+  listDocuments: jest.fn(),
+  restoreDocument: jest.fn(),
+  uploadDocument: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
+const mockArchiveDocument = archiveDocument as jest.Mock;
+const mockGetDocumentDownloadUrl = getDocumentDownloadUrl as jest.Mock;
 const mockListDocuments = listDocuments as jest.Mock;
+const mockRestoreDocument = restoreDocument as jest.Mock;
 const mockUploadDocument = uploadDocument as jest.Mock;
 
 const documents = [
@@ -31,7 +42,10 @@ const documents = [
     doc_type: 'resume',
     doc_title: 'Resume - Software Engineer at Acme',
     content: '# Resume',
+    file_path: null,
     doc_version: 2,
+    status: 'active',
+    updated_at: null,
     created_at: '2026-07-01T12:00:00Z',
   },
   {
@@ -41,15 +55,29 @@ const documents = [
     doc_type: 'cover_letter',
     doc_title: 'Cover Letter - Designer at Studio',
     content: '# Cover Letter',
+    file_path: null,
     doc_version: 1,
+    status: 'active',
+    updated_at: null,
     created_at: '2026-07-02T12:00:00Z',
   },
 ];
+
+const archivedDocument = {
+  ...documents[0],
+  document_id: 'doc-archived',
+  doc_title: 'Archived Resume',
+  status: 'archived',
+  updated_at: '2026-07-03T12:00:00Z',
+};
 
 describe('DocumentLibraryPage', () => {
   beforeEach(() => {
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
     mockListDocuments.mockResolvedValue(documents);
+    mockArchiveDocument.mockResolvedValue({ ...documents[0], status: 'archived' });
+    mockRestoreDocument.mockResolvedValue({ ...archivedDocument, status: 'active' });
+    mockGetDocumentDownloadUrl.mockResolvedValue('https://example.com/signed-download');
   });
 
   afterEach(() => {
@@ -63,7 +91,7 @@ describe('DocumentLibraryPage', () => {
     expect(await screen.findByText('Resume - Software Engineer at Acme')).toBeInTheDocument();
     expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
     expect(screen.getByText('Version 2 · Created Jul 1, 2026')).toBeInTheDocument();
-    expect(mockListDocuments).toHaveBeenCalledWith('test-token');
+    expect(mockListDocuments).toHaveBeenCalledWith('test-token', false);
   });
 
   it('shows an empty state when no documents exist', async () => {
@@ -107,8 +135,13 @@ describe('DocumentLibraryPage', () => {
       content: null,
       file_path: 'user-1/doc-3.pdf',
       doc_version: 1,
+      status: 'active',
+      updated_at: null,
       created_at: '2026-07-08T10:00:00Z',
     };
+    mockListDocuments
+      .mockResolvedValueOnce(documents)
+      .mockResolvedValueOnce([uploadedDoc, ...documents]);
     mockUploadDocument.mockResolvedValueOnce(uploadedDoc);
 
     render(<DocumentLibraryPage />);
@@ -165,6 +198,8 @@ describe('DocumentLibraryPage', () => {
       content: null,
       file_path: 'user-1/doc-4.pdf',
       doc_version: 1,
+      status: 'active',
+      updated_at: null,
       created_at: '2026-07-08T09:00:00Z',
     };
     mockListDocuments.mockResolvedValueOnce([docWithFile]);
@@ -175,5 +210,55 @@ describe('DocumentLibraryPage', () => {
     expect(screen.getByText('Uploaded File')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /download/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /view/i })).not.toBeInTheDocument();
+  });
+
+  it('loads archived documents when the archived toggle is enabled', async () => {
+    mockListDocuments.mockResolvedValueOnce(documents).mockResolvedValueOnce([archivedDocument]);
+
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Resume - Software Engineer at Acme');
+    await userEvent.click(screen.getByRole('checkbox', { name: /show archived/i }));
+
+    expect(await screen.findByText('Archived Resume')).toBeInTheDocument();
+    expect(screen.getByText('Archived')).toBeInTheDocument();
+    expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', true);
+  });
+
+  it('archives an active document and reloads the library', async () => {
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Resume - Software Engineer at Acme');
+    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[0]);
+
+    await waitFor(() => expect(mockArchiveDocument).toHaveBeenCalledWith('test-token', 'doc-1'));
+    expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', false);
+  });
+
+  it('restores an archived document and reloads the library', async () => {
+    mockListDocuments.mockResolvedValue([archivedDocument]);
+
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Archived Resume');
+    await userEvent.click(screen.getByRole('button', { name: /restore/i }));
+
+    await waitFor(() =>
+      expect(mockRestoreDocument).toHaveBeenCalledWith('test-token', 'doc-archived')
+    );
+    expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', false);
+  });
+
+  it('shows an error when archive or restore fails', async () => {
+    mockArchiveDocument.mockRejectedValueOnce(new Error('network error'));
+
+    render(<DocumentLibraryPage />);
+
+    await screen.findByText('Resume - Software Engineer at Acme');
+    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[0]);
+
+    expect(
+      await screen.findByText('Unable to update document status. Please try again.')
+    ).toBeInTheDocument();
   });
 });
