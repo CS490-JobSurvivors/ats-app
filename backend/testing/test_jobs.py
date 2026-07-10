@@ -1084,6 +1084,7 @@ def test_create_job_document_starts_at_version_one():
     assert body["doc_title"] == "Resume - Software Engineer at Acme"
     assert body["content"] == "## Resume\nTailored content."
     assert body["doc_version"] == 1
+    assert body["status"] == "active"
     assert body["job_id"] == job_id
     assert body["user_id"] == user_id
 

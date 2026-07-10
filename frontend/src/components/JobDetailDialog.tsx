@@ -299,8 +299,19 @@ const JobDetailDialog = ({
   const saveDocument = async (docType: 'resume' | 'cover_letter', content: string) => {
     if (!onSaveDocument) return;
     setIsSavingDocument(true);
+    if (docType === 'resume') {
+      setResumeError('');
+    } else {
+      setCoverLetterError('');
+    }
     try {
       await onSaveDocument({ doc_type: docType, doc_title: buildDocTitle(docType), content });
+    } catch {
+      if (docType === 'resume') {
+        setResumeError('Unable to save resume. Please try again.');
+      } else {
+        setCoverLetterError('Unable to save cover letter. Please try again.');
+      }
     } finally {
       setIsSavingDocument(false);
     }

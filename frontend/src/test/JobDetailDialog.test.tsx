@@ -970,7 +970,55 @@ describe('JobDetailDialog', () => {
       });
     });
 
+    it('shows an error when saving a generated resume fails', async () => {
+      mockOnSaveDocument.mockRejectedValueOnce(new Error('save failed'));
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          onGenerateResume={jest.fn().mockResolvedValue('# Resume draft')}
+          onSaveDocument={mockOnSaveDocument}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await screen.findByText('Generated Resume');
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(
+        await screen.findByText('Unable to save resume. Please try again.')
+      ).toBeInTheDocument();
+    });
+
     it('saves the generated cover letter with an auto-generated title', async () => {
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          onGenerateCoverLetter={jest.fn().mockResolvedValue('Dear hiring manager...')}
+          onSaveDocument={mockOnSaveDocument}
+        />
+      );
+      fireEvent.click(screen.getByRole('button', { name: /^cover letter$/i }));
+      await screen.findByText('Generated Cover Letter');
+      await userEvent.click(await screen.findByRole('button', { name: /^save$/i }));
+
+      expect(mockOnSaveDocument).toHaveBeenCalledWith({
+        doc_type: 'cover_letter',
+        doc_title: 'Cover Letter - Software Engineer at Acme Corp',
+        content: 'Dear hiring manager...',
+      });
+    });
+
+    it('shows an error when saving a generated cover letter fails', async () => {
+      mockOnSaveDocument.mockRejectedValueOnce(new Error('save failed'));
       render(
         <JobDetailDialog
           open={true}
@@ -987,11 +1035,9 @@ describe('JobDetailDialog', () => {
       await screen.findByText('Generated Cover Letter');
       await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
-      expect(mockOnSaveDocument).toHaveBeenCalledWith({
-        doc_type: 'cover_letter',
-        doc_title: 'Cover Letter - Software Engineer at Acme Corp',
-        content: 'Dear hiring manager...',
-      });
+      expect(
+        await screen.findByText('Unable to save cover letter. Please try again.')
+      ).toBeInTheDocument();
     });
 
     it('shows an empty state when there are no saved drafts', () => {
