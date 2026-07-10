@@ -1,6 +1,6 @@
 import React from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
@@ -22,6 +22,7 @@ import {
   deleteJobFollowUp,
   createJobDocument,
   deleteJobDocument,
+  updateJobDocument,
 } from '../api/jobs';
 import { generateResume } from '../api/resume';
 
@@ -57,6 +58,7 @@ jest.mock('../api/jobs', () => ({
   deleteJobFollowUp: jest.fn(),
   createJobDocument: jest.fn(),
   deleteJobDocument: jest.fn(),
+  updateJobDocument: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
@@ -77,6 +79,7 @@ const mockUpdateJobFollowUp = updateJobFollowUp as jest.Mock;
 const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
 const mockCreateJobDocument = createJobDocument as jest.Mock;
 const mockDeleteJobDocument = deleteJobDocument as jest.Mock;
+const mockUpdateJobDocument = updateJobDocument as jest.Mock;
 const mockGenerateResume = generateResume as jest.Mock;
 
 const zeroMetrics = {
@@ -124,6 +127,7 @@ beforeEach(() => {
   mockDeleteJobFollowUp.mockReset();
   mockCreateJobDocument.mockReset();
   mockDeleteJobDocument.mockReset();
+  mockUpdateJobDocument.mockReset();
   mockGenerateResume.mockReset();
 });
 
@@ -555,6 +559,9 @@ describe('DashboardPage', () => {
         doc_title: 'Resume - Software Engineer at Test Co',
         content: '# Resume draft',
         doc_version: 1,
+        status: 'active',
+        tags: [],
+        updated_at: null,
         created_at: '2026-06-20T00:00:00Z',
       },
     ]);
@@ -566,6 +573,9 @@ describe('DashboardPage', () => {
       doc_title: 'Resume - Software Engineer at Test Co',
       content: '# Resume draft',
       doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
       created_at: '2026-06-20T00:00:00Z',
     });
     render(<DashboardPage />);
@@ -598,6 +608,9 @@ describe('DashboardPage', () => {
           doc_title: 'Resume - Software Engineer at Test Co',
           content: '# Resume draft',
           doc_version: 1,
+          status: 'active',
+          tags: [],
+          updated_at: null,
           created_at: '2026-06-20T00:00:00Z',
         },
       ])
@@ -721,6 +734,128 @@ describe('DashboardPage', () => {
         'job-1',
         expect.objectContaining({ job_title: 'Senior Engineer' })
       );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Document metadata updates (S3-002)
+  // -------------------------------------------------------------------------
+
+  describe('updating document metadata', () => {
+    const DOCUMENT_TITLE = 'Resume - Software Engineer at Test Co';
+
+    const savedDocument = {
+      document_id: 'doc-1',
+      user_id: 'user-1',
+      job_id: 'job-1',
+      doc_type: 'resume',
+      doc_title: DOCUMENT_TITLE,
+      content: '# Resume draft',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: ['backend'],
+      updated_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+    };
+
+    /**
+     * Scopes queries to the saved document's row. The job detail dialog also
+     * renders its own "Edit" button, so row-scoping is required to disambiguate.
+     */
+    const getDocumentRow = (): HTMLElement => {
+      let element = screen.getByText(DOCUMENT_TITLE).parentElement;
+      while (element && !within(element).queryByRole('button', { name: /^view$/i })) {
+        element = element.parentElement;
+      }
+      return element as HTMLElement;
+    };
+
+    /** Opens the job, then the document's "Edit Document" modal. */
+    const openDocumentEditor = async (): Promise<HTMLElement> => {
+      await userEvent.click(await screen.findByText('Software Engineer'));
+      expect(await screen.findByText(DOCUMENT_TITLE)).toBeInTheDocument();
+      await userEvent.click(within(getDocumentRow()).getByRole('button', { name: /^edit$/i }));
+      return screen.getByText('Edit Document').closest('[role="dialog"]') as HTMLElement;
+    };
+
+    it('should call updateJobDocument with the token, ids, and edited metadata', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([savedDocument]);
+      mockUpdateJobDocument.mockResolvedValue({ ...savedDocument, status: 'archived' });
+      render(<DashboardPage />);
+
+      // Act
+      const editDialog = await openDocumentEditor();
+      fireEvent.change(within(editDialog).getByLabelText('Tags'), {
+        target: { value: 'backend, remote' },
+      });
+      await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+      // Assert
+      await waitFor(() => {
+        expect(mockUpdateJobDocument).toHaveBeenCalledWith('test-token', 'job-1', 'doc-1', {
+          doc_title: DOCUMENT_TITLE,
+          status: 'active',
+          tags: ['backend', 'remote'],
+        });
+      });
+    });
+
+    it('should reload the job documents so the updated metadata is displayed', async () => {
+      // Arrange
+      const renamedTitle = 'Resume (final)';
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments
+        .mockResolvedValueOnce([savedDocument])
+        .mockResolvedValueOnce([{ ...savedDocument, doc_title: renamedTitle, status: 'archived' }]);
+      mockUpdateJobDocument.mockResolvedValue({ ...savedDocument, doc_title: renamedTitle });
+      render(<DashboardPage />);
+
+      // Act
+      const editDialog = await openDocumentEditor();
+      fireEvent.change(within(editDialog).getByLabelText('Title'), {
+        target: { value: renamedTitle },
+      });
+      await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+      // Assert
+      expect(await screen.findByText(renamedTitle)).toBeInTheDocument();
+      expect(await screen.findByText('archived')).toBeInTheDocument();
+    });
+
+    it('should surface an error message when the update request fails', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([savedDocument]);
+      mockUpdateJobDocument.mockRejectedValue(new Error('Unable to update document.'));
+      render(<DashboardPage />);
+
+      // Act
+      const editDialog = await openDocumentEditor();
+      await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+      // Assert
+      expect(
+        await screen.findByText('Unable to update that document. Please try again.')
+      ).toBeInTheDocument();
+    });
+
+    it('should not call updateJobDocument when there is no active session token', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([savedDocument]);
+      render(<DashboardPage />);
+      const editDialog = await openDocumentEditor();
+
+      // Act
+      mockGetSession.mockResolvedValueOnce({ data: { session: null } });
+      await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+      // Assert
+      await waitFor(() => expect(mockGetSession).toHaveBeenCalled());
+      expect(mockUpdateJobDocument).not.toHaveBeenCalled();
     });
   });
 });

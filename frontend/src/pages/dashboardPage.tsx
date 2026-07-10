@@ -40,12 +40,14 @@ import {
   deleteJobInterview,
   createJobDocument,
   deleteJobDocument,
+  updateJobDocument,
   InterviewPayload,
   InterviewRecord,
   FollowUpPayload,
   FollowUpRecord,
   DocumentPayload,
   DocumentRecord,
+  DocumentUpdatePayload,
   JobActivityEvent,
   JobMetrics,
   JobRecord,
@@ -474,6 +476,21 @@ const DashboardPage = () => {
     }
   };
 
+  const handleUpdateDocument = async (documentId: string, payload: DocumentUpdatePayload) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      await updateJobDocument(token, selectedJob.job_id, documentId, payload);
+      await loadJobDocuments(selectedJob.job_id);
+    } catch {
+      setErrorMessage('Unable to update that document. Please try again.');
+    }
+  };
+
   const handleDialogSubmit = async (payload: JobPayload) => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -742,6 +759,7 @@ const DashboardPage = () => {
         isFollowUpsLoading={isFollowUpsLoading}
         onSaveDocument={handleSaveDocument}
         onDeleteDocument={handleDeleteDocument}
+        onUpdateDocument={handleUpdateDocument}
         savedDocuments={selectedJobDocuments}
         isSavedDocumentsLoading={isDocumentsLoading}
         onStageChange={async (newStage) => {

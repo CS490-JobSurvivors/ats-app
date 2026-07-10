@@ -99,6 +99,7 @@ export interface FollowUpPayload {
 export type FollowUpUpdatePayload = Partial<FollowUpPayload>;
 
 export type DocType = 'resume' | 'cover_letter';
+export type DocStatus = 'active' | 'archived' | 'draft';
 
 export interface DocumentRecord {
   document_id: string;
@@ -109,6 +110,9 @@ export interface DocumentRecord {
   content: string | null;
   file_path: string | null;
   doc_version: number;
+  status: DocStatus;
+  tags: string[];
+  updated_at: string | null;
   created_at: string;
 }
 
@@ -116,6 +120,14 @@ export interface DocumentPayload {
   doc_type: DocType;
   doc_title: string;
   content?: string | null;
+  status?: DocStatus;
+  tags?: string[];
+}
+
+export interface DocumentUpdatePayload {
+  doc_title?: string;
+  status?: DocStatus;
+  tags?: string[];
 }
 
 const authHeaders = (accessToken: string) => ({
@@ -471,4 +483,26 @@ export const deleteJobDocument = async (
   if (!response.ok) {
     throw new Error('Unable to delete document.');
   }
+};
+
+export const updateJobDocument = async (
+  accessToken: string,
+  jobId: string,
+  documentId: string,
+  payload: DocumentUpdatePayload
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents/${documentId}`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to update document.');
+  }
+
+  return await response.json();
 };

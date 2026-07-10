@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JobDetailDialog from '../components/JobDetailDialog';
-import { FollowUpRecord, InterviewRecord, JobRecord } from '../api/jobs';
+import { DocumentRecord, FollowUpRecord, InterviewRecord, JobRecord } from '../api/jobs';
 import { stageColors } from '../utils/stageColors';
 
 const mockJob: JobRecord = {
@@ -944,6 +944,9 @@ describe('JobDetailDialog', () => {
         content: 'Some content',
         file_path: null,
         doc_version: 1,
+        status: 'active' as const,
+        tags: [] as string[],
+        updated_at: null,
         created_at: '2026-06-20T00:00:00Z',
       },
     ];
@@ -1078,6 +1081,322 @@ describe('JobDetailDialog', () => {
       await userEvent.click(deleteButtons[deleteButtons.length - 1]);
 
       expect(mockOnDeleteDocument).toHaveBeenCalledWith('doc-1');
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Document metadata: status, tags, updated_at (S3-002)
+  // -------------------------------------------------------------------------
+
+  describe('Document metadata', () => {
+    const mockOnUpdateDocument = jest.fn();
+
+    const buildDocument = (overrides: Partial<DocumentRecord> = {}): DocumentRecord => ({
+      document_id: 'doc-1',
+      user_id: 'user-1',
+      job_id: '123',
+      doc_type: 'resume',
+      doc_title: 'Resume - Software Engineer at Acme Corp',
+      content: 'Some content',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+      ...overrides,
+    });
+
+    /** Renders the dialog with a single saved document and metadata editing enabled. */
+    const renderWithDocument = (
+      overrides: Partial<DocumentRecord> = {},
+      { withUpdateHandler = true } = {}
+    ) =>
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          savedDocuments={[buildDocument(overrides)]}
+          onUpdateDocument={withUpdateHandler ? mockOnUpdateDocument : undefined}
+        />
+      );
+
+    const DOCUMENT_TITLE = 'Resume - Software Engineer at Acme Corp';
+
+    /**
+     * Scopes queries to a saved document's row. The dialog also renders an "Edit"
+     * button for the job itself, so row-scoping is required to disambiguate.
+     */
+    const getDocumentRow = (title = DOCUMENT_TITLE): HTMLElement => {
+      let element = screen.getByText(title).parentElement;
+      while (element && !within(element).queryByRole('button', { name: /^view$/i })) {
+        element = element.parentElement;
+      }
+      return element as HTMLElement;
+    };
+
+    /** Scopes queries to the "Edit Document" modal, which is portaled alongside others. */
+    const getEditDialog = () =>
+      screen.getByText('Edit Document').closest('[role="dialog"]') as HTMLElement;
+
+    const openEditDialog = async () => {
+      await userEvent.click(within(getDocumentRow()).getByRole('button', { name: /^edit$/i }));
+      return getEditDialog();
+    };
+
+    beforeEach(() => {
+      mockOnUpdateDocument.mockReset();
+      mockOnUpdateDocument.mockResolvedValue(undefined);
+    });
+
+    describe('metadata display', () => {
+      it('should render the document status as a chip when the document is active', () => {
+        // Arrange & Act
+        renderWithDocument({ status: 'active' });
+
+        // Assert
+        expect(screen.getByText('active')).toBeInTheDocument();
+      });
+
+      it('should render the archived status when the document is archived', () => {
+        // Arrange & Act
+        renderWithDocument({ status: 'archived' });
+
+        // Assert
+        expect(screen.getByText('archived')).toBeInTheDocument();
+      });
+
+      it('should render one chip per tag when the document has tags', () => {
+        // Arrange & Act
+        renderWithDocument({ tags: ['backend', 'remote'] });
+
+        // Assert
+        expect(screen.getByText('backend')).toBeInTheDocument();
+        expect(screen.getByText('remote')).toBeInTheDocument();
+      });
+
+      it('should render no tag chips when the document has no tags', () => {
+        // Arrange
+        const tag = 'backend';
+
+        // Act
+        renderWithDocument({ tags: [] });
+
+        // Assert
+        expect(screen.queryByText(tag)).not.toBeInTheDocument();
+      });
+
+      it('should show the updated timestamp in the viewer when the document has been edited', async () => {
+        // Arrange
+        renderWithDocument({ updated_at: '2026-07-01T12:00:00Z' });
+
+        // Act
+        await userEvent.click(within(getDocumentRow()).getByRole('button', { name: /^view$/i }));
+
+        // Assert
+        expect(await screen.findByText(/Updated/)).toBeInTheDocument();
+      });
+
+      it('should omit the updated timestamp in the viewer when the document has never been edited', async () => {
+        // Arrange
+        renderWithDocument({ updated_at: null });
+
+        // Act
+        await userEvent.click(within(getDocumentRow()).getByRole('button', { name: /^view$/i }));
+
+        // Assert
+        await waitFor(() => expect(screen.getAllByText(/^v1/).length).toBeGreaterThan(0));
+        expect(screen.queryByText(/Updated/)).not.toBeInTheDocument();
+      });
+    });
+
+    describe('edit affordance', () => {
+      it('should not show an Edit button when onUpdateDocument is not provided', () => {
+        // Arrange & Act
+        renderWithDocument({}, { withUpdateHandler: false });
+
+        // Assert
+        expect(
+          within(getDocumentRow()).queryByRole('button', { name: /^edit$/i })
+        ).not.toBeInTheDocument();
+      });
+
+      it('should show an Edit button when onUpdateDocument is provided', () => {
+        // Arrange & Act
+        renderWithDocument();
+
+        // Assert
+        expect(
+          within(getDocumentRow()).getByRole('button', { name: /^edit$/i })
+        ).toBeInTheDocument();
+      });
+
+      it('should prefill the edit form with the current title, status, and comma-joined tags', async () => {
+        // Arrange
+        renderWithDocument({ status: 'draft', tags: ['backend', 'remote'] });
+
+        // Act
+        const editDialog = await openEditDialog();
+
+        // Assert
+        expect(within(editDialog).getByLabelText('Title')).toHaveValue(
+          'Resume - Software Engineer at Acme Corp'
+        );
+        expect(within(editDialog).getByLabelText('Tags')).toHaveValue('backend, remote');
+        expect(within(editDialog).getByRole('combobox')).toHaveTextContent('Draft');
+      });
+    });
+
+    describe('saving metadata changes', () => {
+      it('should call onUpdateDocument with the edited title, status, and tags', async () => {
+        // Arrange
+        renderWithDocument({ tags: ['backend'] });
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Title'), {
+          target: { value: 'Resume (final)' },
+        });
+        fireEvent.change(within(editDialog).getByLabelText('Tags'), {
+          target: { value: 'senior, remote' },
+        });
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() =>
+          expect(mockOnUpdateDocument).toHaveBeenCalledWith('doc-1', {
+            doc_title: 'Resume (final)',
+            status: 'active',
+            tags: ['senior', 'remote'],
+          })
+        );
+      });
+
+      it('should submit the newly selected status when the status dropdown is changed', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        await userEvent.click(within(editDialog).getByRole('combobox'));
+        await userEvent.click(await screen.findByRole('option', { name: 'Archived' }));
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() =>
+          expect(mockOnUpdateDocument).toHaveBeenCalledWith(
+            'doc-1',
+            expect.objectContaining({ status: 'archived' })
+          )
+        );
+      });
+
+      it('should trim whitespace and drop empty entries when parsing the tags input', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Tags'), {
+          target: { value: '  react ,, node ,  ' },
+        });
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() =>
+          expect(mockOnUpdateDocument).toHaveBeenCalledWith(
+            'doc-1',
+            expect.objectContaining({ tags: ['react', 'node'] })
+          )
+        );
+      });
+
+      it('should submit an empty tag list when the tags input is cleared', async () => {
+        // Arrange
+        renderWithDocument({ tags: ['stale'] });
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Tags'), { target: { value: '' } });
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() =>
+          expect(mockOnUpdateDocument).toHaveBeenCalledWith(
+            'doc-1',
+            expect.objectContaining({ tags: [] })
+          )
+        );
+      });
+
+      it('should close the edit dialog after a successful save', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() => expect(screen.queryByText('Edit Document')).not.toBeInTheDocument());
+      });
+    });
+
+    describe('edit validation and error handling', () => {
+      it('should disable the Save button when the title is empty', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Title'), { target: { value: '' } });
+
+        // Assert
+        expect(within(editDialog).getByRole('button', { name: /^save$/i })).toBeDisabled();
+      });
+
+      it('should disable the Save button when the title is only whitespace', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Title'), { target: { value: '   ' } });
+
+        // Assert
+        expect(within(editDialog).getByRole('button', { name: /^save$/i })).toBeDisabled();
+      });
+
+      it('should show an error alert and keep the dialog open when the update fails', async () => {
+        // Arrange
+        mockOnUpdateDocument.mockRejectedValue(new Error('Unable to update document.'));
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        expect(await screen.findByText('Failed to update document.')).toBeInTheDocument();
+        expect(screen.getByText('Edit Document')).toBeInTheDocument();
+      });
+
+      it('should close the dialog without calling onUpdateDocument when cancelled', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^cancel$/i }));
+
+        // Assert
+        await waitFor(() => expect(screen.queryByText('Edit Document')).not.toBeInTheDocument());
+        expect(mockOnUpdateDocument).not.toHaveBeenCalled();
+      });
     });
   });
 });

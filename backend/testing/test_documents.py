@@ -31,6 +31,10 @@ class FakeDb:
                 obj.doc_version = 1
             if obj.created_at is None:
                 obj.created_at = datetime.now(timezone.utc)
+            if obj.status is None:
+                obj.status = "active"
+            if obj.tags is None:
+                obj.tags = []
 
     def scalar(self, query):
         entity = query.column_descriptions[0]["entity"]
@@ -120,3 +124,46 @@ def test_upload_rejects_invalid_doc_type():
     )
 
     assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Document metadata: status, tags, updated_at (S3-002)
+# ---------------------------------------------------------------------------
+
+
+def test_upload_document_defaults_to_active_status_and_no_tags():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    documents.clear()
+
+    # Act
+    with patch("app.services.storage.upload_file", return_value=f"{user_id}/fakeid.pdf"):
+        response = client.post(
+            "/documents/upload",
+            data={"doc_type": "resume", "doc_title": "My Resume"},
+            files={"file": make_pdf()},
+        )
+
+    # Assert
+    body = response.json()
+    assert body["status"] == "active"
+    assert body["tags"] == []
+
+
+def test_upload_document_leaves_updated_at_unset():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    documents.clear()
+
+    # Act
+    with patch("app.services.storage.upload_file", return_value=f"{user_id}/fakeid.pdf"):
+        response = client.post(
+            "/documents/upload",
+            data={"doc_type": "cover_letter", "doc_title": "My Cover Letter"},
+            files={"file": make_pdf("cover.pdf")},
+        )
+
+    # Assert
+    assert response.json()["updated_at"] is None
