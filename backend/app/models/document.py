@@ -18,6 +18,7 @@ class Document(Base):
     doc_type: Mapped[str | None] = mapped_column(Text, nullable=True)
     doc_title: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     doc_version: Mapped[int] = mapped_column(SmallInteger, default=1, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
