@@ -1557,16 +1557,7 @@ def test_update_job_document_leaves_other_documents_untouched():
     assert cover_letter["tags"] == ["keep"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "DocumentUpdate permits explicit nulls, so PATCH {'doc_title': null} writes NULL "
-        "over a non-nullable column and blows up DocumentRead response validation. "
-        "Route should skip None values (or schema should forbid them). "
-        "Remove this marker once fixed."
-    ),
-)
-@pytest.mark.parametrize("null_field", ["doc_title", "status", "tags"])
+@pytest.mark.parametrize("null_field", ["status", "tags"])
 def test_update_job_document_ignores_explicit_null_fields(null_field: str):
     # Arrange
     user_id = str(uuid4())
@@ -1582,6 +1573,27 @@ def test_update_job_document_ignores_explicit_null_fields(null_field: str):
     # Assert
     assert response.status_code == 200
     assert response.json()[null_field] == document[null_field]
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "PATCH {doc_title: null} writes NULL over a NOT NULL column — route should "
+        "skip None values or schema should forbid them."
+    ),
+)
+def test_update_job_document_explicit_null_doc_title_is_rejected():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"doc_title": None},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["doc_title"] == document["doc_title"]
 
 
 # ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 DocType = Literal["resume", "cover_letter"]
 DocStatus = Literal["active", "archived", "draft"]
@@ -37,3 +37,13 @@ class DocumentRead(BaseModel):
     tags: list[str]
     updated_at: datetime | None
     created_at: datetime
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def coerce_null_tags(cls, v: object) -> object:
+        return v if v is not None else []
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def coerce_null_status(cls, v: object) -> object:
+        return v if v is not None else "active"
