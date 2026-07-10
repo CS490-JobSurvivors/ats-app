@@ -799,11 +799,7 @@ const DocumentLibraryPage = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setRenamingDocument(null)}>Cancel</Button>
-          <Button
-            variant="contained"
-            onClick={handleRenameSubmit}
-            disabled={!renameTitle.trim()}
-          >
+          <Button variant="contained" onClick={handleRenameSubmit} disabled={!renameTitle.trim()}>
             Save
           </Button>
         </DialogActions>
