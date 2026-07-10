@@ -147,7 +147,11 @@ def rename_document(
     return doc
 
 
-@router.post("/{document_id}/duplicate", response_model=DocumentRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{document_id}/duplicate",
+    response_model=DocumentRead,
+    status_code=status.HTTP_201_CREATED,
+)
 def duplicate_document(
     document_id: UUID,
     current_user: dict = Depends(get_current_user),
