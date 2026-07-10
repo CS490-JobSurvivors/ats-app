@@ -577,6 +577,34 @@ describe('JobDetailDialog', () => {
     expect(screen.queryByText('Prep notes')).not.toBeInTheDocument();
   });
 
+  it('includes company_research_notes in job save payload when filled in', async () => {
+    mockOnSave.mockResolvedValue(undefined);
+    renderDialog();
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.change(screen.getByLabelText(/company research notes/i), {
+      target: { value: 'Founded 2010, Series C, engineering-first culture.' },
+    });
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          company_research_notes: 'Founded 2010, Series C, engineering-first culture.',
+        })
+      );
+    });
+  });
+
+  it('displays company_research_notes when present on the job', () => {
+    renderDialog({ ...mockJob, company_research_notes: 'Competes with Acme. Remote-friendly.' });
+    expect(screen.getByText('Company Research Notes')).toBeInTheDocument();
+    expect(screen.getByText('Competes with Acme. Remote-friendly.')).toBeInTheDocument();
+  });
+
+  it('does not show company research notes section when notes are null', () => {
+    renderDialog({ ...mockJob, company_research_notes: null });
+    expect(screen.queryByText('Company Research Notes')).not.toBeInTheDocument();
+  });
+
   it('does not render application link when not provided', () => {
     renderDialog({ ...mockJob, application_link: null });
     expect(screen.queryByText('Application Link')).not.toBeInTheDocument();

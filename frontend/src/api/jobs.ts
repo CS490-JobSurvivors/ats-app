@@ -12,6 +12,7 @@ export interface JobRecord {
   deadline?: string | null;
   recruiter_notes?: string | null;
   outcome_notes?: string | null;
+  company_research_notes?: string | null;
   job_stage: JobStage;
   job_poster_id: string;
   updated_at: string;
@@ -27,6 +28,7 @@ export interface JobPayload {
   deadline?: string | null;
   recruiter_notes?: string | null;
   outcome_notes?: string | null;
+  company_research_notes?: string | null;
   job_stage?: JobStage;
 }
 

@@ -215,6 +215,7 @@ const JobDetailDialog = ({
     deadline: '',
     recruiter_notes: '',
     outcome_notes: '',
+    company_research_notes: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -244,6 +245,7 @@ const JobDetailDialog = ({
         deadline: job.deadline || '',
         recruiter_notes: job.recruiter_notes || '',
         outcome_notes: job.outcome_notes || '',
+        company_research_notes: job.company_research_notes || '',
       });
     }
     setIsEditing(false);
@@ -429,6 +431,7 @@ const JobDetailDialog = ({
         deadline: form.deadline || null,
         recruiter_notes: form.recruiter_notes.trim() || null,
         outcome_notes: form.outcome_notes.trim() || null,
+        company_research_notes: form.company_research_notes.trim() || null,
       });
       setIsEditing(false);
     } catch {
@@ -561,6 +564,14 @@ const JobDetailDialog = ({
                 multiline
                 rows={3}
               />
+              <TextField
+                label="Company Research Notes"
+                value={form.company_research_notes}
+                onChange={(e) => setForm((f) => ({ ...f, company_research_notes: e.target.value }))}
+                fullWidth
+                multiline
+                rows={3}
+              />
               {OUTCOME_STAGES.includes(job.job_stage) && (
                 <TextField
                   label="Outcome Notes"
@@ -636,6 +647,21 @@ const JobDetailDialog = ({
                     sx={{ whiteSpace: 'pre-wrap' }}
                   >
                     {job.recruiter_notes}
+                  </Typography>
+                </Box>
+              )}
+
+              {job.company_research_notes && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Company Research Notes
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ whiteSpace: 'pre-wrap' }}
+                  >
+                    {job.company_research_notes}
                   </Typography>
                 </Box>
               )}

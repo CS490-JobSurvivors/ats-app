@@ -950,6 +950,56 @@ def test_update_job_outcome_notes_on_rejection():
     assert update_response.json()["outcome_notes"] == "Went with an internal candidate."
 
 
+# ---------------------------------------------------------------------------
+# S3-012: Company research notes
+# ---------------------------------------------------------------------------
+
+
+def test_create_job_with_company_research_notes_persists_and_returns_notes():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    notes = "Founded in 2020, 500 employees, strong RPG gamer culture."
+    payload = {**create_job_payload(), "company_research_notes": notes}
+
+    response = client.post("/jobs", json=payload)
+
+    assert response.status_code == 201
+    assert response.json()["company_research_notes"] == notes
+
+
+def test_update_job_company_research_notes_via_patch():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    notes = (
+        "Competes with Activision. Incredibly competitive culture, "
+        "but they have slides on their website about work-life balance."
+    )
+    response = client.patch(
+        f"/jobs/{job_id}",
+        json={"company_research_notes": notes},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["company_research_notes"] == notes
+
+
+def test_update_job_company_research_notes_rejects_non_owner():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    set_authenticated_user(other_user_id)
+    response = client.patch(
+        f"/jobs/{job_id}",
+        json={"company_research_notes": "Unauthorized notes."},
+    )
+
+    assert response.status_code == 404
+
+
 def test_create_and_list_job_followups_for_owned_job():
     owner_id = str(uuid4())
     set_authenticated_user(owner_id)
