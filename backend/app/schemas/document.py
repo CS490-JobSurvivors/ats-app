@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 DocType = Literal["resume", "cover_letter"]
 DocStatus = Literal["active", "archived", "draft"]
@@ -20,6 +20,12 @@ class DocumentUpdate(BaseModel):
     doc_title: str | None = Field(default=None, min_length=1)
     status: DocStatus | None = None
     tags: list[str] | None = None
+
+    @model_validator(mode="after")
+    def reject_null_title(self) -> "DocumentUpdate":
+        if "doc_title" in self.model_fields_set and self.doc_title is None:
+            raise ValueError("doc_title cannot be null")
+        return self
 
 
 class DocumentRead(BaseModel):

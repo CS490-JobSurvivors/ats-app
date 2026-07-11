@@ -1592,13 +1592,6 @@ def test_update_job_document_ignores_explicit_null_fields(null_field: str):
     assert response.json()[null_field] == document[null_field]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "PATCH {doc_title: null} writes NULL over a NOT NULL column — route should "
-        "skip None values or schema should forbid them."
-    ),
-)
 def test_update_job_document_explicit_null_doc_title_is_rejected():
     user_id = str(uuid4())
     set_authenticated_user(user_id)
@@ -1609,8 +1602,7 @@ def test_update_job_document_explicit_null_doc_title_is_rejected():
         json={"doc_title": None},
     )
 
-    assert response.status_code == 200
-    assert response.json()["doc_title"] == document["doc_title"]
+    assert response.status_code == 422
 
 
 # ---------------------------------------------------------------------------
