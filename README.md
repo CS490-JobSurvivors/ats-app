@@ -123,6 +123,10 @@ pytest testing/test_health.py
     REACT_APP_SUPABASE_PUBLISHABLE_KEY=
 ```
 
+## Database Migrations
+
+Migration files live in `backend/migrations/`. See [`backend/migrations/README.md`](backend/migrations/README.md) for the full migration strategy and rollback plan.
+
 ## Authentication
 1. Frontend authenticates using Supabase Auth.
 2. Supabase Auth returns an access token.
