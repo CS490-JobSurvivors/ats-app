@@ -147,9 +147,7 @@ class FakeDb:
         if entity is DocumentVersion:
             document_id = str(params["document_id_1"])
             results = [v for v in document_versions if str(v.document_id) == document_id]
-            return FakeScalarResult(
-                sorted(results, key=lambda v: v.version_number, reverse=True)
-            )
+            return FakeScalarResult(sorted(results, key=lambda v: v.version_number, reverse=True))
 
         return FakeScalarResult([])
 
@@ -198,7 +196,9 @@ class FakeDb:
 
         if entity is DocumentVersion:
             document_id = str(params["document_id_1"])
-            nums = [v.version_number for v in document_versions if str(v.document_id) == document_id]
+            nums = [
+                v.version_number for v in document_versions if str(v.document_id) == document_id
+            ]
             return max(nums) if nums else None
 
         if entity is Document:
