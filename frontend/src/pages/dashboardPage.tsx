@@ -26,6 +26,7 @@ import {
   listJobActivity,
   listJobInterviews,
   getJobMetrics,
+  getJobAnalytics,
   listJobFollowUps,
   listJobDocuments,
   createJob,
@@ -55,6 +56,7 @@ import {
   DocumentRecord,
   DocumentUpdatePayload,
   JobActivityEvent,
+  JobAnalytics,
   JobMetrics,
   JobRecord,
   JobPayload,
@@ -137,6 +139,7 @@ const DashboardPage = () => {
   const [sortBy, setSortBy] = useState<SortBy>('last_activity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [metrics, setMetrics] = useState<JobMetrics | null>(null);
+  const [analytics, setAnalytics] = useState<JobAnalytics | null>(null);
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -169,10 +172,23 @@ const DashboardPage = () => {
     }
   }, []);
 
+  const fetchAnalytics = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    try {
+      const result = await getJobAnalytics(token);
+      setAnalytics(result);
+    } catch {
+      // keep existing analytics visible on error
+    }
+  }, []);
+
   useEffect(() => {
     fetchJobs();
     fetchMetrics();
-  }, [fetchJobs, fetchMetrics]);
+    fetchAnalytics();
+  }, [fetchJobs, fetchMetrics, fetchAnalytics]);
 
   const locationOptions = useMemo<string[]>(() => {
     const locations = jobs
@@ -623,6 +639,135 @@ const DashboardPage = () => {
           })}
         </Box>
       </Paper>
+
+      {analytics && (
+        <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
+          {analytics.conversion_rates.length > 0 && (
+            <Paper sx={{ p: 3, flex: 1, minWidth: 280 }}>
+              <Typography variant="h6" fontWeight={600} mb={2}>
+                Stage Conversion Rates
+              </Typography>
+              <Box
+                component="table"
+                sx={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}
+              >
+                <Box component="thead">
+                  <Box component="tr">
+                    {['From', 'To', 'Count', 'Rate'].map((h) => (
+                      <Box
+                        key={h}
+                        component="th"
+                        sx={{
+                          textAlign: 'left',
+                          pb: 1,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          fontWeight: 600,
+                          pr: 2,
+                        }}
+                      >
+                        {h}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+                <Box component="tbody">
+                  {analytics.conversion_rates.map((row, i) => (
+                    <Box component="tr" key={i}>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.from_stage}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.to_stage}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.count}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75 }}>
+                        {(row.rate * 100).toFixed(0)}%
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Paper>
+          )}
+
+          {analytics.time_in_stage.length > 0 && (
+            <Paper sx={{ p: 3, flex: 1, minWidth: 220 }}>
+              <Typography variant="h6" fontWeight={600} mb={2}>
+                Avg. Time in Stage
+              </Typography>
+              <Box
+                component="table"
+                sx={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}
+              >
+                <Box component="thead">
+                  <Box component="tr">
+                    {['Stage', 'Avg Days', 'Jobs'].map((h) => (
+                      <Box
+                        key={h}
+                        component="th"
+                        sx={{
+                          textAlign: 'left',
+                          pb: 1,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          fontWeight: 600,
+                          pr: 2,
+                        }}
+                      >
+                        {h}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+                <Box component="tbody">
+                  {analytics.time_in_stage.map((row, i) => (
+                    <Box component="tr" key={i}>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.stage}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.avg_days.toFixed(1)}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75 }}>
+                        {row.count}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Paper>
+          )}
+
+          {analytics.weekly_velocity.length > 0 && (
+            <Paper sx={{ p: 3, flex: 1, minWidth: 200 }}>
+              <Typography variant="h6" fontWeight={600} mb={2}>
+                Weekly Application Volume
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {analytics.weekly_velocity.map((row, i) => (
+                  <Box
+                    key={i}
+                    sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      {new Date(row.week_start).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {row.count}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
+          )}
+        </Box>
+      )}
 
       <Box
         sx={{

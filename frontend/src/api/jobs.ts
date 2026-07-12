@@ -43,6 +43,30 @@ export interface JobMetrics {
   stage_counts: StageCounts;
 }
 
+export interface StageConversionRate {
+  from_stage: string;
+  to_stage: string;
+  count: number;
+  rate: number;
+}
+
+export interface TimeInStage {
+  stage: string;
+  avg_days: number;
+  count: number;
+}
+
+export interface WeeklyVelocity {
+  week_start: string;
+  count: number;
+}
+
+export interface JobAnalytics {
+  conversion_rates: StageConversionRate[];
+  time_in_stage: TimeInStage[];
+  weekly_velocity: WeeklyVelocity[];
+}
+
 export type JobActivityEventType =
   | 'applied'
   | 'follow_up'
@@ -164,6 +188,15 @@ export const getJobMetrics = async (accessToken: string): Promise<JobMetrics> =>
     throw new Error('Unable to load job metrics.');
   }
   return await response.json();
+};
+
+export const getJobAnalytics = async (accessToken: string): Promise<JobAnalytics> => {
+  const response = await fetch(`${API_URL}/jobs/analytics`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+  if (!response.ok) throw new Error('Unable to load job analytics.');
+  return response.json();
 };
 
 export const createJob = async (accessToken: string, job: JobPayload): Promise<JobRecord> => {

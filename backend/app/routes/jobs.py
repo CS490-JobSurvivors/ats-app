@@ -1,4 +1,6 @@
-from datetime import date, datetime, time, timezone
+from collections import Counter, defaultdict
+from datetime import date, datetime, time, timedelta, timezone
+from itertools import groupby
 from typing import cast
 from uuid import UUID
 
@@ -24,11 +26,15 @@ from app.schemas.jobs import (
     InterviewRead,
     InterviewUpdate,
     JobActivityEvent,
+    JobAnalytics,
     JobCreate,
     JobMetrics,
     JobRead,
     JobUpdate,
+    StageConversionRate,
     StageCounts,
+    TimeInStage,
+    WeeklyVelocity,
 )
 from app.services.auth.dependencies import get_current_user
 
@@ -258,6 +264,71 @@ def get_job_metrics(
         awaiting_response=stage_counts["Applied"],
         responded=sum(count for stage, count in stage_counts.items() if stage in RESPONDED_STAGES),
         stage_counts=StageCounts(**stage_counts),
+    )
+
+
+@router.get("/analytics", response_model=JobAnalytics)
+def get_job_analytics(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+
+    history = db.scalars(
+        select(JobStageHistory)
+        .join(Job, JobStageHistory.job_id == Job.job_id)
+        .where(Job.job_poster_id == owner_id)
+        .order_by(JobStageHistory.job_id, JobStageHistory.changed_at)
+    ).all()
+
+    transition_counts: Counter = Counter((h.from_stage, h.to_stage) for h in history)
+    from_totals: Counter = Counter(h.from_stage for h in history)
+
+    conversion_rates = [
+        StageConversionRate(
+            from_stage=from_s,
+            to_stage=to_s,
+            count=count,
+            rate=round(count / from_totals[from_s], 2) if from_totals[from_s] else 0.0,
+        )
+        for (from_s, to_s), count in sorted(transition_counts.items())
+    ]
+
+    time_in_stage_data: dict = defaultdict(list)
+    for _, job_history in groupby(history, key=lambda h: h.job_id):
+        records = list(job_history)
+        for i in range(1, len(records)):
+            stage = records[i].from_stage
+            days = (records[i].changed_at - records[i - 1].changed_at).total_seconds() / 86400
+            time_in_stage_data[stage].append(days)
+
+    time_in_stage = [
+        TimeInStage(
+            stage=stage,
+            avg_days=round(sum(durations) / len(durations), 1),
+            count=len(durations),
+        )
+        for stage, durations in sorted(time_in_stage_data.items())
+    ]
+
+    user_jobs = db.scalars(select(Job).where(Job.job_poster_id == owner_id)).all()
+    weekly_counts: Counter = Counter()
+    for job in user_jobs:
+        if job.created_at:
+            week_start = (
+                job.created_at.date() - timedelta(days=job.created_at.weekday())
+            )
+            weekly_counts[week_start] += 1
+
+    weekly_velocity = [
+        WeeklyVelocity(week_start=week, count=count)
+        for week, count in sorted(weekly_counts.items(), reverse=True)
+    ][:12]
+
+    return JobAnalytics(
+        conversion_rates=conversion_rates,
+        time_in_stage=time_in_stage,
+        weekly_velocity=weekly_velocity,
     )
 
 

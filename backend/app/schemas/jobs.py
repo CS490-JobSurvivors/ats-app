@@ -122,3 +122,27 @@ class FollowUpRead(FollowUpBase):
     job_id: UUID
     user_id: UUID
     created_at: datetime | None = None
+
+
+class StageConversionRate(BaseModel):
+    from_stage: str
+    to_stage: str
+    count: int
+    rate: float
+
+
+class TimeInStage(BaseModel):
+    stage: str
+    avg_days: float
+    count: int
+
+
+class WeeklyVelocity(BaseModel):
+    week_start: date
+    count: int
+
+
+class JobAnalytics(BaseModel):
+    conversion_rates: list[StageConversionRate]
+    time_in_stage: list[TimeInStage]
+    weekly_velocity: list[WeeklyVelocity]
