@@ -271,9 +271,8 @@ def list_user_documents(
     query = select(Document).where(
         Document.user_id == owner_id,
         Document.doc_type.in_(("resume", "cover_letter")),
+        Document.status == ("archived" if include_archived else "active"),
     )
-    if not include_archived:
-        query = query.where(Document.status == "active")
 
     return db.scalars(query.order_by(Document.created_at.desc())).all()
 

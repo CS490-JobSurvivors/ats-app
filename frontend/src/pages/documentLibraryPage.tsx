@@ -105,9 +105,7 @@ const DocumentLibraryPage = () => {
     try {
       const token = await getAccessToken();
       const result = await listDocuments(token, includeArchived);
-      setDocuments(
-        includeArchived ? result.filter((document) => document.status === 'archived') : result
-      );
+      setDocuments(result);
     } catch {
       setErrorMessage('Unable to load your document library. Please try again.');
     } finally {
@@ -154,11 +152,14 @@ const DocumentLibraryPage = () => {
 
   const handleDownload = async (doc: DocumentRecord) => {
     if (!doc.file_path) return;
+    setActionErrorMessage('');
     setDownloadingId(doc.document_id);
     try {
       const token = await getAccessToken();
       const url = await getDocumentDownloadUrl(token, doc.document_id);
       window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      setActionErrorMessage('Unable to download document. Please try again.');
     } finally {
       setDownloadingId(null);
     }

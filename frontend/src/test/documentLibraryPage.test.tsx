@@ -238,10 +238,36 @@ describe('DocumentLibraryPage', () => {
     expect(screen.queryByRole('button', { name: /view/i })).not.toBeInTheDocument();
   });
 
+  it('shows an error when a document download fails', async () => {
+    const docWithFile = {
+      document_id: 'doc-4',
+      user_id: 'user-1',
+      job_id: null,
+      doc_type: 'cover_letter',
+      doc_title: 'Uploaded Cover Letter',
+      content: null,
+      file_path: 'user-1/doc-4.pdf',
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-07-08T09:00:00Z',
+    };
+    mockListDocuments.mockResolvedValueOnce([docWithFile]);
+    mockGetDocumentDownloadUrl.mockRejectedValueOnce(new Error('download failed'));
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Uploaded Cover Letter');
+
+    await userEvent.click(screen.getByRole('button', { name: /download/i }));
+
+    expect(
+      await screen.findByText('Unable to download document. Please try again.')
+    ).toBeInTheDocument();
+  });
+
   it('loads archived documents when the archived toggle is enabled', async () => {
-    mockListDocuments
-      .mockResolvedValueOnce(documents)
-      .mockResolvedValueOnce([...documents, archivedDocument]);
+    mockListDocuments.mockResolvedValueOnce(documents).mockResolvedValueOnce([archivedDocument]);
 
     render(<DocumentLibraryPage />);
 

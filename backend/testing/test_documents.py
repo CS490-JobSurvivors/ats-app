@@ -33,8 +33,6 @@ class FakeDb:
                 obj.status = "active"
             if obj.created_at is None:
                 obj.created_at = datetime.now(timezone.utc)
-            if obj.status is None:
-                obj.status = "active"
             if obj.tags is None:
                 obj.tags = []
 
