@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import AppShell from './components/appShell';
+import ErrorBoundary from './components/ErrorBoundary';
 import ProtectedRoute from './components/ProtectedRoute';
 import DashboardPage from './pages/dashboardPage';
 import LoginPage from './pages/loginPage';
@@ -18,6 +19,7 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <ErrorBoundary>
       <ProfileProvider>
         <Router>
           <Routes>
@@ -69,6 +71,7 @@ function App() {
           </Routes>
         </Router>
       </ProfileProvider>
+      </ErrorBoundary>
     </ThemeProvider>
   );
 }
