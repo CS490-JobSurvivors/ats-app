@@ -8,11 +8,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.document import Document
+from app.models.document_version import DocumentVersion
 from app.models.followup import FollowUp
 from app.models.interviews import Interview
 from app.models.job_stage_history import JobStageHistory
 from app.models.jobs import Job
-from app.schemas.document import DocumentCreate, DocumentRead
+from app.schemas.document import DocumentCreate, DocumentRead, DocumentUpdate
+from app.schemas.document_version import DocumentVersionRead
 from app.schemas.jobs import (
     ActivityEventType,
     FollowUpCreate,
@@ -594,7 +596,81 @@ def create_job_document(
     db.commit()
     db.refresh(db_document)
 
+    db.add(
+        DocumentVersion(
+            document_id=db_document.document_id,
+            user_id=owner_id,
+            version_number=db_document.doc_version,
+            content=db_document.content,
+            file_path=db_document.file_path,
+        )
+    )
+    db.commit()
+
     return db_document
+
+
+@router.patch("/{job_id}/documents/{document_id}", response_model=DocumentRead)
+def update_job_document(
+    job_id: UUID,
+    document_id: UUID,
+    document_update: DocumentUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_document_or_404(job_id, document_id, owner_id, db)
+
+    for field, value in document_update.model_dump(exclude_unset=True).items():
+        setattr(db_document, field, value)
+    db_document.updated_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(db_document)
+
+    next_version = (
+        db.scalar(
+            select(func.max(DocumentVersion.version_number)).where(
+                DocumentVersion.document_id == db_document.document_id
+            )
+        )
+        or 0
+    ) + 1
+
+    db.add(
+        DocumentVersion(
+            document_id=db_document.document_id,
+            user_id=owner_id,
+            version_number=next_version,
+            content=db_document.content,
+            file_path=db_document.file_path,
+        )
+    )
+    db.commit()
+
+    return db_document
+
+
+@router.get(
+    "/{job_id}/documents/{document_id}/versions",
+    response_model=list[DocumentVersionRead],
+)
+def list_document_versions(
+    job_id: UUID,
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_document_or_404(job_id, document_id, owner_id, db)
+
+    versions = db.scalars(
+        select(DocumentVersion)
+        .where(DocumentVersion.document_id == document_id)
+        .order_by(DocumentVersion.version_number.desc())
+    ).all()
+
+    return versions
 
 
 @router.delete("/{job_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

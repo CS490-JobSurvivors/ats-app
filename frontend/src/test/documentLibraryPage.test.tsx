@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DocumentLibraryPage from '../pages/documentLibraryPage';
 import { supabase } from '../utils/supabaseClient';
-import { listDocuments, uploadDocument } from '../api/jobs';
+import { listDocuments, listDocumentVersions, uploadDocument } from '../api/jobs';
 
 jest.mock('../utils/supabaseClient', () => ({
   supabase: {
@@ -17,11 +17,14 @@ jest.mock('../api/jobs', () => ({
   listDocuments: jest.fn(),
   uploadDocument: jest.fn(),
   getDocumentDownloadUrl: jest.fn(),
+  updateJobDocument: jest.fn(),
+  listDocumentVersions: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockListDocuments = listDocuments as jest.Mock;
 const mockUploadDocument = uploadDocument as jest.Mock;
+const mockListDocumentVersions = listDocumentVersions as jest.Mock;
 
 const documents = [
   {
@@ -31,7 +34,11 @@ const documents = [
     doc_type: 'resume',
     doc_title: 'Resume - Software Engineer at Acme',
     content: '# Resume',
+    file_path: null,
     doc_version: 2,
+    status: 'active',
+    tags: [],
+    updated_at: null,
     created_at: '2026-07-01T12:00:00Z',
   },
   {
@@ -41,7 +48,11 @@ const documents = [
     doc_type: 'cover_letter',
     doc_title: 'Cover Letter - Designer at Studio',
     content: '# Cover Letter',
+    file_path: null,
     doc_version: 1,
+    status: 'active',
+    tags: [],
+    updated_at: null,
     created_at: '2026-07-02T12:00:00Z',
   },
 ];
@@ -50,6 +61,7 @@ describe('DocumentLibraryPage', () => {
   beforeEach(() => {
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
     mockListDocuments.mockResolvedValue(documents);
+    mockListDocumentVersions.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -107,6 +119,9 @@ describe('DocumentLibraryPage', () => {
       content: null,
       file_path: 'user-1/doc-3.pdf',
       doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
       created_at: '2026-07-08T10:00:00Z',
     };
     mockUploadDocument.mockResolvedValueOnce(uploadedDoc);
@@ -165,6 +180,9 @@ describe('DocumentLibraryPage', () => {
       content: null,
       file_path: 'user-1/doc-4.pdf',
       doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
       created_at: '2026-07-08T09:00:00Z',
     };
     mockListDocuments.mockResolvedValueOnce([docWithFile]);

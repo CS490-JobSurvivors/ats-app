@@ -19,6 +19,7 @@ import {
   IconButton,
   Checkbox,
   FormControlLabel,
+  Stack,
 } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
@@ -30,8 +31,11 @@ import FlagIcon from '@mui/icons-material/Flag';
 import SendIcon from '@mui/icons-material/Send';
 import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
 import {
+  DocStatus,
   DocumentPayload,
   DocumentRecord,
+  DocumentUpdatePayload,
+  DocumentVersion,
   FollowUpPayload,
   FollowUpRecord,
   InterviewPayload,
@@ -80,6 +84,8 @@ interface JobDetailDialogProps {
   savedDocuments?: DocumentRecord[];
   isSavedDocumentsLoading?: boolean;
   onDeleteDocument?: (documentId: string) => Promise<void>;
+  onUpdateDocument?: (documentId: string, payload: DocumentUpdatePayload) => Promise<void>;
+  onLoadVersions?: (documentId: string) => Promise<DocumentVersion[]>;
 }
 
 const emptyInterviewForm = {
@@ -189,6 +195,8 @@ const JobDetailDialog = ({
   savedDocuments = [],
   isSavedDocumentsLoading = false,
   onDeleteDocument,
+  onUpdateDocument,
+  onLoadVersions,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
@@ -233,6 +241,16 @@ const JobDetailDialog = ({
   const [isSavingDocument, setIsSavingDocument] = useState(false);
   const [pendingDeleteDocument, setPendingDeleteDocument] = useState<DocumentRecord | null>(null);
   const [viewingDocument, setViewingDocument] = useState<DocumentRecord | null>(null);
+  const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
+  const [editDocForm, setEditDocForm] = useState<{
+    doc_title: string;
+    status: DocStatus;
+    tags_input: string;
+  }>({ doc_title: '', status: 'active', tags_input: '' });
+  const [isUpdatingDocument, setIsUpdatingDocument] = useState(false);
+  const [editDocError, setEditDocError] = useState('');
+  const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
 
   useEffect(() => {
     if (job) {
@@ -312,6 +330,38 @@ const JobDetailDialog = ({
     if (!pendingDeleteDocument || !onDeleteDocument) return;
     await onDeleteDocument(pendingDeleteDocument.document_id);
     setPendingDeleteDocument(null);
+  };
+
+  const openEditDocument = (document: DocumentRecord) => {
+    setEditDocError('');
+    setEditingDocument(document);
+    setEditDocForm({
+      doc_title: document.doc_title,
+      status: document.status as DocStatus,
+      tags_input: document.tags.join(', '),
+    });
+  };
+
+  const saveEditDocument = async () => {
+    if (!editingDocument || !onUpdateDocument) return;
+    setIsUpdatingDocument(true);
+    setEditDocError('');
+    try {
+      const tags = editDocForm.tags_input
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      await onUpdateDocument(editingDocument.document_id, {
+        doc_title: editDocForm.doc_title,
+        status: editDocForm.status,
+        tags,
+      });
+      setEditingDocument(null);
+    } catch {
+      setEditDocError('Failed to update document.');
+    } finally {
+      setIsUpdatingDocument(false);
+    }
   };
 
   const openInterviewForm = (interview?: InterviewRecord) => {
@@ -925,11 +975,51 @@ const JobDetailDialog = ({
                             v{document.doc_version} &middot;{' '}
                             {formatActivityDate(document.created_at)}
                           </Typography>
+                          <Chip
+                            label={document.status}
+                            size="small"
+                            variant="outlined"
+                            color={
+                              document.status === 'archived'
+                                ? 'error'
+                                : document.status === 'draft'
+                                  ? 'warning'
+                                  : 'default'
+                            }
+                            sx={{ mt: 0.5 }}
+                          />
+                          {document.tags.length > 0 && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                              {document.tags.map((tag) => (
+                                <Chip key={tag} label={tag} size="small" />
+                              ))}
+                            </Box>
+                          )}
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <Button size="small" onClick={() => setViewingDocument(document)}>
+                          <Button
+                            size="small"
+                            onClick={async () => {
+                              setViewingDocument(document);
+                              setDocumentVersions([]);
+                              if (onLoadVersions) {
+                                setVersionsLoading(true);
+                                try {
+                                  const versions = await onLoadVersions(document.document_id);
+                                  setDocumentVersions(versions);
+                                } finally {
+                                  setVersionsLoading(false);
+                                }
+                              }
+                            }}
+                          >
                             View
                           </Button>
+                          {onUpdateDocument && (
+                            <Button size="small" onClick={() => openEditDocument(document)}>
+                              Edit
+                            </Button>
+                          )}
                           {onDeleteDocument && (
                             <Button
                               size="small"
@@ -1619,7 +1709,29 @@ const JobDetailDialog = ({
             <Typography variant="caption" color="text.secondary" display="block">
               v{viewingDocument?.doc_version} &middot;{' '}
               {viewingDocument ? formatActivityDate(viewingDocument.created_at) : ''}
+              {viewingDocument?.updated_at
+                ? ` · Updated ${formatActivityDate(viewingDocument.updated_at)}`
+                : ''}
             </Typography>
+            {viewingDocument && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                <Chip
+                  label={viewingDocument.status}
+                  size="small"
+                  variant="outlined"
+                  color={
+                    viewingDocument.status === 'archived'
+                      ? 'error'
+                      : viewingDocument.status === 'draft'
+                        ? 'warning'
+                        : 'default'
+                  }
+                />
+                {viewingDocument.tags.map((tag) => (
+                  <Chip key={tag} label={tag} size="small" />
+                ))}
+              </Box>
+            )}
           </Box>
           <IconButton size="small" onClick={() => setViewingDocument(null)}>
             <CloseIcon fontSize="small" />
@@ -1635,12 +1747,107 @@ const JobDetailDialog = ({
             maxRows={24}
             sx={{ fontFamily: 'monospace' }}
           />
+          {onLoadVersions && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" fontWeight={700} mb={1}>
+                Version History
+              </Typography>
+              {versionsLoading ? (
+                <CircularProgress size={20} />
+              ) : documentVersions.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No version history available.
+                </Typography>
+              ) : (
+                <Stack spacing={0.5}>
+                  {documentVersions.map((v) => (
+                    <Box
+                      key={v.version_id}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        py: 0.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Typography variant="body2">
+                        v{v.version_number} &middot; {formatActivityDate(v.created_at)}
+                      </Typography>
+                      {v.content && (
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setViewingDocument((prev) =>
+                              prev ? { ...prev, content: v.content } : prev
+                            )
+                          }
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => navigator.clipboard.writeText(viewingDocument?.content ?? '')}>
             Copy
           </Button>
           <Button onClick={() => setViewingDocument(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(editingDocument)}
+        onClose={() => setEditingDocument(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Edit Document</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          {editDocError && <Alert severity="error">{editDocError}</Alert>}
+          <TextField
+            label="Title"
+            fullWidth
+            value={editDocForm.doc_title}
+            onChange={(e) => setEditDocForm((f) => ({ ...f, doc_title: e.target.value }))}
+          />
+          <FormControl fullWidth>
+            <InputLabel>Status</InputLabel>
+            <Select
+              label="Status"
+              value={editDocForm.status}
+              onChange={(e) =>
+                setEditDocForm((f) => ({ ...f, status: e.target.value as DocStatus }))
+              }
+            >
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="draft">Draft</MenuItem>
+              <MenuItem value="archived">Archived</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            label="Tags"
+            fullWidth
+            value={editDocForm.tags_input}
+            onChange={(e) => setEditDocForm((f) => ({ ...f, tags_input: e.target.value }))}
+            helperText="Separate with commas"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingDocument(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={saveEditDocument}
+            disabled={isUpdatingDocument || !editDocForm.doc_title.trim()}
+          >
+            Save
+          </Button>
         </DialogActions>
       </Dialog>
     </>

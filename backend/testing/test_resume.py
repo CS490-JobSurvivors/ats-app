@@ -376,9 +376,7 @@ def test_generate_cover_letter_user_message_includes_profile_and_job_data(
 
 
 @patch("app.routes.resume.anthropic.Anthropic")
-def test_generate_cover_letter_uses_system_parameter_with_guardrails(
-    mock_anthropic, monkeypatch
-):
+def test_generate_cover_letter_uses_system_parameter_with_guardrails(mock_anthropic, monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     user_id = str(uuid4())
     set_authenticated_user(user_id)
@@ -443,9 +441,7 @@ def test_generate_cover_letter_returns_404_for_another_users_job(mock_anthropic,
 
 
 @patch("app.routes.resume.anthropic.Anthropic")
-def test_generate_cover_letter_returns_503_when_api_key_not_configured(
-    mock_anthropic, monkeypatch
-):
+def test_generate_cover_letter_returns_503_when_api_key_not_configured(mock_anthropic, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     user_id = str(uuid4())
     set_authenticated_user(user_id)
