@@ -86,6 +86,7 @@ interface JobDetailDialogProps {
   onDeleteDocument?: (documentId: string) => Promise<void>;
   onUpdateDocument?: (documentId: string, payload: DocumentUpdatePayload) => Promise<void>;
   onLoadVersions?: (documentId: string) => Promise<DocumentVersion[]>;
+  onGenerateResearch?: (userContext: string) => Promise<string>;
 }
 
 const emptyInterviewForm = {
@@ -197,6 +198,7 @@ const JobDetailDialog = ({
   onDeleteDocument,
   onUpdateDocument,
   onLoadVersions,
+  onGenerateResearch,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
@@ -227,6 +229,10 @@ const JobDetailDialog = ({
   });
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [researchContext, setResearchContext] = useState('');
+  const [isResearching, setIsResearching] = useState(false);
+  const [researchError, setResearchError] = useState('');
+  const [wasAiGenerated, setWasAiGenerated] = useState(false);
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<string | null>(null);
@@ -268,6 +274,7 @@ const JobDetailDialog = ({
     }
     setIsEditing(false);
     setErrorMessage('');
+    setWasAiGenerated(false);
   }, [job, open]);
 
   if (!job) return null;
@@ -614,14 +621,63 @@ const JobDetailDialog = ({
                 multiline
                 rows={3}
               />
-              <TextField
-                label="Company Research Notes"
-                value={form.company_research_notes}
-                onChange={(e) => setForm((f) => ({ ...f, company_research_notes: e.target.value }))}
-                fullWidth
-                multiline
-                rows={3}
-              />
+              <Box>
+                <TextField
+                  label="Company Research Notes"
+                  value={form.company_research_notes}
+                  onChange={(e) => {
+                    setWasAiGenerated(false);
+                    setForm((f) => ({ ...f, company_research_notes: e.target.value }));
+                  }}
+                  fullWidth
+                  multiline
+                  rows={3}
+                />
+                {wasAiGenerated && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                    🤖 AI generated — review before saving.
+                  </Typography>
+                )}
+                {onGenerateResearch && (
+                  <Box sx={{ mt: 1, display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <TextField
+                      label="What do you want to research?"
+                      placeholder="e.g. tech stack, culture, recent news"
+                      value={researchContext}
+                      onChange={(e) => setResearchContext(e.target.value)}
+                      size="small"
+                      fullWidth
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={isResearching || !researchContext.trim()}
+                      onClick={async () => {
+                        setIsResearching(true);
+                        setResearchError('');
+                        try {
+                          const result = await onGenerateResearch(researchContext.trim());
+                          setForm((f) => ({ ...f, company_research_notes: result }));
+                          setResearchContext('');
+                          setWasAiGenerated(true);
+                        } catch {
+                          setResearchError('Failed to generate research. Try again.');
+                        } finally {
+                          setIsResearching(false);
+                        }
+                      }}
+                      sx={{ whiteSpace: 'nowrap' }}
+                    >
+                      {isResearching ? <CircularProgress size={16} /> : 'Generate'}
+                    </Button>
+                  </Box>
+                )}
+                {researchError && (
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                    {researchError}
+                  </Typography>
+                )}
+              </Box>
               {OUTCOME_STAGES.includes(job.job_stage) && (
                 <TextField
                   label="Outcome Notes"
@@ -1710,7 +1766,7 @@ const JobDetailDialog = ({
               v{viewingDocument?.doc_version} &middot;{' '}
               {viewingDocument ? formatActivityDate(viewingDocument.created_at) : ''}
               {viewingDocument?.updated_at
-                ? ` · Updated ${formatActivityDate(viewingDocument.updated_at)}`
+                ? ` Â· Updated ${formatActivityDate(viewingDocument.updated_at)}`
                 : ''}
             </Typography>
             {viewingDocument && (
