@@ -23,6 +23,7 @@ import {
   deleteJobFollowUp,
   createJobDocument,
   deleteJobDocument,
+  getJobAnalytics,
   updateJobDocument,
   linkDocumentToJob,
   unlinkDocumentFromJob,
@@ -61,6 +62,7 @@ jest.mock('../api/jobs', () => ({
   deleteJobFollowUp: jest.fn(),
   createJobDocument: jest.fn(),
   deleteJobDocument: jest.fn(),
+  getJobAnalytics: jest.fn(),
   updateJobDocument: jest.fn(),
   listDocuments: jest.fn(),
   linkDocumentToJob: jest.fn(),
@@ -87,6 +89,7 @@ const mockUpdateJobFollowUp = updateJobFollowUp as jest.Mock;
 const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
 const mockCreateJobDocument = createJobDocument as jest.Mock;
 const mockDeleteJobDocument = deleteJobDocument as jest.Mock;
+const mockGetJobAnalytics = getJobAnalytics as jest.Mock;
 const mockUpdateJobDocument = updateJobDocument as jest.Mock;
 const mockListDocuments = listDocuments as jest.Mock;
 const mockLinkDocumentToJob = linkDocumentToJob as jest.Mock;
@@ -127,6 +130,7 @@ beforeEach(() => {
   mockGetJobMetrics.mockResolvedValue(zeroMetrics);
   mockListJobFollowUps.mockResolvedValue([]);
   mockListJobDocuments.mockResolvedValue([]);
+  mockGetJobAnalytics.mockResolvedValue({ conversion_rates: [], time_in_stage: [], weekly_velocity: [] });
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
   mockDeleteJob.mockReset();
@@ -877,6 +881,7 @@ describe('DashboardPage', () => {
     });
   });
 
+<<<<<<< HEAD
   // -------------------------------------------------------------------------
   // Link and unlink document flows (S3-009)
   // -------------------------------------------------------------------------
@@ -999,6 +1004,34 @@ describe('DashboardPage', () => {
       await waitFor(() => {
         expect(mockUnlinkDocumentFromJob).toHaveBeenCalledWith('test-token', 'job-1', 'doc-linked');
       });
+    });
+  });
+
+  describe('analytics panels', () => {
+    it('renders analytics panels when the analytics endpoint returns data', async () => {
+      mockGetJobAnalytics.mockResolvedValueOnce({
+        conversion_rates: [{ from_stage: 'Applied', to_stage: 'Interview', count: 5, rate: 0.5 }],
+        time_in_stage: [{ stage: 'Applied', avg_days: 7.3, count: 4 }],
+        weekly_velocity: [{ week_start: '2026-06-30', count: 3 }],
+      });
+
+      render(<DashboardPage />);
+
+      expect(await screen.findByText('Stage Conversion Rates')).toBeInTheDocument();
+      expect(screen.getByText('Avg. Time in Stage')).toBeInTheDocument();
+      expect(screen.getByText('Weekly Application Volume')).toBeInTheDocument();
+      expect(screen.getByText('Interview')).toBeInTheDocument();
+      expect(screen.getByText('50%')).toBeInTheDocument();
+      expect(screen.getByText('7.3')).toBeInTheDocument();
+    });
+
+    it('does not render analytics panels when all analytics data is empty', async () => {
+      render(<DashboardPage />);
+      await screen.findByText(/no recent applications/i);
+
+      expect(screen.queryByText('Stage Conversion Rates')).not.toBeInTheDocument();
+      expect(screen.queryByText('Avg. Time in Stage')).not.toBeInTheDocument();
+      expect(screen.queryByText('Weekly Application Volume')).not.toBeInTheDocument();
     });
   });
 });
