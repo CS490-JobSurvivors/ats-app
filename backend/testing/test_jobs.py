@@ -196,6 +196,11 @@ class FakeDb:
 
             return None
 
+        if entity is DocumentVersion:
+            document_id = str(params["document_id_1"])
+            nums = [v.version_number for v in document_versions if str(v.document_id) == document_id]
+            return max(nums) if nums else None
+
         if entity is Document:
             if "document_id_1" not in params:
                 versions = [
@@ -1603,6 +1608,73 @@ def test_update_job_document_explicit_null_doc_title_is_rejected():
     )
 
     assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Document version history (S3-003)
+# ---------------------------------------------------------------------------
+
+
+def test_list_document_versions_happy_path_returns_rows():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.get(f"/jobs/{job_id}/documents/{document['document_id']}/versions")
+
+    assert response.status_code == 200
+    versions = response.json()
+    assert isinstance(versions, list)
+    assert len(versions) >= 1
+    assert "version_number" in versions[0]
+    assert "document_id" in versions[0]
+    assert "created_at" in versions[0]
+
+
+def test_create_job_document_seeds_version_1():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.get(f"/jobs/{job_id}/documents/{document['document_id']}/versions")
+
+    assert response.status_code == 200
+    versions = response.json()
+    assert len(versions) == 1
+    assert versions[0]["version_number"] == 1
+    assert versions[0]["document_id"] == document["document_id"]
+
+
+def test_patch_document_adds_version_with_incrementing_number():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"doc_title": "Updated Title"},
+    )
+
+    response = client.get(f"/jobs/{job_id}/documents/{document['document_id']}/versions")
+
+    assert response.status_code == 200
+    versions = response.json()
+    assert len(versions) == 2
+    assert versions[0]["version_number"] == 2
+    assert versions[1]["version_number"] == 1
+
+
+def test_list_document_versions_returns_404_for_non_owner():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id, document = seed_job_and_document(owner_id)
+
+    other_user_id = str(uuid4())
+    set_authenticated_user(other_user_id)
+
+    response = client.get(f"/jobs/{job_id}/documents/{document['document_id']}/versions")
+
+    assert response.status_code == 404
 
 
 # ---------------------------------------------------------------------------

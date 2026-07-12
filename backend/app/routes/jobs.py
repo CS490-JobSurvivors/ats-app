@@ -628,11 +628,20 @@ def update_job_document(
     db.commit()
     db.refresh(db_document)
 
+    next_version = (
+        db.scalar(
+            select(func.max(DocumentVersion.version_number)).where(
+                DocumentVersion.document_id == db_document.document_id
+            )
+        )
+        or 0
+    ) + 1
+
     db.add(
         DocumentVersion(
             document_id=db_document.document_id,
             user_id=owner_id,
-            version_number=db_document.doc_version,
+            version_number=next_version,
             content=db_document.content,
             file_path=db_document.file_path,
         )
