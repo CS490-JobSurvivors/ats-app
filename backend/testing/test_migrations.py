@@ -168,7 +168,10 @@ def test_006_rollback_drops_table():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("col", ["document_id", "user_id", "job_id", "doc_type", "doc_title", "content", "doc_version", "created_at"])
+@pytest.mark.parametrize("col", [
+    "document_id", "user_id", "job_id", "doc_type", "doc_title",
+    "content", "doc_version", "created_at",
+])
 def test_document_model_retains_original_columns(col: str):
     assert col in model_columns(Document)
 
