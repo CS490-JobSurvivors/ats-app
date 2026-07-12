@@ -348,7 +348,7 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
     await screen.findByText('Resume - Software Engineer at Acme');
 
-    // doc-1 (Resume) is first in API order on this branch (no sort feature yet)
+    // default sort is newest-first; doc-2 (Jul 2) is first, doc-1 (Jul 1) is second
     await userEvent.click(screen.getAllByRole('button', { name: /^view$/i })[0]);
 
     const dialog = screen.getByRole('dialog');
@@ -361,5 +361,65 @@ describe('DocumentLibraryPage', () => {
 
     expect(mockCreateObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+  });
+
+  it('filters to only resume documents when the resume type filter is selected', async () => {
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    const [typeSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(typeSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /^resume$/i }));
+
+    expect(screen.getByText('Resume - Software Engineer at Acme')).toBeInTheDocument();
+    expect(screen.queryByText('Cover Letter - Designer at Studio')).not.toBeInTheDocument();
+  });
+
+  it('filters to only cover letter documents when the cover letter type filter is selected', async () => {
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Cover Letter - Designer at Studio');
+
+    const [typeSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(typeSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /cover letter/i }));
+
+    expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
+    expect(screen.queryByText('Resume - Software Engineer at Acme')).not.toBeInTheDocument();
+  });
+
+  it('shows a no-match message when the active type filter matches no documents', async () => {
+    mockListDocuments.mockResolvedValueOnce([documents[0]]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    const [typeSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(typeSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /cover letter/i }));
+
+    expect(screen.getByText('No documents match the selected filter.')).toBeInTheDocument();
+  });
+
+  it('sorts documents oldest-first when the sort order is changed to ascending', async () => {
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    // default is newest-first: doc-2 (Jul 2, Cover Letter) before doc-1 (Jul 1, Resume)
+    const resumeEl = screen.getByText('Resume - Software Engineer at Acme');
+    const coverLetterEl = screen.getByText('Cover Letter - Designer at Studio');
+    expect(
+      coverLetterEl.compareDocumentPosition(resumeEl) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    const [, sortSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(sortSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /oldest first/i }));
+
+    // after ascending sort, resume (Jul 1) should precede cover letter (Jul 2)
+    const resumeAfter = screen.getByText('Resume - Software Engineer at Acme');
+    const coverLetterAfter = screen.getByText('Cover Letter - Designer at Studio');
+    expect(
+      resumeAfter.compareDocumentPosition(coverLetterAfter) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 });
