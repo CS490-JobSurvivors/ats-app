@@ -5,9 +5,11 @@ import DocumentLibraryPage from '../pages/documentLibraryPage';
 import { supabase } from '../utils/supabaseClient';
 import {
   archiveDocument,
+  duplicateDocument,
   getDocumentDownloadUrl,
   listDocumentVersions,
   listDocuments,
+  renameDocument,
   restoreDocument,
   updateJobDocument,
   uploadDocument,
@@ -23,9 +25,11 @@ jest.mock('../utils/supabaseClient', () => ({
 
 jest.mock('../api/jobs', () => ({
   archiveDocument: jest.fn(),
+  duplicateDocument: jest.fn(),
   getDocumentDownloadUrl: jest.fn(),
   listDocumentVersions: jest.fn(),
   listDocuments: jest.fn(),
+  renameDocument: jest.fn(),
   restoreDocument: jest.fn(),
   updateJobDocument: jest.fn(),
   uploadDocument: jest.fn(),
@@ -33,9 +37,11 @@ jest.mock('../api/jobs', () => ({
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockArchiveDocument = archiveDocument as jest.Mock;
+const mockDuplicateDocument = duplicateDocument as jest.Mock;
 const mockGetDocumentDownloadUrl = getDocumentDownloadUrl as jest.Mock;
 const mockListDocumentVersions = listDocumentVersions as jest.Mock;
 const mockListDocuments = listDocuments as jest.Mock;
+const mockRenameDocument = renameDocument as jest.Mock;
 const mockRestoreDocument = restoreDocument as jest.Mock;
 const mockUpdateJobDocument = updateJobDocument as jest.Mock;
 const mockUploadDocument = uploadDocument as jest.Mock;
@@ -88,6 +94,8 @@ describe('DocumentLibraryPage', () => {
     mockRestoreDocument.mockResolvedValue({ ...archivedDocument, status: 'active' });
     mockUpdateJobDocument.mockResolvedValue({ ...documents[0], doc_title: 'Updated Resume' });
     mockGetDocumentDownloadUrl.mockResolvedValue('https://example.com/signed-download');
+    mockRenameDocument.mockResolvedValue({ ...documents[0] });
+    mockDuplicateDocument.mockResolvedValue({ ...documents[0], document_id: 'doc-copy' });
   });
 
   afterEach(() => {
@@ -554,5 +562,57 @@ describe('DocumentLibraryPage', () => {
     expect(
       resumeEl.compareDocumentPosition(coverLetterEl) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+  });
+
+  it('opens the rename dialog pre-filled with the current title and updates the document on submit', async () => {
+    const renamed = { ...documents[0], doc_title: 'New Resume Title' };
+    mockRenameDocument.mockResolvedValueOnce(renamed);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    // default sort is newest-first; doc-2 (Cover Letter) renders first, doc-1 (Resume) is at [1]
+    await userEvent.click(screen.getAllByRole('button', { name: /^rename$/i })[1]);
+
+    const dialog = screen.getByRole('dialog', { name: /rename document/i });
+    expect(dialog).toBeInTheDocument();
+
+    const titleInput = within(dialog).getByRole('textbox');
+    expect(titleInput).toHaveValue('Resume - Software Engineer at Acme');
+
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, 'New Resume Title');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(mockRenameDocument).toHaveBeenCalledWith('test-token', 'doc-1', 'New Resume Title')
+    );
+    expect(await screen.findByText('New Resume Title')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: /rename document/i })).not.toBeInTheDocument()
+    );
+  });
+
+  it('calls duplicateDocument and prepends the copy to the document list', async () => {
+    const copy = {
+      ...documents[0],
+      document_id: 'doc-1-copy',
+      doc_title: 'Copy of Resume - Software Engineer at Acme',
+      doc_version: 1,
+    };
+    mockDuplicateDocument.mockResolvedValueOnce(copy);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    // default sort is newest-first; doc-2 (Cover Letter) is at [0], doc-1 (Resume) is at [1]
+    await userEvent.click(screen.getAllByRole('button', { name: /^duplicate$/i })[1]);
+
+    await waitFor(() =>
+      expect(mockDuplicateDocument).toHaveBeenCalledWith('test-token', 'doc-1')
+    );
+    expect(
+      await screen.findByText('Copy of Resume - Software Engineer at Acme')
+    ).toBeInTheDocument();
   });
 });
