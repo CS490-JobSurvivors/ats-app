@@ -286,7 +286,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
 
     await screen.findByText('Resume - Software Engineer at Acme');
-    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[0]);
+    // default sort is newest-first; doc-2 (Jul 2) renders before doc-1 (Jul 1)
+    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[1]);
 
     await waitFor(() => expect(mockArchiveDocument).toHaveBeenCalledWith('test-token', 'doc-1'));
     expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', false);
@@ -310,7 +311,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
 
     await screen.findByText('Resume - Software Engineer at Acme');
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    // default sort is newest-first; doc-2 (Jul 2) renders before doc-1 (Jul 1)
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Updated Resume' } });
     fireEvent.change(screen.getByLabelText(/tags/i), { target: { value: 'backend, remote' } });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
