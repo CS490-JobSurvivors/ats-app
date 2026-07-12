@@ -659,7 +659,6 @@ def create_job_document(
         job_id=job_id,
         user_id=owner_id,
         doc_version=(latest_version or 0) + 1,
-        status="active",
     )
 
     db.add(db_document)

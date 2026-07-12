@@ -1572,11 +1572,13 @@ def test_update_job_document_persists_change_for_subsequent_reads():
         f"/jobs/{job_id}/documents/{document['document_id']}",
         json={"status": "archived", "tags": ["filed"]},
     )
-    listed = client.get(f"/jobs/{job_id}/documents").json()
+    active_list = client.get(f"/jobs/{job_id}/documents").json()
+    archived_list = client.get("/jobs/documents?include_archived=true").json()
 
     # Assert
-    assert listed[0]["status"] == "archived"
-    assert listed[0]["tags"] == ["filed"]
+    assert active_list == []
+    assert archived_list[0]["status"] == "archived"
+    assert archived_list[0]["tags"] == ["filed"]
 
 
 @pytest.mark.parametrize(
