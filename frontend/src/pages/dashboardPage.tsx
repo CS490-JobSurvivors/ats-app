@@ -42,6 +42,7 @@ import {
   deleteJobDocument,
   updateJobDocument,
   listDocumentVersions,
+  generateCompanyResearch,
   DocumentVersion,
   InterviewPayload,
   InterviewRecord,
@@ -776,6 +777,12 @@ const DashboardPage = () => {
         onDeleteDocument={handleDeleteDocument}
         onUpdateDocument={handleUpdateDocument}
         onLoadVersions={handleLoadVersions}
+        onGenerateResearch={async (userContext: string) => {
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.access_token;
+          if (!token || !selectedJob) throw new Error('Not authenticated.');
+          return await generateCompanyResearch(token, selectedJob.job_id, userContext);
+        }}
         savedDocuments={selectedJobDocuments}
         isSavedDocumentsLoading={isDocumentsLoading}
         onStageChange={async (newStage) => {
