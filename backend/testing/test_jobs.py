@@ -127,9 +127,19 @@ class FakeDb:
         if entity is Document:
             user_id = str(params["user_id_1"])
             results = [document for document in documents if str(document.user_id) == user_id]
+            for document in results:
+                if document.status is None:
+                    document.status = "active"
             if "job_id_1" in params:
                 job_id = str(params["job_id_1"])
                 results = [document for document in results if str(document.job_id) == job_id]
+            if "status_1" in params:
+                status = params["status_1"]
+                results = [
+                    document
+                    for document in results
+                    if (document.status or "active") == status
+                ]
             if "doc_type_1" in params:
                 allowed_types = set()
                 for key, value in params.items():
@@ -213,12 +223,16 @@ class FakeDb:
                 return max(versions) if versions else None
 
             for document in documents:
-                if (
-                    str(document.document_id) == str(params["document_id_1"])
-                    and str(document.job_id) == str(params["job_id_1"])
-                    and str(document.user_id) == str(params["user_id_1"])
-                ):
-                    return document
+                if str(document.document_id) != str(params["document_id_1"]) or str(
+                    document.user_id
+                ) != str(params["user_id_1"]):
+                    continue
+                if "job_id_1" in params and str(document.job_id) != str(params["job_id_1"]):
+                    continue
+                if document.status is None:
+                    document.status = "active"
+
+                return document
 
             return None
 
@@ -1148,6 +1162,7 @@ def test_create_job_document_starts_at_version_one():
     assert body["doc_title"] == "Resume - Software Engineer at Acme"
     assert body["content"] == "## Resume\nTailored content."
     assert body["doc_version"] == 1
+    assert body["status"] == "active"
     assert body["job_id"] == job_id
     assert body["user_id"] == user_id
 
@@ -1290,7 +1305,76 @@ def test_list_user_documents_filters_to_supported_business_types():
     assert [document["doc_title"] for document in response.json()] == ["Resume"]
 
 
-def test_delete_job_document_only_deletes_owned_document():
+def test_archive_user_document_hides_it_without_changing_version_history():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    document_response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume", "content": "Draft."},
+    )
+    document_id = document_response.json()["document_id"]
+
+    archive_response = client.patch(f"/jobs/documents/{document_id}/archive")
+    active_list_response = client.get("/jobs/documents")
+    archived_list_response = client.get("/jobs/documents?include_archived=true")
+
+    assert archive_response.status_code == 200
+    assert archive_response.json()["status"] == "archived"
+    assert archive_response.json()["updated_at"] is not None
+    assert archive_response.json()["doc_version"] == 1
+    assert active_list_response.status_code == 200
+    assert active_list_response.json() == []
+    assert [document["document_id"] for document in archived_list_response.json()] == [document_id]
+    assert len(documents) == 1
+
+
+def test_restore_user_document_returns_it_to_active_library_without_changing_version():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    document_response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "cover_letter", "doc_title": "Cover Letter", "content": "Draft."},
+    )
+    document_id = document_response.json()["document_id"]
+    client.patch(f"/jobs/documents/{document_id}/archive")
+
+    restore_response = client.patch(f"/jobs/documents/{document_id}/restore")
+    active_list_response = client.get("/jobs/documents")
+
+    assert restore_response.status_code == 200
+    assert restore_response.json()["status"] == "active"
+    assert restore_response.json()["updated_at"] is not None
+    assert restore_response.json()["doc_version"] == 1
+    assert [document["document_id"] for document in active_list_response.json()] == [document_id]
+    assert len(documents) == 1
+
+
+def test_archive_and_restore_user_document_reject_unowned_document():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    document_response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume", "content": "Draft."},
+    )
+    document_id = document_response.json()["document_id"]
+
+    set_authenticated_user(other_user_id)
+    archive_response = client.patch(f"/jobs/documents/{document_id}/archive")
+    restore_response = client.patch(f"/jobs/documents/{document_id}/restore")
+
+    assert archive_response.status_code == 404
+    assert restore_response.status_code == 404
+    assert documents[0].status == "active"
+
+
+def test_delete_job_document_archives_owned_document_without_hard_deleting():
     owner_id = str(uuid4())
     other_user_id = str(uuid4())
     set_authenticated_user(owner_id)
@@ -1313,6 +1397,9 @@ def test_delete_job_document_only_deletes_owned_document():
     assert delete_response.status_code == 204
     assert list_response.status_code == 200
     assert list_response.json() == []
+    assert len(documents) == 1
+    assert documents[0].status == "archived"
+    assert documents[0].doc_version == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1485,11 +1572,13 @@ def test_update_job_document_persists_change_for_subsequent_reads():
         f"/jobs/{job_id}/documents/{document['document_id']}",
         json={"status": "archived", "tags": ["filed"]},
     )
-    listed = client.get(f"/jobs/{job_id}/documents").json()
+    active_list = client.get(f"/jobs/{job_id}/documents").json()
+    archived_list = client.get("/jobs/documents?include_archived=true").json()
 
     # Assert
-    assert listed[0]["status"] == "archived"
-    assert listed[0]["tags"] == ["filed"]
+    assert active_list == []
+    assert archived_list[0]["status"] == "archived"
+    assert archived_list[0]["tags"] == ["filed"]
 
 
 @pytest.mark.parametrize(

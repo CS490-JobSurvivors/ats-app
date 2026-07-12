@@ -29,10 +29,10 @@ class FakeDb:
         if isinstance(obj, Document):
             if obj.doc_version is None:
                 obj.doc_version = 1
-            if obj.created_at is None:
-                obj.created_at = datetime.now(timezone.utc)
             if obj.status is None:
                 obj.status = "active"
+            if obj.created_at is None:
+                obj.created_at = datetime.now(timezone.utc)
             if obj.tags is None:
                 obj.tags = []
 

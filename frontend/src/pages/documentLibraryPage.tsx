@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -11,11 +11,13 @@ import {
   DialogTitle,
   Divider,
   FormControl,
+  FormControlLabel,
   InputLabel,
   MenuItem,
   Paper,
   Select,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -23,6 +25,7 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { supabase } from '../utils/supabaseClient';
 import {
+  archiveDocument,
   DocStatus,
   DocumentRecord,
   DocumentUpdatePayload,
@@ -31,6 +34,7 @@ import {
   getDocumentDownloadUrl,
   listDocumentVersions,
   listDocuments,
+  restoreDocument,
   updateJobDocument,
   uploadDocument,
 } from '../api/jobs';
@@ -48,12 +52,21 @@ const formatCreatedAt = (value: string) =>
     year: 'numeric',
   });
 
+const statusColor = (status: DocStatus) => {
+  if (status === 'archived') return 'error';
+  if (status === 'draft') return 'warning';
+  return 'default';
+};
+
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt'];
 
 const DocumentLibraryPage = () => {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
+  const [actionErrorMessage, setActionErrorMessage] = useState('');
+  const [includeArchived, setIncludeArchived] = useState(false);
+  const [actionDocumentId, setActionDocumentId] = useState<string | null>(null);
   const [selectedDocument, setSelectedDocument] = useState<DocumentRecord | null>(null);
 
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
@@ -77,34 +90,39 @@ const DocumentLibraryPage = () => {
   const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
 
-  useEffect(() => {
-    const loadDocuments = async () => {
-      setIsLoading(true);
-      setErrorMessage('');
+  const getAccessToken = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) throw new Error('No active session.');
 
-      try {
-        const { data } = await supabase.auth.getSession();
-        const token = data.session?.access_token;
-        if (!token) throw new Error('No active session.');
-
-        const result = await listDocuments(token);
-        setDocuments(result);
-      } catch {
-        setErrorMessage('Unable to load your document library. Please try again.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadDocuments();
+    return token;
   }, []);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] ?? null;
+  const loadDocuments = useCallback(async () => {
+    setIsLoading(true);
+    setErrorMessage('');
+
+    try {
+      const token = await getAccessToken();
+      const result = await listDocuments(token, includeArchived);
+      setDocuments(result);
+    } catch {
+      setErrorMessage('Unable to load your document library. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getAccessToken, includeArchived]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
     if (!file) return;
-    const ext = '.' + file.name.split('.').pop()?.toLowerCase();
+    const ext = `.${file.name.split('.').pop()?.toLowerCase()}`;
     if (!ALLOWED_EXTENSIONS.includes(ext)) {
-      setUploadError(`Unsupported file type. Allowed: PDF, DOCX, TXT.`);
+      setUploadError('Unsupported file type. Allowed: PDF, DOCX, TXT.');
       setUploadFile(null);
       return;
     }
@@ -118,12 +136,9 @@ const DocumentLibraryPage = () => {
     setIsUploading(true);
     setUploadError('');
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error('No active session.');
-
-      const newDoc = await uploadDocument(token, uploadFile, uploadDocType, uploadDocTitle.trim());
-      setDocuments((prev) => [newDoc, ...prev]);
+      const token = await getAccessToken();
+      await uploadDocument(token, uploadFile, uploadDocType, uploadDocTitle.trim());
+      await loadDocuments();
       setUploadDialogOpen(false);
       setUploadFile(null);
       setUploadDocTitle('');
@@ -137,18 +152,35 @@ const DocumentLibraryPage = () => {
 
   const handleDownload = async (doc: DocumentRecord) => {
     if (!doc.file_path) return;
+    setActionErrorMessage('');
     setDownloadingId(doc.document_id);
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error('No active session.');
-
+      const token = await getAccessToken();
       const url = await getDocumentDownloadUrl(token, doc.document_id);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch {
-      // silently fail — user can retry
+      setActionErrorMessage('Unable to download document. Please try again.');
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const handleArchiveToggle = async (document: DocumentRecord) => {
+    setActionDocumentId(document.document_id);
+    setActionErrorMessage('');
+
+    try {
+      const token = await getAccessToken();
+      if (document.status === 'archived') {
+        await restoreDocument(token, document.document_id);
+      } else {
+        await archiveDocument(token, document.document_id);
+      }
+      await loadDocuments();
+    } catch {
+      setActionErrorMessage('Unable to update document status. Please try again.');
+    } finally {
+      setActionDocumentId(null);
     }
   };
 
@@ -157,7 +189,7 @@ const DocumentLibraryPage = () => {
     setEditingDocument(doc);
     setEditDocForm({
       doc_title: doc.doc_title,
-      status: doc.status as DocStatus,
+      status: doc.status,
       tags_input: doc.tags.join(', '),
     });
   };
@@ -167,10 +199,7 @@ const DocumentLibraryPage = () => {
     setIsUpdatingDocument(true);
     setEditDocError('');
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error('No active session.');
-
+      const token = await getAccessToken();
       const tags = editDocForm.tags_input
         .split(',')
         .map((t) => t.trim())
@@ -187,13 +216,28 @@ const DocumentLibraryPage = () => {
         payload
       );
       setDocuments((prev) =>
-        prev.map((d) => (d.document_id === updated.document_id ? updated : d))
+        prev.map((document) => (document.document_id === updated.document_id ? updated : document))
       );
       setEditingDocument(null);
     } catch {
       setEditDocError('Failed to update document.');
     } finally {
       setIsUpdatingDocument(false);
+    }
+  };
+
+  const openDocument = async (document: DocumentRecord) => {
+    setSelectedDocument(document);
+    setDocumentVersions([]);
+    if (!document.job_id) return;
+
+    setVersionsLoading(true);
+    try {
+      const token = await getAccessToken();
+      const versions = await listDocumentVersions(token, document.job_id, document.document_id);
+      setDocumentVersions(versions);
+    } finally {
+      setVersionsLoading(false);
     }
   };
 
@@ -231,6 +275,23 @@ const DocumentLibraryPage = () => {
           {errorMessage}
         </Alert>
       )}
+      {actionErrorMessage && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {actionErrorMessage}
+        </Alert>
+      )}
+
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={includeArchived}
+              onChange={(event) => setIncludeArchived(event.target.checked)}
+            />
+          }
+          label="Show archived"
+        />
+      </Box>
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -249,10 +310,12 @@ const DocumentLibraryPage = () => {
         >
           <DescriptionOutlinedIcon sx={{ fontSize: 44, color: 'text.secondary', mb: 1 }} />
           <Typography variant="h6" fontWeight={600}>
-            No documents saved yet.
+            {includeArchived ? 'No archived documents.' : 'No documents saved yet.'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Saved resumes and cover letters will appear here.
+            {includeArchived
+              ? 'Archived resumes and cover letters will appear here.'
+              : 'Saved resumes and cover letters will appear here.'}
           </Typography>
         </Paper>
       ) : (
@@ -286,13 +349,7 @@ const DocumentLibraryPage = () => {
                     size="small"
                     label={document.status}
                     variant="outlined"
-                    color={
-                      document.status === 'archived'
-                        ? 'error'
-                        : document.status === 'draft'
-                          ? 'warning'
-                          : 'default'
-                    }
+                    color={statusColor(document.status)}
                   />
                 </Box>
                 {document.tags.length > 0 && (
@@ -308,7 +365,7 @@ const DocumentLibraryPage = () => {
                   {document.updated_at ? ` · Updated ${formatCreatedAt(document.updated_at)}` : ''}
                 </Typography>
               </Box>
-              <Stack direction="row" spacing={1}>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
                 {document.job_id && (
                   <Button
                     variant="outlined"
@@ -329,41 +386,25 @@ const DocumentLibraryPage = () => {
                   </Button>
                 )}
                 {document.content && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={async () => {
-                      setSelectedDocument(document);
-                      setDocumentVersions([]);
-                      if (document.job_id) {
-                        setVersionsLoading(true);
-                        try {
-                          const { data } = await supabase.auth.getSession();
-                          const token = data.session?.access_token;
-                          if (token) {
-                            const versions = await listDocumentVersions(
-                              token,
-                              document.job_id,
-                              document.document_id
-                            );
-                            setDocumentVersions(versions);
-                          }
-                        } finally {
-                          setVersionsLoading(false);
-                        }
-                      }
-                    }}
-                  >
+                  <Button variant="outlined" size="small" onClick={() => openDocument(document)}>
                     View
                   </Button>
                 )}
+                <Button
+                  variant="outlined"
+                  size="small"
+                  color={document.status === 'archived' ? 'primary' : 'warning'}
+                  disabled={actionDocumentId === document.document_id}
+                  onClick={() => handleArchiveToggle(document)}
+                >
+                  {document.status === 'archived' ? 'Restore' : 'Archive'}
+                </Button>
               </Stack>
             </Paper>
           ))}
         </Stack>
       )}
 
-      {/* View text content dialog */}
       <Dialog
         open={Boolean(selectedDocument)}
         onClose={() => setSelectedDocument(null)}
@@ -385,13 +426,7 @@ const DocumentLibraryPage = () => {
                 size="small"
                 label={selectedDocument.status}
                 variant="outlined"
-                color={
-                  selectedDocument.status === 'archived'
-                    ? 'error'
-                    : selectedDocument.status === 'draft'
-                      ? 'warning'
-                      : 'default'
-                }
+                color={statusColor(selectedDocument.status)}
               />
               {selectedDocument.tags.map((tag) => (
                 <Chip key={tag} label={tag} size="small" />
@@ -422,9 +457,9 @@ const DocumentLibraryPage = () => {
                 </Typography>
               ) : (
                 <Stack spacing={0.5}>
-                  {documentVersions.map((v) => (
+                  {documentVersions.map((version) => (
                     <Box
-                      key={v.version_id}
+                      key={version.version_id}
                       sx={{
                         display: 'flex',
                         alignItems: 'center',
@@ -435,19 +470,19 @@ const DocumentLibraryPage = () => {
                       }}
                     >
                       <Typography variant="body2">
-                        v{v.version_number} &middot;{' '}
-                        {new Date(v.created_at).toLocaleDateString('en-US', {
+                        v{version.version_number} &middot;{' '}
+                        {new Date(version.created_at).toLocaleDateString('en-US', {
                           month: 'short',
                           day: 'numeric',
                           year: 'numeric',
                         })}
                       </Typography>
-                      {v.content && (
+                      {version.content && (
                         <Button
                           size="small"
                           onClick={() =>
                             setSelectedDocument((prev) =>
-                              prev ? { ...prev, content: v.content } : prev
+                              prev ? { ...prev, content: version.content } : prev
                             )
                           }
                         >
@@ -471,7 +506,6 @@ const DocumentLibraryPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Edit document dialog */}
       <Dialog
         open={Boolean(editingDocument)}
         onClose={() => setEditingDocument(null)}
@@ -487,15 +521,20 @@ const DocumentLibraryPage = () => {
               label="Title"
               fullWidth
               value={editDocForm.doc_title}
-              onChange={(e) => setEditDocForm((f) => ({ ...f, doc_title: e.target.value }))}
+              onChange={(event) =>
+                setEditDocForm((current) => ({ ...current, doc_title: event.target.value }))
+              }
             />
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
               <Select
                 label="Status"
                 value={editDocForm.status}
-                onChange={(e) =>
-                  setEditDocForm((f) => ({ ...f, status: e.target.value as DocStatus }))
+                onChange={(event) =>
+                  setEditDocForm((current) => ({
+                    ...current,
+                    status: event.target.value as DocStatus,
+                  }))
                 }
               >
                 <MenuItem value="active">Active</MenuItem>
@@ -507,7 +546,9 @@ const DocumentLibraryPage = () => {
               label="Tags"
               fullWidth
               value={editDocForm.tags_input}
-              onChange={(e) => setEditDocForm((f) => ({ ...f, tags_input: e.target.value }))}
+              onChange={(event) =>
+                setEditDocForm((current) => ({ ...current, tags_input: event.target.value }))
+              }
               helperText="Separate with commas"
             />
           </Stack>
@@ -524,7 +565,6 @@ const DocumentLibraryPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Upload dialog */}
       <Dialog
         open={uploadDialogOpen}
         onClose={() => !isUploading && setUploadDialogOpen(false)}
@@ -543,7 +583,7 @@ const DocumentLibraryPage = () => {
               </Typography>
               <Select
                 value={uploadDocType}
-                onChange={(e) => setUploadDocType(e.target.value as DocType)}
+                onChange={(event) => setUploadDocType(event.target.value as DocType)}
                 fullWidth
                 size="small"
               >
@@ -555,7 +595,7 @@ const DocumentLibraryPage = () => {
             <TextField
               label="Document Title"
               value={uploadDocTitle}
-              onChange={(e) => setUploadDocTitle(e.target.value)}
+              onChange={(event) => setUploadDocTitle(event.target.value)}
               fullWidth
               size="small"
             />
