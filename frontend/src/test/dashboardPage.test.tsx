@@ -130,7 +130,11 @@ beforeEach(() => {
   mockGetJobMetrics.mockResolvedValue(zeroMetrics);
   mockListJobFollowUps.mockResolvedValue([]);
   mockListJobDocuments.mockResolvedValue([]);
-  mockGetJobAnalytics.mockResolvedValue({ conversion_rates: [], time_in_stage: [], weekly_velocity: [] });
+  mockGetJobAnalytics.mockResolvedValue({
+    conversion_rates: [],
+    time_in_stage: [],
+    weekly_velocity: [],
+  });
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
   mockDeleteJob.mockReset();
@@ -881,7 +885,6 @@ describe('DashboardPage', () => {
     });
   });
 
-<<<<<<< HEAD
   // -------------------------------------------------------------------------
   // Link and unlink document flows (S3-009)
   // -------------------------------------------------------------------------
