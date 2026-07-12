@@ -45,6 +45,8 @@ graph LR
     - Enviornment variable loading from `backend/.env` and app config
 - `app/database.py`
     - Database connection & SQLAlchemy session config
+- `migrations/`
+    - Versioned SQL migration files. See [migrations/README.md](migrations/README.md) for run/rollback instructions.
 - `testing/`
     - Houses all backend tests
 - `.env.example`
