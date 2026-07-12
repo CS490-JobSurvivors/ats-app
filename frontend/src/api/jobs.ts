@@ -517,6 +517,28 @@ export const updateJobDocument = async (
   return await response.json();
 };
 
+export const generateCompanyResearch = async (
+  accessToken: string,
+  jobId: string,
+  userContext: string
+): Promise<string> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/research`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ user_context: userContext }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to generate company research.');
+  }
+
+  const body = await response.json();
+  return body.research as string;
+};
+
 export const listDocumentVersions = async (
   accessToken: string,
   jobId: string,
