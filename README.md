@@ -139,7 +139,9 @@ Migration files live in `backend/migrations/`. See [`backend/migrations/README.m
 6. Where necessary, returning protected data
 
 ### CI/CD
-1. Secrets are managed using GitHub Secrets.
+- On pull request to `dev` or `main`: lint, build, and tests must pass (`.github/workflows/ci.yml`)
+- On merge to `main`: Docker image is built, pushed to ECR, ECS service is force-redeployed, and a post-deploy health check hits `https://api.jobsurvivors.tech/health` (`.github/workflows/deploy.yml`)
+- Secrets are managed via GitHub Actions secrets (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `ECR_REPOSITORY`, `ECS_CLUSTER`, `ECS_SERVICE`)
 
 ### Prod (AWS deployment)
-1. Secrets are stored using AWS Secrets Manager
+- Runtime secrets are stored in AWS Secrets Manager and injected into the ECS container at startup
