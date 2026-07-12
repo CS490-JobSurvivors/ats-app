@@ -608,9 +608,7 @@ describe('DocumentLibraryPage', () => {
     // default sort is newest-first; doc-2 (Cover Letter) is at [0], doc-1 (Resume) is at [1]
     await userEvent.click(screen.getAllByRole('button', { name: /^duplicate$/i })[1]);
 
-    await waitFor(() =>
-      expect(mockDuplicateDocument).toHaveBeenCalledWith('test-token', 'doc-1')
-    );
+    await waitFor(() => expect(mockDuplicateDocument).toHaveBeenCalledWith('test-token', 'doc-1'));
     expect(
       await screen.findByText('Copy of Resume - Software Engineer at Acme')
     ).toBeInTheDocument();
