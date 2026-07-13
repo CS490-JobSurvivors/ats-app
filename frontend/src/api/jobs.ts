@@ -406,9 +406,18 @@ export const listJobDocuments = async (
 
 export const listDocuments = async (
   accessToken: string,
-  includeArchived = false
+  includeArchived = false,
+  docType?: DocType | '',
+  tag?: string,
+  sortOrder: 'asc' | 'desc' = 'desc'
 ): Promise<DocumentRecord[]> => {
-  const response = await fetch(`${API_URL}/jobs/documents?include_archived=${includeArchived}`, {
+  const params = new URLSearchParams({
+    include_archived: String(includeArchived),
+    sort_order: sortOrder,
+  });
+  if (docType) params.set('doc_type', docType);
+  if (tag) params.set('tag', tag);
+  const response = await fetch(`${API_URL}/jobs/documents?${params}`, {
     method: 'GET',
     headers: authHeaders(accessToken),
   });

@@ -83,18 +83,10 @@ const DocumentLibraryPage = () => {
   const [filterTag, setFilterTag] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
-  const visibleDocuments = documents
-    .filter((d) => (filterType ? d.doc_type === filterType : true))
-    .filter((d) => (filterStatus ? d.status === filterStatus : true))
-    .filter((d) =>
-      filterTag ? d.tags.some((t) => t.toLowerCase().includes(filterTag.toLowerCase())) : true
-    )
-    .sort((a, b) => {
-      const aDate = a.updated_at ?? a.created_at;
-      const bDate = b.updated_at ?? b.created_at;
-      const diff = new Date(aDate).getTime() - new Date(bDate).getTime();
-      return sortOrder === 'desc' ? -diff : diff;
-    });
+  const hasActiveFilters = Boolean(filterType || filterTag || filterStatus);
+  const visibleDocuments = filterStatus
+    ? documents.filter((d) => d.status === filterStatus)
+    : documents;
 
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
   const [editDocForm, setEditDocForm] = useState<{
@@ -121,14 +113,20 @@ const DocumentLibraryPage = () => {
 
     try {
       const token = await getAccessToken();
-      const result = await listDocuments(token, includeArchived);
+      const result = await listDocuments(
+        token,
+        includeArchived,
+        filterType || undefined,
+        filterTag || undefined,
+        sortOrder
+      );
       setDocuments(result);
     } catch {
       setErrorMessage('Unable to load your document library. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [getAccessToken, includeArchived]);
+  }, [getAccessToken, includeArchived, filterType, filterTag, sortOrder]);
 
   useEffect(() => {
     loadDocuments();
@@ -365,7 +363,7 @@ const DocumentLibraryPage = () => {
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress aria-label="Loading documents" />
         </Box>
-      ) : documents.length === 0 ? (
+      ) : documents.length === 0 && !hasActiveFilters ? (
         <Paper
           elevation={0}
           sx={{
