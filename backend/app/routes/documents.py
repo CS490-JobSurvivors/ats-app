@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -142,6 +143,7 @@ def rename_document(
     if doc is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found.")
     doc.doc_title = body.doc_title.strip()
+    doc.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(doc)
     return doc

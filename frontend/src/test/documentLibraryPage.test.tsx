@@ -613,4 +613,37 @@ describe('DocumentLibraryPage', () => {
       await screen.findByText('Copy of Resume - Software Engineer at Acme')
     ).toBeInTheDocument();
   });
+
+  it('shows an error in the rename dialog when rename fails', async () => {
+    mockRenameDocument.mockRejectedValueOnce(new Error('network error'));
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^rename$/i })[0]);
+
+    const dialog = screen.getByRole('dialog', { name: /rename document/i });
+    const titleInput = within(dialog).getByRole('textbox');
+    await userEvent.clear(titleInput);
+    await userEvent.type(titleInput, 'New Title');
+    await userEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+
+    expect(
+      await screen.findByText('Unable to rename document. Please try again.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /rename document/i })).toBeInTheDocument();
+  });
+
+  it('shows an error when duplicate fails', async () => {
+    mockDuplicateDocument.mockRejectedValueOnce(new Error('network error'));
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^duplicate$/i })[0]);
+
+    expect(
+      await screen.findByText('Unable to duplicate document. Please try again.')
+    ).toBeInTheDocument();
+  });
 });

@@ -267,9 +267,7 @@ const DocumentLibraryPage = () => {
     if (!renamingDocument || !renameTitle.trim()) return;
     setRenameError('');
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error('No active session.');
+      const token = await getAccessToken();
       const updated = await renameDocument(token, renamingDocument.document_id, renameTitle.trim());
       setDocuments((prev) =>
         prev.map((d) => (d.document_id === updated.document_id ? updated : d))
@@ -283,9 +281,7 @@ const DocumentLibraryPage = () => {
   const handleDuplicate = async (doc: DocumentRecord) => {
     setDuplicatingId(doc.document_id);
     try {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error('No active session.');
+      const token = await getAccessToken();
       const copy = await duplicateDocument(token, doc.document_id);
       setDocuments((prev) => [copy, ...prev]);
     } catch {
