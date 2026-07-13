@@ -136,9 +136,7 @@ class FakeDb:
             if "status_1" in params:
                 status = params["status_1"]
                 results = [
-                    document
-                    for document in results
-                    if (document.status or "active") == status
+                    document for document in results if (document.status or "active") == status
                 ]
             if "doc_type_1" in params:
                 allowed_types = set()
@@ -1053,6 +1051,94 @@ def test_update_job_company_research_notes_rejects_non_owner():
     )
 
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# S3-020: Security and ownership rules
+# ---------------------------------------------------------------------------
+
+
+def test_security_non_owner_cannot_delete_job():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.delete(f"/jobs/{job_id}")
+
+    set_authenticated_user(owner_id)
+    owner_list_response = client.get("/jobs")
+
+    assert denied_response.status_code == 404
+    assert [job["job_id"] for job in owner_list_response.json()] == [job_id]
+
+
+@pytest.mark.parametrize(
+    ("method", "path_suffix", "payload"),
+    [
+        ("get", "interviews", None),
+        (
+            "post",
+            "interviews",
+            {
+                "round_type": "Technical",
+                "scheduled_at_date": "2026-07-08",
+                "scheduled_at_time": "2026-07-08T15:30:00Z",
+            },
+        ),
+        ("get", "followups", None),
+        ("post", "followups", {"due_date": "2026-07-08", "notes": "Email recruiter."}),
+        ("get", "documents", None),
+        (
+            "post",
+            "documents",
+            {"doc_type": "resume", "doc_title": "Unauthorized Resume", "content": "Draft."},
+        ),
+        ("get", "activity", None),
+    ],
+)
+def test_security_non_owner_cannot_access_job_scoped_resources(
+    method: str,
+    path_suffix: str,
+    payload: dict | None,
+):
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    set_authenticated_user(other_user_id)
+    request = getattr(client, method)
+    response = (
+        request(f"/jobs/{job_id}/{path_suffix}", json=payload)
+        if payload
+        else request(f"/jobs/{job_id}/{path_suffix}")
+    )
+
+    assert response.status_code == 404
+    assert interviews == []
+    assert followups == []
+    assert documents == []
+
+
+def test_security_non_owner_document_update_does_not_create_version_history():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id, document = seed_job_and_document(owner_id)
+    initial_version_count = len(document_versions)
+
+    set_authenticated_user(other_user_id)
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"doc_title": "Stolen Rename", "status": "archived"},
+    )
+
+    assert response.status_code == 404
+    assert documents[0].doc_title == "Resume"
+    assert documents[0].status == "active"
+    assert len(document_versions) == initial_version_count
 
 
 def test_create_and_list_job_followups_for_owned_job():
