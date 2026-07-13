@@ -1865,6 +1865,19 @@ const JobDetailDialog = ({
           <Button onClick={() => navigator.clipboard.writeText(viewingDocument?.content ?? '')}>
             Copy
           </Button>
+          <Button
+            onClick={() => {
+              const blob = new Blob([viewingDocument?.content ?? ''], { type: 'text/plain' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${viewingDocument?.doc_title ?? 'document'}.txt`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Download
+          </Button>
           <Button onClick={() => setViewingDocument(null)}>Close</Button>
         </DialogActions>
       </Dialog>

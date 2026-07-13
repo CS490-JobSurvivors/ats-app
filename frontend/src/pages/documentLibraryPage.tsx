@@ -500,6 +500,19 @@ const DocumentLibraryPage = () => {
           <Button onClick={() => navigator.clipboard.writeText(selectedDocument?.content ?? '')}>
             Copy
           </Button>
+          <Button
+            onClick={() => {
+              const blob = new Blob([selectedDocument?.content ?? ''], { type: 'text/plain' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${selectedDocument?.doc_title ?? 'document'}.txt`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Download
+          </Button>
           <Button variant="contained" onClick={() => setSelectedDocument(null)}>
             Close
           </Button>

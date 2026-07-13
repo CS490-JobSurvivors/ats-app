@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DocumentLibraryPage from '../pages/documentLibraryPage';
 import { supabase } from '../utils/supabaseClient';
@@ -334,5 +334,29 @@ describe('DocumentLibraryPage', () => {
     expect(
       await screen.findByText('Unable to update document status. Please try again.')
     ).toBeInTheDocument();
+  });
+
+  it('shows a Download button in the view dialog that triggers a blob download for content documents', async () => {
+    const mockCreateObjectURL = jest.fn().mockReturnValue('blob:mock-url');
+    const mockRevokeObjectURL = jest.fn();
+    Object.defineProperty(URL, 'createObjectURL', { writable: true, value: mockCreateObjectURL });
+    Object.defineProperty(URL, 'revokeObjectURL', { writable: true, value: mockRevokeObjectURL });
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    // doc-1 (Resume) is first in API order on this branch (no sort feature yet)
+    await userEvent.click(screen.getAllByRole('button', { name: /^view$/i })[0]);
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toBeInTheDocument();
+
+    const downloadBtn = within(dialog).getByRole('button', { name: /^download$/i });
+    expect(downloadBtn).toBeInTheDocument();
+
+    await userEvent.click(downloadBtn);
+
+    expect(mockCreateObjectURL).toHaveBeenCalledWith(expect.any(Blob));
+    expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
   });
 });
