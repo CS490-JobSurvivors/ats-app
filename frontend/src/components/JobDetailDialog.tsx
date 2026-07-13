@@ -87,6 +87,9 @@ interface JobDetailDialogProps {
   onUpdateDocument?: (documentId: string, payload: DocumentUpdatePayload) => Promise<void>;
   onLoadVersions?: (documentId: string) => Promise<DocumentVersion[]>;
   onGenerateResearch?: (userContext: string) => Promise<string>;
+  libraryDocuments?: DocumentRecord[];
+  onLinkDocument?: (documentId: string) => Promise<void>;
+  onUnlinkDocument?: (documentId: string) => Promise<void>;
 }
 
 const emptyInterviewForm = {
@@ -199,6 +202,9 @@ const JobDetailDialog = ({
   onUpdateDocument,
   onLoadVersions,
   onGenerateResearch,
+  libraryDocuments,
+  onLinkDocument,
+  onUnlinkDocument,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
@@ -257,6 +263,8 @@ const JobDetailDialog = ({
   const [editDocError, setEditDocError] = useState('');
   const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [isLinking, setIsLinking] = useState<string | null>(null);
 
   useEffect(() => {
     if (job) {
@@ -1096,11 +1104,31 @@ const JobDetailDialog = ({
                               Delete
                             </Button>
                           )}
+                          {onUnlinkDocument && (
+                            <Button
+                              size="small"
+                              color="warning"
+                              onClick={() => onUnlinkDocument(document.document_id)}
+                            >
+                              Unlink
+                            </Button>
+                          )}
                         </Box>
                       </Box>
                     </Box>
                   ))}
                 </Box>
+              )}
+
+              {onLinkDocument && libraryDocuments && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{ mb: 2 }}
+                  onClick={() => setLinkPickerOpen(true)}
+                >
+                  Link from Library
+                </Button>
               )}
 
               <Divider sx={{ mb: 2 }} />
@@ -1928,6 +1956,73 @@ const JobDetailDialog = ({
           >
             Save
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={linkPickerOpen}
+        onClose={() => setLinkPickerOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Link from Library</DialogTitle>
+        <DialogContent>
+          {!libraryDocuments || libraryDocuments.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+              No library documents available to link.
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'grid', gap: 1, pt: 1 }}>
+              {libraryDocuments.map((doc) => (
+                <Box
+                  key={doc.document_id}
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    p: 1.5,
+                  }}
+                >
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>
+                      {doc.doc_title}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, alignItems: 'center' }}>
+                      {doc.doc_type && (
+                        <Chip label={doc.doc_type} size="small" variant="outlined" />
+                      )}
+                      <Typography variant="caption" color="text.secondary">
+                        {formatActivityDate(doc.created_at)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disabled={isLinking === doc.document_id}
+                    onClick={async () => {
+                      if (!onLinkDocument) return;
+                      setIsLinking(doc.document_id);
+                      try {
+                        await onLinkDocument(doc.document_id);
+                        setLinkPickerOpen(false);
+                      } finally {
+                        setIsLinking(null);
+                      }
+                    }}
+                  >
+                    {isLinking === doc.document_id ? <CircularProgress size={16} /> : 'Link'}
+                  </Button>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLinkPickerOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
     </>

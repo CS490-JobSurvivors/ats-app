@@ -1767,6 +1767,58 @@ def test_list_document_versions_returns_404_for_non_owner():
 
 
 # ---------------------------------------------------------------------------
+# Link/unlink library documents to job applications (S3-009)
+# ---------------------------------------------------------------------------
+
+
+def test_link_document_to_job_sets_job_id():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/link")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == job_id
+    assert response.json()["document_id"] == document["document_id"]
+
+
+def test_link_document_returns_404_for_non_owner():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id, document = seed_job_and_document(owner_id)
+
+    set_authenticated_user(other_user_id)
+    response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/link")
+
+    assert response.status_code == 404
+
+
+def test_unlink_document_from_job_clears_job_id():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/unlink")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] is None
+    assert response.json()["document_id"] == document["document_id"]
+
+
+def test_unlink_document_returns_404_when_not_linked_to_job():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id_1, document = seed_job_and_document(user_id)
+    job_id_2 = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    response = client.patch(f"/jobs/{job_id_2}/documents/{document['document_id']}/unlink")
+
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # Stage transition integrity (S2-BR-008, S2-BR-009)
 # ---------------------------------------------------------------------------
 

@@ -11,6 +11,7 @@ import {
   getJobMetrics,
   listJobFollowUps,
   listJobDocuments,
+  listDocuments,
   createJob,
   updateJob,
   deleteJob,
@@ -23,6 +24,8 @@ import {
   createJobDocument,
   deleteJobDocument,
   updateJobDocument,
+  linkDocumentToJob,
+  unlinkDocumentFromJob,
 } from '../api/jobs';
 import { generateResume } from '../api/resume';
 
@@ -59,6 +62,11 @@ jest.mock('../api/jobs', () => ({
   createJobDocument: jest.fn(),
   deleteJobDocument: jest.fn(),
   updateJobDocument: jest.fn(),
+  listDocuments: jest.fn(),
+  linkDocumentToJob: jest.fn(),
+  unlinkDocumentFromJob: jest.fn(),
+  listDocumentVersions: jest.fn(),
+  generateCompanyResearch: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
@@ -80,6 +88,9 @@ const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
 const mockCreateJobDocument = createJobDocument as jest.Mock;
 const mockDeleteJobDocument = deleteJobDocument as jest.Mock;
 const mockUpdateJobDocument = updateJobDocument as jest.Mock;
+const mockListDocuments = listDocuments as jest.Mock;
+const mockLinkDocumentToJob = linkDocumentToJob as jest.Mock;
+const mockUnlinkDocumentFromJob = unlinkDocumentFromJob as jest.Mock;
 const mockGenerateResume = generateResume as jest.Mock;
 
 const zeroMetrics = {
@@ -128,6 +139,9 @@ beforeEach(() => {
   mockCreateJobDocument.mockReset();
   mockDeleteJobDocument.mockReset();
   mockUpdateJobDocument.mockReset();
+  mockListDocuments.mockResolvedValue([]);
+  mockLinkDocumentToJob.mockReset();
+  mockUnlinkDocumentFromJob.mockReset();
   mockGenerateResume.mockReset();
 });
 

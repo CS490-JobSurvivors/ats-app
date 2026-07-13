@@ -749,6 +749,37 @@ def list_document_versions(
     return versions
 
 
+@router.patch("/{job_id}/documents/{document_id}/link", response_model=DocumentRead)
+def link_document_to_job(
+    job_id: UUID,
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_job_or_404(job_id, owner_id, db)
+    db_document = get_owned_library_document_or_404(document_id, owner_id, db)
+    db_document.job_id = job_id
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+
+@router.patch("/{job_id}/documents/{document_id}/unlink", response_model=DocumentRead)
+def unlink_document_from_job(
+    job_id: UUID,
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_document_or_404(job_id, document_id, owner_id, db)
+    db_document.job_id = None
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+
 @router.delete("/{job_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_job_document(
     job_id: UUID,
