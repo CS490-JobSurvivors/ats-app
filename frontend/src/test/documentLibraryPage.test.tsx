@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DocumentLibraryPage from '../pages/documentLibraryPage';
 import { supabase } from '../utils/supabaseClient';
@@ -400,6 +400,39 @@ describe('DocumentLibraryPage', () => {
     expect(screen.getByText('No documents match the selected filter.')).toBeInTheDocument();
   });
 
+  it('filters to only documents matching the selected status', async () => {
+    const draftDoc = {
+      ...documents[0],
+      document_id: 'doc-draft',
+      doc_title: 'Draft Resume',
+      status: 'draft',
+      created_at: '2026-07-03T12:00:00Z',
+    };
+    mockListDocuments.mockResolvedValueOnce([...documents, draftDoc]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    const [, statusSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(statusSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /^active$/i }));
+
+    expect(screen.getByText('Resume - Software Engineer at Acme')).toBeInTheDocument();
+    expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
+    expect(screen.queryByText('Draft Resume')).not.toBeInTheDocument();
+  });
+
+  it('filters documents by tag substring match', async () => {
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Cover Letter - Designer at Studio');
+
+    const tagInput = screen.getByRole('textbox', { name: /tag/i });
+    await userEvent.type(tagInput, 'design');
+
+    expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
+    expect(screen.queryByText('Resume - Software Engineer at Acme')).not.toBeInTheDocument();
+  });
+
   it('sorts documents oldest-first when the sort order is changed to ascending', async () => {
     render(<DocumentLibraryPage />);
     await screen.findByText('Resume - Software Engineer at Acme');
@@ -411,7 +444,8 @@ describe('DocumentLibraryPage', () => {
       coverLetterEl.compareDocumentPosition(resumeEl) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
 
-    const [, sortSelect] = screen.getAllByRole('combobox');
+    // Sort is the third combobox: Type (0), Status (1), Sort (2)
+    const sortSelect = screen.getAllByRole('combobox')[2];
     fireEvent.mouseDown(sortSelect);
     await userEvent.click(await screen.findByRole('option', { name: /oldest first/i }));
 
@@ -420,6 +454,25 @@ describe('DocumentLibraryPage', () => {
     const coverLetterAfter = screen.getByText('Cover Letter - Designer at Studio');
     expect(
       resumeAfter.compareDocumentPosition(coverLetterAfter) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('sorts by updated_at when set, falling back to created_at', async () => {
+    // doc-1: created Jul 1, updated Jul 5 (recently updated)
+    // doc-2: created Jul 3, no update
+    // desc sort should put doc-1 first (effective date Jul 5 > Jul 3)
+    const docWithUpdate = { ...documents[0], updated_at: '2026-07-05T12:00:00Z' };
+    const docNoUpdate = { ...documents[1], created_at: '2026-07-03T12:00:00Z', updated_at: null };
+    mockListDocuments.mockResolvedValueOnce([docWithUpdate, docNoUpdate]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    const resumeEl = screen.getByText('Resume - Software Engineer at Acme');
+    const coverLetterEl = screen.getByText('Cover Letter - Designer at Studio');
+    // Resume (effective Jul 5) should precede Cover Letter (effective Jul 3)
+    expect(
+      resumeEl.compareDocumentPosition(coverLetterEl) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
   });
 });

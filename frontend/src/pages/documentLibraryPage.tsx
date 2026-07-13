@@ -79,12 +79,22 @@ const DocumentLibraryPage = () => {
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'' | DocType>('');
+  const [filterStatus, setFilterStatus] = useState<'' | DocStatus>('');
+  const [filterTag, setFilterTag] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   const visibleDocuments = documents
     .filter((d) => (filterType ? d.doc_type === filterType : true))
+    .filter((d) => (filterStatus ? d.status === filterStatus : true))
+    .filter((d) =>
+      filterTag
+        ? d.tags.some((t) => t.toLowerCase().includes(filterTag.toLowerCase()))
+        : true
+    )
     .sort((a, b) => {
-      const diff = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      const aDate = a.updated_at ?? a.created_at;
+      const bDate = b.updated_at ?? b.created_at;
+      const diff = new Date(aDate).getTime() - new Date(bDate).getTime();
       return sortOrder === 'desc' ? -diff : diff;
     });
 
@@ -303,8 +313,8 @@ const DocumentLibraryPage = () => {
       </Box>
 
       {!isLoading && documents.length > 0 && (
-        <Stack direction="row" spacing={2} sx={{ mb: 3 }}>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
+        <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
+          <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel id="filter-type-label">Type</InputLabel>
             <Select
               labelId="filter-type-label"
@@ -317,6 +327,27 @@ const DocumentLibraryPage = () => {
               <MenuItem value="cover_letter">Cover Letter</MenuItem>
             </Select>
           </FormControl>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel id="filter-status-label">Status</InputLabel>
+            <Select
+              labelId="filter-status-label"
+              label="Status"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as '' | DocStatus)}
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="archived">Archived</MenuItem>
+              <MenuItem value="draft">Draft</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            size="small"
+            label="Tag"
+            value={filterTag}
+            onChange={(e) => setFilterTag(e.target.value)}
+            sx={{ minWidth: 140 }}
+          />
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel id="sort-order-label">Sort by Date</InputLabel>
             <Select
