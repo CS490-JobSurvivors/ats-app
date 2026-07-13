@@ -87,9 +87,7 @@ const DocumentLibraryPage = () => {
     .filter((d) => (filterType ? d.doc_type === filterType : true))
     .filter((d) => (filterStatus ? d.status === filterStatus : true))
     .filter((d) =>
-      filterTag
-        ? d.tags.some((t) => t.toLowerCase().includes(filterTag.toLowerCase()))
-        : true
+      filterTag ? d.tags.some((t) => t.toLowerCase().includes(filterTag.toLowerCase())) : true
     )
     .sort((a, b) => {
       const aDate = a.updated_at ?? a.created_at;
