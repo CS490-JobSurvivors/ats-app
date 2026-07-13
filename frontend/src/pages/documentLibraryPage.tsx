@@ -78,6 +78,15 @@ const DocumentLibraryPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [filterType, setFilterType] = useState<'' | DocType>('');
+  const [filterStatus, setFilterStatus] = useState<'' | DocStatus>('');
+  const [filterTag, setFilterTag] = useState('');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+
+  const hasActiveFilters = Boolean(filterType || filterTag || filterStatus);
+  const visibleDocuments = filterStatus
+    ? documents.filter((d) => d.status === filterStatus)
+    : documents;
 
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
   const [editDocForm, setEditDocForm] = useState<{
@@ -104,14 +113,20 @@ const DocumentLibraryPage = () => {
 
     try {
       const token = await getAccessToken();
-      const result = await listDocuments(token, includeArchived);
+      const result = await listDocuments(
+        token,
+        includeArchived,
+        filterType || undefined,
+        filterTag || undefined,
+        sortOrder
+      );
       setDocuments(result);
     } catch {
       setErrorMessage('Unable to load your document library. Please try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [getAccessToken, includeArchived]);
+  }, [getAccessToken, includeArchived, filterType, filterTag, sortOrder]);
 
   useEffect(() => {
     loadDocuments();
@@ -293,11 +308,62 @@ const DocumentLibraryPage = () => {
         />
       </Box>
 
+      {!isLoading && documents.length > 0 && (
+        <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel id="filter-type-label">Type</InputLabel>
+            <Select
+              labelId="filter-type-label"
+              label="Type"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value as '' | DocType)}
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="resume">Resume</MenuItem>
+              <MenuItem value="cover_letter">Cover Letter</MenuItem>
+            </Select>
+          </FormControl>
+          <FormControl size="small" sx={{ minWidth: 140 }}>
+            <InputLabel id="filter-status-label">Status</InputLabel>
+            <Select
+              labelId="filter-status-label"
+              label="Status"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as '' | DocStatus)}
+            >
+              <MenuItem value="">All</MenuItem>
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="archived">Archived</MenuItem>
+              <MenuItem value="draft">Draft</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            size="small"
+            label="Tag"
+            value={filterTag}
+            onChange={(e) => setFilterTag(e.target.value)}
+            sx={{ minWidth: 140 }}
+          />
+          <FormControl size="small" sx={{ minWidth: 160 }}>
+            <InputLabel id="sort-order-label">Sort by Date</InputLabel>
+            <Select
+              labelId="sort-order-label"
+              label="Sort by Date"
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}
+            >
+              <MenuItem value="desc">Newest First</MenuItem>
+              <MenuItem value="asc">Oldest First</MenuItem>
+            </Select>
+          </FormControl>
+        </Stack>
+      )}
+
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress aria-label="Loading documents" />
         </Box>
-      ) : documents.length === 0 ? (
+      ) : documents.length === 0 && !hasActiveFilters ? (
         <Paper
           elevation={0}
           sx={{
@@ -318,9 +384,11 @@ const DocumentLibraryPage = () => {
               : 'Saved resumes and cover letters will appear here.'}
           </Typography>
         </Paper>
+      ) : visibleDocuments.length === 0 ? (
+        <Typography color="text.secondary">No documents match the selected filter.</Typography>
       ) : (
         <Stack spacing={2}>
-          {documents.map((document) => (
+          {visibleDocuments.map((document) => (
             <Paper
               key={document.document_id}
               elevation={0}

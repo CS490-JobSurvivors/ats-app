@@ -82,7 +82,7 @@ const archivedDocument = {
 describe('DocumentLibraryPage', () => {
   beforeEach(() => {
     mockGetSession.mockResolvedValue({ data: { session: { access_token: 'test-token' } } });
-    mockListDocuments.mockResolvedValue(documents);
+    mockListDocuments.mockResolvedValue([documents[1], documents[0]]);
     mockListDocumentVersions.mockResolvedValue([]);
     mockArchiveDocument.mockResolvedValue({ ...documents[0], status: 'archived' });
     mockRestoreDocument.mockResolvedValue({ ...archivedDocument, status: 'active' });
@@ -102,7 +102,13 @@ describe('DocumentLibraryPage', () => {
     expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
     expect(screen.getByText('Version 2 · Created Jul 1, 2026')).toBeInTheDocument();
     expect(screen.getByText('design')).toBeInTheDocument();
-    expect(mockListDocuments).toHaveBeenCalledWith('test-token', false);
+    expect(mockListDocuments).toHaveBeenCalledWith(
+      'test-token',
+      false,
+      undefined,
+      undefined,
+      'desc'
+    );
   });
 
   it('shows an empty state when no documents exist', async () => {
@@ -141,7 +147,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
 
     await screen.findByText('Resume - Software Engineer at Acme');
-    await userEvent.click(screen.getAllByRole('button', { name: /view/i })[0]);
+    // default sort is newest-first; doc-2 (Jul 2) renders before doc-1 (Jul 1)
+    await userEvent.click(screen.getAllByRole('button', { name: /view/i })[1]);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByDisplayValue('# Resume')).toBeInTheDocument();
@@ -278,17 +285,30 @@ describe('DocumentLibraryPage', () => {
     expect(screen.queryByText('Resume - Software Engineer at Acme')).not.toBeInTheDocument();
     expect(screen.queryByText('Cover Letter - Designer at Studio')).not.toBeInTheDocument();
     expect(screen.getByText('archived')).toBeInTheDocument();
-    expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', true);
+    expect(mockListDocuments).toHaveBeenLastCalledWith(
+      'test-token',
+      true,
+      undefined,
+      undefined,
+      'desc'
+    );
   });
 
   it('archives an active document and reloads the library', async () => {
     render(<DocumentLibraryPage />);
 
     await screen.findByText('Resume - Software Engineer at Acme');
-    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[0]);
+    // default sort is newest-first; doc-2 (Jul 2) renders before doc-1 (Jul 1)
+    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[1]);
 
     await waitFor(() => expect(mockArchiveDocument).toHaveBeenCalledWith('test-token', 'doc-1'));
-    expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', false);
+    expect(mockListDocuments).toHaveBeenLastCalledWith(
+      'test-token',
+      false,
+      undefined,
+      undefined,
+      'desc'
+    );
   });
 
   it('restores an archived document and reloads the library', async () => {
@@ -302,14 +322,21 @@ describe('DocumentLibraryPage', () => {
     await waitFor(() =>
       expect(mockRestoreDocument).toHaveBeenCalledWith('test-token', 'doc-archived')
     );
-    expect(mockListDocuments).toHaveBeenLastCalledWith('test-token', false);
+    expect(mockListDocuments).toHaveBeenLastCalledWith(
+      'test-token',
+      false,
+      undefined,
+      undefined,
+      'desc'
+    );
   });
 
   it('updates document metadata from the edit dialog', async () => {
     render(<DocumentLibraryPage />);
 
     await screen.findByText('Resume - Software Engineer at Acme');
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    // default sort is newest-first; doc-2 (Jul 2) renders before doc-1 (Jul 1)
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Updated Resume' } });
     fireEvent.change(screen.getByLabelText(/tags/i), { target: { value: 'backend, remote' } });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -345,7 +372,7 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
     await screen.findByText('Resume - Software Engineer at Acme');
 
-    // doc-1 (Resume) is first in API order on this branch (no sort feature yet)
+    // default sort is newest-first; doc-2 (Jul 2) is first, doc-1 (Jul 1) is second
     await userEvent.click(screen.getAllByRole('button', { name: /^view$/i })[0]);
 
     const dialog = screen.getByRole('dialog');
@@ -358,5 +385,174 @@ describe('DocumentLibraryPage', () => {
 
     expect(mockCreateObjectURL).toHaveBeenCalledWith(expect.any(Blob));
     expect(mockRevokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+  });
+
+  it('filters to only resume documents when the resume type filter is selected', async () => {
+    mockListDocuments
+      .mockResolvedValueOnce([documents[1], documents[0]])
+      .mockResolvedValueOnce([documents[0]]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    const [typeSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(typeSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /^resume$/i }));
+
+    await waitFor(() =>
+      expect(mockListDocuments).toHaveBeenLastCalledWith(
+        'test-token',
+        false,
+        'resume',
+        undefined,
+        'desc'
+      )
+    );
+    expect(screen.getByText('Resume - Software Engineer at Acme')).toBeInTheDocument();
+    expect(screen.queryByText('Cover Letter - Designer at Studio')).not.toBeInTheDocument();
+  });
+
+  it('filters to only cover letter documents when the cover letter type filter is selected', async () => {
+    mockListDocuments
+      .mockResolvedValueOnce([documents[1], documents[0]])
+      .mockResolvedValueOnce([documents[1]]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Cover Letter - Designer at Studio');
+
+    const [typeSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(typeSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /cover letter/i }));
+
+    await waitFor(() =>
+      expect(mockListDocuments).toHaveBeenLastCalledWith(
+        'test-token',
+        false,
+        'cover_letter',
+        undefined,
+        'desc'
+      )
+    );
+    expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
+    expect(screen.queryByText('Resume - Software Engineer at Acme')).not.toBeInTheDocument();
+  });
+
+  it('shows a no-match message when the active type filter matches no documents', async () => {
+    mockListDocuments.mockResolvedValueOnce([documents[0]]).mockResolvedValueOnce([]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    const [typeSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(typeSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /cover letter/i }));
+
+    expect(await screen.findByText('No documents match the selected filter.')).toBeInTheDocument();
+  });
+
+  it('filters to only documents matching the selected status', async () => {
+    const draftDoc = {
+      ...documents[0],
+      document_id: 'doc-draft',
+      doc_title: 'Draft Resume',
+      status: 'draft',
+      created_at: '2026-07-03T12:00:00Z',
+    };
+    mockListDocuments.mockResolvedValueOnce([...documents, draftDoc]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    const [, statusSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(statusSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /^active$/i }));
+
+    expect(screen.getByText('Resume - Software Engineer at Acme')).toBeInTheDocument();
+    expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
+    expect(screen.queryByText('Draft Resume')).not.toBeInTheDocument();
+  });
+
+  it('filters documents by tag substring match', async () => {
+    mockListDocuments
+      .mockResolvedValueOnce([documents[1], documents[0]])
+      .mockResolvedValueOnce([documents[1]]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Cover Letter - Designer at Studio');
+
+    const tagInput = screen.getByRole('textbox', { name: /tag/i });
+    fireEvent.change(tagInput, { target: { value: 'design' } });
+
+    await waitFor(() =>
+      expect(mockListDocuments).toHaveBeenLastCalledWith(
+        'test-token',
+        false,
+        undefined,
+        'design',
+        'desc'
+      )
+    );
+    expect(await screen.findByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
+    expect(screen.queryByText('Resume - Software Engineer at Acme')).not.toBeInTheDocument();
+  });
+
+  it('sorts documents oldest-first when the sort order is changed to ascending', async () => {
+    // desc (default): cover letter Jul 2 before resume Jul 1
+    // asc: resume Jul 1 before cover letter Jul 2
+    mockListDocuments
+      .mockResolvedValueOnce([documents[1], documents[0]])
+      .mockResolvedValueOnce([documents[0], documents[1]]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    // default is newest-first: doc-2 (Jul 2, Cover Letter) before doc-1 (Jul 1, Resume)
+    const resumeEl = screen.getByText('Resume - Software Engineer at Acme');
+    const coverLetterEl = screen.getByText('Cover Letter - Designer at Studio');
+    expect(
+      coverLetterEl.compareDocumentPosition(resumeEl) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    // Sort is the third combobox: Type (0), Status (1), Sort (2)
+    const sortSelect = screen.getAllByRole('combobox')[2];
+    fireEvent.mouseDown(sortSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /oldest first/i }));
+
+    await waitFor(() =>
+      expect(mockListDocuments).toHaveBeenLastCalledWith(
+        'test-token',
+        false,
+        undefined,
+        undefined,
+        'asc'
+      )
+    );
+
+    // after ascending sort, resume (Jul 1) should precede cover letter (Jul 2)
+    const resumeAfter = await screen.findByText('Resume - Software Engineer at Acme');
+    const coverLetterAfter = screen.getByText('Cover Letter - Designer at Studio');
+    expect(
+      resumeAfter.compareDocumentPosition(coverLetterAfter) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('sorts by updated_at when set, falling back to created_at', async () => {
+    // backend returns docs sorted by coalesce(updated_at, created_at) desc
+    // doc-1: updated Jul 5 → effective Jul 5
+    // doc-2: created Jul 3, no update → effective Jul 3
+    // expected order: resume (Jul 5) first, then cover letter (Jul 3)
+    const docWithUpdate = { ...documents[0], updated_at: '2026-07-05T12:00:00Z' };
+    const docNoUpdate = { ...documents[1], created_at: '2026-07-03T12:00:00Z', updated_at: null };
+    mockListDocuments.mockResolvedValueOnce([docWithUpdate, docNoUpdate]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    const resumeEl = screen.getByText('Resume - Software Engineer at Acme');
+    const coverLetterEl = screen.getByText('Cover Letter - Designer at Studio');
+    // Resume (effective Jul 5) should precede Cover Letter (effective Jul 3)
+    expect(
+      resumeEl.compareDocumentPosition(coverLetterEl) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 });

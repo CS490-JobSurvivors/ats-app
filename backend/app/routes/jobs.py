@@ -264,17 +264,25 @@ def get_job_metrics(
 @router.get("/documents", response_model=list[DocumentRead])
 def list_user_documents(
     include_archived: bool = False,
+    doc_type: str | None = None,
+    tag: str | None = None,
+    sort_order: str = "desc",
     current_user: dict = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     owner_id = get_current_user_id(current_user)
-    query = select(Document).where(
+    conditions = [
         Document.user_id == owner_id,
         Document.doc_type.in_(("resume", "cover_letter")),
         Document.status == ("archived" if include_archived else "active"),
-    )
-
-    return db.scalars(query.order_by(Document.created_at.desc())).all()
+    ]
+    if doc_type:
+        conditions.append(Document.doc_type == doc_type)
+    if tag:
+        conditions.append(func.array_to_string(Document.tags, ",").ilike(f"%{tag}%"))
+    sort_col = func.coalesce(Document.updated_at, Document.created_at)
+    order_expr = sort_col.asc() if sort_order == "asc" else sort_col.desc()
+    return db.scalars(select(Document).where(*conditions).order_by(order_expr)).all()
 
 
 @router.patch("/documents/{document_id}/archive", response_model=DocumentRead)
