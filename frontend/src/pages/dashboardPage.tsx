@@ -524,7 +524,7 @@ const DashboardPage = () => {
     }
   };
 
-  const handleLinkDocument = async (documentId: string) => {
+  const handleLinkDocument = async (documentId: string, existingDocumentId?: string) => {
     if (!selectedJob) return;
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -532,6 +532,9 @@ const DashboardPage = () => {
 
     setErrorMessage('');
     try {
+      if (existingDocumentId) {
+        await unlinkDocumentFromJob(token, selectedJob.job_id, existingDocumentId);
+      }
       await linkDocumentToJob(token, selectedJob.job_id, documentId);
       await Promise.all([loadJobDocuments(selectedJob.job_id), loadLibraryDocuments()]);
     } catch {

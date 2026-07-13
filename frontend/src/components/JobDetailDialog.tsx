@@ -88,7 +88,7 @@ interface JobDetailDialogProps {
   onLoadVersions?: (documentId: string) => Promise<DocumentVersion[]>;
   onGenerateResearch?: (userContext: string) => Promise<string>;
   libraryDocuments?: DocumentRecord[];
-  onLinkDocument?: (documentId: string) => Promise<void>;
+  onLinkDocument?: (documentId: string, existingDocumentId?: string) => Promise<void>;
   onUnlinkDocument?: (documentId: string) => Promise<void>;
 }
 
@@ -265,6 +265,8 @@ const JobDetailDialog = ({
   const [versionsLoading, setVersionsLoading] = useState(false);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
   const [isLinking, setIsLinking] = useState<string | null>(null);
+  const [pendingLinkDoc, setPendingLinkDoc] = useState<DocumentRecord | null>(null);
+  const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
 
   useEffect(() => {
     if (job) {
@@ -2003,15 +2005,17 @@ const JobDetailDialog = ({
                     size="small"
                     variant="contained"
                     disabled={isLinking === doc.document_id}
-                    onClick={async () => {
+                    onClick={() => {
                       if (!onLinkDocument) return;
-                      setIsLinking(doc.document_id);
-                      try {
-                        await onLinkDocument(doc.document_id);
+                      const conflict = savedDocuments.find((d) => d.doc_type === doc.doc_type);
+                      if (conflict) {
+                        setPendingLinkDoc(doc);
                         setLinkPickerOpen(false);
-                      } finally {
-                        setIsLinking(null);
+                        setReplaceConfirmOpen(true);
+                        return;
                       }
+                      setIsLinking(doc.document_id);
+                      onLinkDocument(doc.document_id).finally(() => setIsLinking(null));
                     }}
                   >
                     {isLinking === doc.document_id ? <CircularProgress size={16} /> : 'Link'}
@@ -2023,6 +2027,51 @@ const JobDetailDialog = ({
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setLinkPickerOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={replaceConfirmOpen}
+        onClose={() => {
+          setReplaceConfirmOpen(false);
+          setPendingLinkDoc(null);
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Replace existing document?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            A {pendingLinkDoc?.doc_type} is already linked to this job. Linking{' '}
+            <strong>{pendingLinkDoc?.doc_title}</strong> will unlink the existing one. Continue?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setReplaceConfirmOpen(false);
+              setPendingLinkDoc(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={async () => {
+              if (!pendingLinkDoc || !onLinkDocument) return;
+              const conflict = savedDocuments.find((d) => d.doc_type === pendingLinkDoc.doc_type);
+              setReplaceConfirmOpen(false);
+              setPendingLinkDoc(null);
+              setIsLinking(pendingLinkDoc.document_id);
+              try {
+                await onLinkDocument(pendingLinkDoc.document_id, conflict?.document_id);
+              } finally {
+                setIsLinking(null);
+              }
+            }}
+          >
+            Replace
+          </Button>
         </DialogActions>
       </Dialog>
     </>

@@ -213,6 +213,16 @@ class FakeDb:
 
         if entity is Document:
             if "document_id_1" not in params:
+                if "status_1" in params:
+                    for document in documents:
+                        if (
+                            str(document.job_id) == str(params["job_id_1"])
+                            and str(document.user_id) == str(params["user_id_1"])
+                            and document.doc_type == params["doc_type_1"]
+                            and (document.status or "active") == params["status_1"]
+                        ):
+                            return document
+                    return None
                 versions = [
                     document.doc_version
                     for document in documents
@@ -1775,6 +1785,7 @@ def test_link_document_to_job_sets_job_id():
     user_id = str(uuid4())
     set_authenticated_user(user_id)
     job_id, document = seed_job_and_document(user_id)
+    client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/unlink")
 
     response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/link")
 
@@ -1816,6 +1827,37 @@ def test_unlink_document_returns_404_when_not_linked_to_job():
     response = client.patch(f"/jobs/{job_id_2}/documents/{document['document_id']}/unlink")
 
     assert response.status_code == 404
+
+
+def test_link_document_rejects_duplicate_doc_type():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, first_doc = seed_job_and_document(user_id)
+    second_doc = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Second Resume", "content": "Content."},
+    ).json()
+    client.patch(f"/jobs/{job_id}/documents/{second_doc['document_id']}/unlink")
+
+    response = client.patch(f"/jobs/{job_id}/documents/{second_doc['document_id']}/link")
+
+    assert response.status_code == 409
+
+
+def test_link_document_allows_different_doc_type():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, _ = seed_job_and_document(user_id)
+    cover_letter = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "cover_letter", "doc_title": "Cover Letter", "content": "Content."},
+    ).json()
+    client.patch(f"/jobs/{job_id}/documents/{cover_letter['document_id']}/unlink")
+
+    response = client.patch(f"/jobs/{job_id}/documents/{cover_letter['document_id']}/link")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == job_id
 
 
 # ---------------------------------------------------------------------------
