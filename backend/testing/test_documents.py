@@ -39,19 +39,18 @@ class FakeDb:
     def scalar(self, query):
         entity = query.column_descriptions[0]["entity"]
         if entity is Document:
-            for clause in query.whereclause.clauses:
-                right = getattr(clause, "right", None)
-                val = getattr(right, "value", None)
-                if isinstance(val, UUID):
-                    return next(
-                        (
-                            d
-                            for d in documents
-                            if str(d.document_id) == str(val)
-                            and str(d.user_id) == active_user_id
-                        ),
-                        None,
-                    )
+            params = query.compile().params
+            document_id = params.get("document_id_1")
+            user_id = params.get("user_id_1")
+            if isinstance(document_id, UUID) and user_id is not None:
+                return next(
+                    (
+                        d
+                        for d in documents
+                        if str(d.document_id) == str(document_id) and str(d.user_id) == str(user_id)
+                    ),
+                    None,
+                )
         return None
 
 
@@ -124,6 +123,29 @@ def test_upload_rejects_invalid_doc_type():
     )
 
     assert response.status_code == 422
+
+
+def test_download_document_rejects_non_owner_without_requesting_signed_url():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    documents.clear()
+
+    with patch("app.services.storage.upload_file", return_value=f"{owner_id}/fakeid.pdf"):
+        upload_response = client.post(
+            "/documents/upload",
+            data={"doc_type": "resume", "doc_title": "My Resume"},
+            files={"file": make_pdf()},
+        )
+    document_id = upload_response.json()["document_id"]
+
+    set_authenticated_user(other_user_id)
+    with patch("app.services.storage.get_signed_url") as get_signed_url:
+        response = client.get(f"/documents/download/{document_id}")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Document not found."
+    get_signed_url.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
