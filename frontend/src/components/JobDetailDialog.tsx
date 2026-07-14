@@ -1076,19 +1076,30 @@ const JobDetailDialog = ({
                             v{document.doc_version} &middot;{' '}
                             {formatActivityDate(document.created_at)}
                           </Typography>
-                          <Chip
-                            label={document.status}
-                            size="small"
-                            variant="outlined"
-                            color={
-                              document.status === 'archived'
-                                ? 'error'
-                                : document.status === 'draft'
-                                  ? 'warning'
-                                  : 'default'
-                            }
-                            sx={{ mt: 0.5 }}
-                          />
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                            {document.doc_type && (
+                              <Chip
+                                label={document.doc_type
+                                  .replace(/_/g, ' ')
+                                  .replace(/\b\w/g, (c) => c.toUpperCase())}
+                                size="small"
+                                variant="filled"
+                                color={document.doc_type === 'resume' ? 'primary' : 'secondary'}
+                              />
+                            )}
+                            <Chip
+                              label={document.status}
+                              size="small"
+                              variant="outlined"
+                              color={
+                                document.status === 'archived'
+                                  ? 'error'
+                                  : document.status === 'draft'
+                                    ? 'warning'
+                                    : 'success'
+                              }
+                            />
+                          </Box>
                           {document.tags.length > 0 && (
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
                               {document.tags.map((tag) => (
@@ -2031,7 +2042,14 @@ const JobDetailDialog = ({
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, alignItems: 'center' }}>
                       {doc.doc_type && (
-                        <Chip label={doc.doc_type} size="small" variant="outlined" />
+                        <Chip
+                          label={doc.doc_type
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, (c) => c.toUpperCase())}
+                          size="small"
+                          variant="filled"
+                          color={doc.doc_type === 'resume' ? 'primary' : 'secondary'}
+                        />
                       )}
                       <Typography variant="caption" color="text.secondary">
                         {formatActivityDate(doc.created_at)}
