@@ -17,6 +17,7 @@ class JobBase(BaseModel):
     deadline: date | None = None
     recruiter_notes: str | None = None
     outcome_notes: str | None = None
+    company_research_notes: str | None = None
     job_stage: JobStage = "Interested"
 
 
@@ -33,6 +34,7 @@ class JobUpdate(BaseModel):
     deadline: date | None = None
     recruiter_notes: str | None = None
     outcome_notes: str | None = None
+    company_research_notes: str | None = None
     job_stage: JobStage | None = None
 
 
@@ -74,6 +76,7 @@ class InterviewBase(BaseModel):
     scheduled_at_date: date
     scheduled_at_time: datetime
     interview_notes: str | None = None
+    prep_notes: str | None = None
 
 
 class InterviewCreate(InterviewBase):
@@ -85,6 +88,7 @@ class InterviewUpdate(BaseModel):
     scheduled_at_date: date | None = None
     scheduled_at_time: datetime | None = None
     interview_notes: str | None = None
+    prep_notes: str | None = None
 
 
 class InterviewRead(InterviewBase):
@@ -118,3 +122,27 @@ class FollowUpRead(FollowUpBase):
     job_id: UUID
     user_id: UUID
     created_at: datetime | None = None
+
+
+class StageConversionRate(BaseModel):
+    from_stage: str
+    to_stage: str
+    count: int
+    rate: float
+
+
+class TimeInStage(BaseModel):
+    stage: str
+    avg_days: float
+    count: int
+
+
+class WeeklyVelocity(BaseModel):
+    week_start: date
+    count: int
+
+
+class JobAnalytics(BaseModel):
+    conversion_rates: list[StageConversionRate]
+    time_in_stage: list[TimeInStage]
+    weekly_velocity: list[WeeklyVelocity]

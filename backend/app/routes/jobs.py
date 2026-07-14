@@ -1,4 +1,6 @@
-from datetime import date, datetime, time, timezone
+from collections import Counter, defaultdict
+from datetime import date, datetime, time, timedelta, timezone
+from itertools import groupby
 from typing import cast
 from uuid import UUID
 
@@ -8,11 +10,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.document import Document
+from app.models.document_version import DocumentVersion
 from app.models.followup import FollowUp
 from app.models.interviews import Interview
 from app.models.job_stage_history import JobStageHistory
 from app.models.jobs import Job
-from app.schemas.document import DocumentCreate, DocumentRead
+from app.schemas.document import DocumentCreate, DocumentRead, DocumentUpdate
+from app.schemas.document_version import DocumentVersionRead
 from app.schemas.jobs import (
     ActivityEventType,
     FollowUpCreate,
@@ -22,11 +26,15 @@ from app.schemas.jobs import (
     InterviewRead,
     InterviewUpdate,
     JobActivityEvent,
+    JobAnalytics,
     JobCreate,
     JobMetrics,
     JobRead,
     JobUpdate,
+    StageConversionRate,
     StageCounts,
+    TimeInStage,
+    WeeklyVelocity,
 )
 from app.services.auth.dependencies import get_current_user
 
@@ -137,6 +145,36 @@ def get_owned_document_or_404(
     return document
 
 
+def get_owned_library_document_or_404(document_id: UUID, owner_id: UUID, db: Session) -> Document:
+    document = db.scalar(
+        select(Document).where(
+            Document.document_id == document_id,
+            Document.user_id == owner_id,
+        )
+    )
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    return document
+
+
+def archive_document_record(document: Document) -> Document:
+    now = datetime.now(timezone.utc)
+    document.status = "archived"
+    document.updated_at = now
+    return document
+
+
+def restore_document_record(document: Document) -> Document:
+    document.status = "active"
+    document.updated_at = datetime.now(timezone.utc)
+    return document
+
+
 def as_datetime(value: date | datetime) -> datetime:
     if isinstance(value, datetime):
         return value
@@ -227,6 +265,160 @@ def get_job_metrics(
         responded=sum(count for stage, count in stage_counts.items() if stage in RESPONDED_STAGES),
         stage_counts=StageCounts(**stage_counts),
     )
+
+
+@router.get("/analytics", response_model=JobAnalytics)
+def get_job_analytics(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+
+    history = db.scalars(
+        select(JobStageHistory)
+        .join(Job, JobStageHistory.job_id == Job.job_id)
+        .where(Job.job_poster_id == owner_id)
+        .order_by(JobStageHistory.job_id, JobStageHistory.changed_at)
+    ).all()
+
+    # S3-BR-014: Applied -> Interview conversions within 14 days
+    applied_total = 0
+    applied_to_interview_within_14 = 0
+    for _, job_history in groupby(history, key=lambda h: h.job_id):
+        records = list(job_history)
+        for i, record in enumerate(records):
+            if record.to_stage == "Applied":
+                applied_total += 1
+                for j in range(i + 1, len(records)):
+                    if records[j].from_stage == "Applied":
+                        if records[j].to_stage == "Interview":
+                            days = (
+                                records[j].changed_at - record.changed_at
+                            ).total_seconds() / 86400
+                            if days <= 14:
+                                applied_to_interview_within_14 += 1
+                        break
+
+    conversion_rates = (
+        [
+            StageConversionRate(
+                from_stage="Applied",
+                to_stage="Interview",
+                count=applied_to_interview_within_14,
+                rate=round(applied_to_interview_within_14 / applied_total, 2),
+            )
+        ]
+        if applied_total > 0
+        else []
+    )
+
+    time_in_stage_data: dict = defaultdict(list)
+    for _, job_history in groupby(history, key=lambda h: h.job_id):
+        records = list(job_history)
+        for i in range(1, len(records)):
+            stage = records[i].from_stage
+            days = (records[i].changed_at - records[i - 1].changed_at).total_seconds() / 86400
+            time_in_stage_data[stage].append(days)
+
+    time_in_stage = [
+        TimeInStage(
+            stage=stage,
+            avg_days=round(sum(durations) / len(durations), 1),
+            count=len(durations),
+        )
+        for stage, durations in sorted(time_in_stage_data.items())
+    ]
+
+    # S3-BR-013: Interested -> Applied transitions grouped into weekly buckets
+    weekly_counts: Counter = Counter()
+    for h in history:
+        if h.from_stage == "Interested" and h.to_stage == "Applied":
+            week_start = h.changed_at.date() - timedelta(days=h.changed_at.weekday())
+            weekly_counts[week_start] += 1
+
+    weekly_velocity = [
+        WeeklyVelocity(week_start=week, count=count)
+        for week, count in sorted(weekly_counts.items(), reverse=True)
+    ][:12]
+
+    return JobAnalytics(
+        conversion_rates=conversion_rates,
+        time_in_stage=time_in_stage,
+        weekly_velocity=weekly_velocity,
+    )
+
+
+@router.get("/documents", response_model=list[DocumentRead])
+def list_user_documents(
+    include_archived: bool = False,
+    doc_type: str | None = None,
+    tag: str | None = None,
+    sort_order: str = "desc",
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    conditions = [
+        Document.user_id == owner_id,
+        Document.doc_type.in_(("resume", "cover_letter")),
+        Document.status == ("archived" if include_archived else "active"),
+    ]
+    if doc_type:
+        conditions.append(Document.doc_type == doc_type)
+    if tag:
+        conditions.append(func.array_to_string(Document.tags, ",").ilike(f"%{tag}%"))
+    sort_col = func.coalesce(Document.updated_at, Document.created_at)
+    order_expr = sort_col.asc() if sort_order == "asc" else sort_col.desc()
+    return db.scalars(select(Document).where(*conditions).order_by(order_expr)).all()
+
+
+@router.patch("/documents/{document_id}", response_model=DocumentRead)
+def update_library_document(
+    document_id: UUID,
+    document_update: DocumentUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_library_document_or_404(document_id, owner_id, db)
+    for field, value in document_update.model_dump(exclude_unset=True).items():
+        setattr(db_document, field, value)
+    db_document.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+
+@router.patch("/documents/{document_id}/archive", response_model=DocumentRead)
+def archive_user_document(
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_library_document_or_404(document_id, owner_id, db)
+    archive_document_record(db_document)
+
+    db.commit()
+    db.refresh(db_document)
+
+    return db_document
+
+
+@router.patch("/documents/{document_id}/restore", response_model=DocumentRead)
+def restore_user_document(
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_library_document_or_404(document_id, owner_id, db)
+    restore_document_record(db_document)
+
+    db.commit()
+    db.refresh(db_document)
+
+    return db_document
 
 
 @router.delete("/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -542,7 +734,11 @@ def list_job_documents(
 
     return db.scalars(
         select(Document)
-        .where(Document.job_id == job_id, Document.user_id == owner_id)
+        .where(
+            Document.job_id == job_id,
+            Document.user_id == owner_id,
+            Document.status == "active",
+        )
         .order_by(Document.created_at.desc())
     ).all()
 
@@ -580,6 +776,133 @@ def create_job_document(
     db.commit()
     db.refresh(db_document)
 
+    db.add(
+        DocumentVersion(
+            document_id=db_document.document_id,
+            user_id=owner_id,
+            version_number=db_document.doc_version,
+            content=db_document.content,
+            file_path=db_document.file_path,
+        )
+    )
+    db.commit()
+
+    return db_document
+
+
+@router.patch("/{job_id}/documents/{document_id}", response_model=DocumentRead)
+def update_job_document(
+    job_id: UUID,
+    document_id: UUID,
+    document_update: DocumentUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_document_or_404(job_id, document_id, owner_id, db)
+
+    for field, value in document_update.model_dump(exclude_unset=True).items():
+        setattr(db_document, field, value)
+    db_document.updated_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(db_document)
+
+    next_version = (
+        db.scalar(
+            select(func.max(DocumentVersion.version_number)).where(
+                DocumentVersion.document_id == db_document.document_id
+            )
+        )
+        or 0
+    ) + 1
+
+    db.add(
+        DocumentVersion(
+            document_id=db_document.document_id,
+            user_id=owner_id,
+            version_number=next_version,
+            content=db_document.content,
+            file_path=db_document.file_path,
+        )
+    )
+    db.commit()
+
+    return db_document
+
+
+@router.get(
+    "/{job_id}/documents/{document_id}/versions",
+    response_model=list[DocumentVersionRead],
+)
+def list_document_versions(
+    job_id: UUID,
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_document_or_404(job_id, document_id, owner_id, db)
+
+    versions = db.scalars(
+        select(DocumentVersion)
+        .where(DocumentVersion.document_id == document_id)
+        .order_by(DocumentVersion.version_number.desc())
+    ).all()
+
+    return versions
+
+
+@router.patch("/{job_id}/documents/{document_id}/link", response_model=DocumentRead)
+def link_document_to_job(
+    job_id: UUID,
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_job_or_404(job_id, owner_id, db)
+    db_document = get_owned_library_document_or_404(document_id, owner_id, db)
+
+    if db_document.job_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document is already linked to a job",
+        )
+
+    if db_document.doc_type:
+        existing = db.scalar(
+            select(Document).where(
+                Document.job_id == job_id,
+                Document.user_id == owner_id,
+                Document.doc_type == db_document.doc_type,
+                Document.status == "active",
+            )
+        )
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A {db_document.doc_type} is already linked to this job",
+            )
+
+    db_document.job_id = job_id
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+
+@router.patch("/{job_id}/documents/{document_id}/unlink", response_model=DocumentRead)
+def unlink_document_from_job(
+    job_id: UUID,
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_document_or_404(job_id, document_id, owner_id, db)
+    db_document.job_id = None
+    db.commit()
+    db.refresh(db_document)
     return db_document
 
 
@@ -593,5 +916,5 @@ def delete_job_document(
     owner_id = get_current_user_id(current_user)
     db_document = get_owned_document_or_404(job_id, document_id, owner_id, db)
 
-    db.delete(db_document)
+    archive_document_record(db_document)
     db.commit()

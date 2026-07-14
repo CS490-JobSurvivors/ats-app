@@ -12,6 +12,7 @@ export interface JobRecord {
   deadline?: string | null;
   recruiter_notes?: string | null;
   outcome_notes?: string | null;
+  company_research_notes?: string | null;
   job_stage: JobStage;
   job_poster_id: string;
   updated_at: string;
@@ -27,6 +28,7 @@ export interface JobPayload {
   deadline?: string | null;
   recruiter_notes?: string | null;
   outcome_notes?: string | null;
+  company_research_notes?: string | null;
   job_stage?: JobStage;
 }
 
@@ -39,6 +41,30 @@ export interface JobMetrics {
   awaiting_response: number;
   responded: number;
   stage_counts: StageCounts;
+}
+
+export interface StageConversionRate {
+  from_stage: string;
+  to_stage: string;
+  count: number;
+  rate: number;
+}
+
+export interface TimeInStage {
+  stage: string;
+  avg_days: number;
+  count: number;
+}
+
+export interface WeeklyVelocity {
+  week_start: string;
+  count: number;
+}
+
+export interface JobAnalytics {
+  conversion_rates: StageConversionRate[];
+  time_in_stage: TimeInStage[];
+  weekly_velocity: WeeklyVelocity[];
 }
 
 export type JobActivityEventType =
@@ -65,6 +91,7 @@ export interface InterviewRecord {
   scheduled_at_date: string;
   scheduled_at_time: string;
   interview_notes?: string | null;
+  prep_notes?: string | null;
 }
 
 export interface InterviewPayload {
@@ -72,6 +99,7 @@ export interface InterviewPayload {
   scheduled_at_date: string;
   scheduled_at_time: string;
   interview_notes?: string | null;
+  prep_notes?: string | null;
 }
 
 export type InterviewUpdatePayload = Partial<InterviewPayload>;
@@ -95,6 +123,7 @@ export interface FollowUpPayload {
 export type FollowUpUpdatePayload = Partial<FollowUpPayload>;
 
 export type DocType = 'resume' | 'cover_letter';
+export type DocStatus = 'active' | 'archived' | 'draft';
 
 export interface DocumentRecord {
   document_id: string;
@@ -103,7 +132,11 @@ export interface DocumentRecord {
   doc_type: DocType | null;
   doc_title: string;
   content: string | null;
+  file_path: string | null;
   doc_version: number;
+  status: DocStatus;
+  tags: string[];
+  updated_at: string | null;
   created_at: string;
 }
 
@@ -111,6 +144,24 @@ export interface DocumentPayload {
   doc_type: DocType;
   doc_title: string;
   content?: string | null;
+  status?: DocStatus;
+  tags?: string[];
+}
+
+export interface DocumentUpdatePayload {
+  doc_title?: string;
+  status?: DocStatus;
+  tags?: string[];
+}
+
+export interface DocumentVersion {
+  version_id: string;
+  document_id: string;
+  user_id: string;
+  version_number: number;
+  content: string | null;
+  file_path: string | null;
+  created_at: string;
 }
 
 const authHeaders = (accessToken: string) => ({
@@ -137,6 +188,15 @@ export const getJobMetrics = async (accessToken: string): Promise<JobMetrics> =>
     throw new Error('Unable to load job metrics.');
   }
   return await response.json();
+};
+
+export const getJobAnalytics = async (accessToken: string): Promise<JobAnalytics> => {
+  const response = await fetch(`${API_URL}/jobs/analytics`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+  if (!response.ok) throw new Error('Unable to load job analytics.');
+  return response.json();
 };
 
 export const createJob = async (accessToken: string, job: JobPayload): Promise<JobRecord> => {
@@ -377,6 +437,131 @@ export const listJobDocuments = async (
   return await response.json();
 };
 
+export const listDocuments = async (
+  accessToken: string,
+  includeArchived = false,
+  docType?: DocType | '',
+  tag?: string,
+  sortOrder: 'asc' | 'desc' = 'desc'
+): Promise<DocumentRecord[]> => {
+  const params = new URLSearchParams({
+    include_archived: String(includeArchived),
+    sort_order: sortOrder,
+  });
+  if (docType) params.set('doc_type', docType);
+  if (tag) params.set('tag', tag);
+  const response = await fetch(`${API_URL}/jobs/documents?${params}`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load documents.');
+  }
+
+  return await response.json();
+};
+
+export const uploadDocument = async (
+  accessToken: string,
+  file: File,
+  docType: DocType,
+  docTitle: string
+): Promise<DocumentRecord> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('doc_type', docType);
+  formData.append('doc_title', docTitle);
+
+  const response = await fetch(`${API_URL}/documents/upload`, {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || 'Upload failed.');
+  }
+
+  return await response.json();
+};
+
+export const archiveDocument = async (
+  accessToken: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/documents/${documentId}/archive`, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to archive document.');
+  }
+
+  return await response.json();
+};
+
+export const getDocumentDownloadUrl = async (
+  accessToken: string,
+  documentId: string
+): Promise<string> => {
+  const response = await fetch(`${API_URL}/documents/download/${documentId}`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to get download link.');
+  }
+
+  const body = await response.json();
+  return body.url as string;
+};
+
+export const restoreDocument = async (
+  accessToken: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/documents/${documentId}/restore`, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to restore document.');
+  }
+
+  return await response.json();
+};
+
+export const renameDocument = async (
+  accessToken: string,
+  documentId: string,
+  docTitle: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/documents/${documentId}`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(accessToken), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ doc_title: docTitle }),
+  });
+  if (!response.ok) throw new Error('Unable to rename document.');
+  return response.json();
+};
+
+export const duplicateDocument = async (
+  accessToken: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/documents/${documentId}/duplicate`, {
+    method: 'POST',
+    headers: authHeaders(accessToken),
+  });
+  if (!response.ok) throw new Error('Unable to duplicate document.');
+  return response.json();
+};
+
 export const createJobDocument = async (
   accessToken: string,
   jobId: string,
@@ -411,4 +596,120 @@ export const deleteJobDocument = async (
   if (!response.ok) {
     throw new Error('Unable to delete document.');
   }
+};
+
+export const updateLibraryDocument = async (
+  accessToken: string,
+  documentId: string,
+  payload: DocumentUpdatePayload
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/documents/${documentId}`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to update document.');
+  }
+
+  return await response.json();
+};
+
+export const updateJobDocument = async (
+  accessToken: string,
+  jobId: string,
+  documentId: string,
+  payload: DocumentUpdatePayload
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents/${documentId}`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to update document.');
+  }
+
+  return await response.json();
+};
+
+export const generateCompanyResearch = async (
+  accessToken: string,
+  jobId: string,
+  userContext: string
+): Promise<string> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/research`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ user_context: userContext }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to generate company research.');
+  }
+
+  const body = await response.json();
+  return body.research as string;
+};
+
+export const listDocumentVersions = async (
+  accessToken: string,
+  jobId: string,
+  documentId: string
+): Promise<DocumentVersion[]> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents/${documentId}/versions`, {
+    method: 'GET',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to load document versions.');
+  }
+
+  return await response.json();
+};
+
+export const linkDocumentToJob = async (
+  accessToken: string,
+  jobId: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents/${documentId}/link`, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to link document.');
+  }
+
+  return await response.json();
+};
+
+export const unlinkDocumentFromJob = async (
+  accessToken: string,
+  jobId: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents/${documentId}/unlink`, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to unlink document.');
+  }
+
+  return await response.json();
 };

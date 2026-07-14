@@ -26,6 +26,7 @@ import {
   listJobActivity,
   listJobInterviews,
   getJobMetrics,
+  getJobAnalytics,
   listJobFollowUps,
   listJobDocuments,
   createJob,
@@ -40,13 +41,23 @@ import {
   deleteJobInterview,
   createJobDocument,
   deleteJobDocument,
+  updateJobDocument,
+  listDocumentVersions,
+  listDocuments,
+  linkDocumentToJob,
+  unlinkDocumentFromJob,
+  getDocumentDownloadUrl,
+  generateCompanyResearch,
+  DocumentVersion,
   InterviewPayload,
   InterviewRecord,
   FollowUpPayload,
   FollowUpRecord,
   DocumentPayload,
   DocumentRecord,
+  DocumentUpdatePayload,
   JobActivityEvent,
+  JobAnalytics,
   JobMetrics,
   JobRecord,
   JobPayload,
@@ -124,10 +135,12 @@ const DashboardPage = () => {
   const [isFollowUpsLoading, setIsFollowUpsLoading] = useState(false);
   const [selectedJobDocuments, setSelectedJobDocuments] = useState<DocumentRecord[]>([]);
   const [isDocumentsLoading, setIsDocumentsLoading] = useState(false);
+  const [libraryDocuments, setLibraryDocuments] = useState<DocumentRecord[]>([]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('last_activity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
   const [metrics, setMetrics] = useState<JobMetrics | null>(null);
+  const [analytics, setAnalytics] = useState<JobAnalytics | null>(null);
 
   const fetchJobs = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -160,10 +173,23 @@ const DashboardPage = () => {
     }
   }, []);
 
+  const fetchAnalytics = useCallback(async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    try {
+      const result = await getJobAnalytics(token);
+      setAnalytics(result);
+    } catch {
+      // keep existing analytics visible on error
+    }
+  }, []);
+
   useEffect(() => {
     fetchJobs();
     fetchMetrics();
-  }, [fetchJobs, fetchMetrics]);
+    fetchAnalytics();
+  }, [fetchJobs, fetchMetrics, fetchAnalytics]);
 
   const locationOptions = useMemo<string[]>(() => {
     const locations = jobs
@@ -303,6 +329,18 @@ const DashboardPage = () => {
     }
   };
 
+  const loadLibraryDocuments = async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    try {
+      const all = await listDocuments(token);
+      setLibraryDocuments(all.filter((d) => d.job_id === null));
+    } catch {
+      setLibraryDocuments([]);
+    }
+  };
+
   const openDetailDialog = async (job: JobRecord) => {
     setSelectedJob(job);
     setSelectedJobActivity([]);
@@ -315,6 +353,7 @@ const DashboardPage = () => {
       loadJobInterviews(job.job_id),
       loadJobFollowUps(job.job_id),
       loadJobDocuments(job.job_id),
+      loadLibraryDocuments(),
     ]);
   };
 
@@ -328,6 +367,7 @@ const DashboardPage = () => {
     setConfirmDeleteOpen(false);
     setDetailOpen(false);
     await fetchMetrics();
+    await fetchAnalytics();
   };
 
   const handleDetailSave = async (payload: JobPayload) => {
@@ -356,6 +396,7 @@ const DashboardPage = () => {
       }
       await loadJobActivity(selectedJob.job_id);
       await fetchMetrics();
+      await fetchAnalytics();
     } catch {
       setErrorMessage('Unable to delete that stage history. Please try again.');
     }
@@ -474,6 +515,86 @@ const DashboardPage = () => {
     }
   };
 
+  const handleUpdateDocument = async (documentId: string, payload: DocumentUpdatePayload) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      await updateJobDocument(token, selectedJob.job_id, documentId, payload);
+      await loadJobDocuments(selectedJob.job_id);
+    } catch {
+      setErrorMessage('Unable to update that document. Please try again.');
+    }
+  };
+
+  const handleLoadVersions = async (documentId: string): Promise<DocumentVersion[]> => {
+    if (!selectedJob) return [];
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return [];
+
+    try {
+      return await listDocumentVersions(token, selectedJob.job_id, documentId);
+    } catch {
+      return [];
+    }
+  };
+
+  const handleLinkDocument = async (documentId: string, existingDocumentId?: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      if (existingDocumentId) {
+        await unlinkDocumentFromJob(token, selectedJob.job_id, existingDocumentId);
+      }
+      await linkDocumentToJob(token, selectedJob.job_id, documentId);
+      await Promise.all([loadJobDocuments(selectedJob.job_id), loadLibraryDocuments()]);
+    } catch {
+      setErrorMessage('Unable to link that document. Please try again.');
+    }
+  };
+
+  const handleDownloadDocument = async (documentId: string) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    try {
+      const url = await getDocumentDownloadUrl(token, documentId);
+      window.open(url, '_blank');
+    } catch {
+      throw new Error('Download failed');
+    }
+  };
+
+  const handleUnlinkDocument = async (documentId: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    const unlinked = selectedJobDocuments.find((d) => d.document_id === documentId);
+    setSelectedJobDocuments((prev) => prev.filter((d) => d.document_id !== documentId));
+    if (unlinked) setLibraryDocuments((prev) => [...prev, { ...unlinked, job_id: null }]);
+
+    try {
+      await unlinkDocumentFromJob(token, selectedJob.job_id, documentId);
+    } catch {
+      if (unlinked) {
+        setSelectedJobDocuments((prev) => [...prev, unlinked]);
+        setLibraryDocuments((prev) => prev.filter((d) => d.document_id !== documentId));
+      }
+      setErrorMessage('Unable to unlink that document. Please try again.');
+    }
+  };
+
   const handleDialogSubmit = async (payload: JobPayload) => {
     const { data } = await supabase.auth.getSession();
     const token = data.session?.access_token;
@@ -482,6 +603,7 @@ const DashboardPage = () => {
     setDialogOpen(false);
     await fetchJobs();
     await fetchMetrics();
+    await fetchAnalytics();
   };
 
   return (
@@ -540,6 +662,135 @@ const DashboardPage = () => {
           })}
         </Box>
       </Paper>
+
+      {analytics && (
+        <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
+          {analytics.conversion_rates.length > 0 && (
+            <Paper sx={{ p: 3, flex: 1, minWidth: 280 }}>
+              <Typography variant="h6" fontWeight={600} mb={2}>
+                Stage Conversion Rates
+              </Typography>
+              <Box
+                component="table"
+                sx={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}
+              >
+                <Box component="thead">
+                  <Box component="tr">
+                    {['From', 'To', 'Count', 'Rate'].map((h) => (
+                      <Box
+                        key={h}
+                        component="th"
+                        sx={{
+                          textAlign: 'left',
+                          pb: 1,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          fontWeight: 600,
+                          pr: 2,
+                        }}
+                      >
+                        {h}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+                <Box component="tbody">
+                  {analytics.conversion_rates.map((row, i) => (
+                    <Box component="tr" key={i}>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.from_stage}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.to_stage}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.count}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75 }}>
+                        {(row.rate * 100).toFixed(0)}%
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Paper>
+          )}
+
+          {analytics.time_in_stage.length > 0 && (
+            <Paper sx={{ p: 3, flex: 1, minWidth: 220 }}>
+              <Typography variant="h6" fontWeight={600} mb={2}>
+                Avg. Time in Stage
+              </Typography>
+              <Box
+                component="table"
+                sx={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}
+              >
+                <Box component="thead">
+                  <Box component="tr">
+                    {['Stage', 'Avg Days', 'Jobs'].map((h) => (
+                      <Box
+                        key={h}
+                        component="th"
+                        sx={{
+                          textAlign: 'left',
+                          pb: 1,
+                          borderBottom: '1px solid',
+                          borderColor: 'divider',
+                          fontWeight: 600,
+                          pr: 2,
+                        }}
+                      >
+                        {h}
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+                <Box component="tbody">
+                  {analytics.time_in_stage.map((row, i) => (
+                    <Box component="tr" key={i}>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.stage}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75, pr: 2 }}>
+                        {row.avg_days.toFixed(1)}
+                      </Box>
+                      <Box component="td" sx={{ py: 0.75 }}>
+                        {row.count}
+                      </Box>
+                    </Box>
+                  ))}
+                </Box>
+              </Box>
+            </Paper>
+          )}
+
+          {analytics.weekly_velocity.length > 0 && (
+            <Paper sx={{ p: 3, flex: 1, minWidth: 200 }}>
+              <Typography variant="h6" fontWeight={600} mb={2}>
+                Weekly Application Volume
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                {analytics.weekly_velocity.map((row, i) => (
+                  <Box
+                    key={i}
+                    sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}
+                  >
+                    <Typography variant="body2" color="text.secondary">
+                      {new Date(row.week_start + 'T00:00:00').toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </Typography>
+                    <Typography variant="body2" fontWeight={600}>
+                      {row.count}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
+          )}
+        </Box>
+      )}
 
       <Box
         sx={{
@@ -742,6 +993,18 @@ const DashboardPage = () => {
         isFollowUpsLoading={isFollowUpsLoading}
         onSaveDocument={handleSaveDocument}
         onDeleteDocument={handleDeleteDocument}
+        onUpdateDocument={handleUpdateDocument}
+        onLoadVersions={handleLoadVersions}
+        libraryDocuments={libraryDocuments}
+        onLinkDocument={handleLinkDocument}
+        onUnlinkDocument={handleUnlinkDocument}
+        onDownloadDocument={handleDownloadDocument}
+        onGenerateResearch={async (userContext: string) => {
+          const { data } = await supabase.auth.getSession();
+          const token = data.session?.access_token;
+          if (!token || !selectedJob) throw new Error('Not authenticated.');
+          return await generateCompanyResearch(token, selectedJob.job_id, userContext);
+        }}
         savedDocuments={selectedJobDocuments}
         isSavedDocumentsLoading={isDocumentsLoading}
         onStageChange={async (newStage) => {
@@ -753,6 +1016,7 @@ const DashboardPage = () => {
           setSelectedJob(updated);
           await loadJobActivity(updated.job_id);
           await fetchMetrics();
+          await fetchAnalytics();
         }}
         activityEvents={selectedJobActivity}
         isActivityLoading={isActivityLoading}

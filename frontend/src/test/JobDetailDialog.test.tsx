@@ -1,8 +1,8 @@
 import '@testing-library/jest-dom';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import JobDetailDialog from '../components/JobDetailDialog';
-import { FollowUpRecord, InterviewRecord, JobRecord } from '../api/jobs';
+import { DocumentRecord, FollowUpRecord, InterviewRecord, JobRecord } from '../api/jobs';
 import { stageColors } from '../utils/stageColors';
 
 const mockJob: JobRecord = {
@@ -294,7 +294,7 @@ describe('JobDetailDialog', () => {
       />
     );
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-12' } });
     fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Followed up.' } });
     await userEvent.click(screen.getByLabelText(/completed/i));
@@ -399,7 +399,7 @@ describe('JobDetailDialog', () => {
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
-    fireEvent.change(screen.getByLabelText(/notes/i), {
+    fireEvent.change(screen.getByLabelText(/^notes$/i), {
       target: { value: 'Review system design.' },
     });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -436,11 +436,11 @@ describe('JobDetailDialog', () => {
       />
     );
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Final' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-10' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '18:00' } });
-    fireEvent.change(screen.getByLabelText(/notes/i), {
+    fireEvent.change(screen.getByLabelText(/^notes$/i), {
       target: { value: 'Meet hiring manager.' },
     });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -504,6 +504,107 @@ describe('JobDetailDialog', () => {
     expect(screen.getByRole('heading', { name: /add interview/i })).toBeInTheDocument();
   });
 
+  it('includes prep_notes in the interview payload when filled in', async () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+      />
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: /add interview/i }));
+    fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
+    fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
+    fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
+    fireEvent.change(screen.getByLabelText(/preparation notes/i), {
+      target: { value: 'Study graphs and dynamic programming.' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => {
+      expect(mockOnSaveInterview).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prep_notes: 'Study graphs and dynamic programming.',
+        }),
+        undefined
+      );
+    });
+  });
+
+  it('displays prep_notes on the interview card when present', () => {
+    const interviewWithPrepNotes: InterviewRecord[] = [
+      {
+        ...interviews[0],
+        prep_notes: 'Practice system design questions.',
+      },
+    ];
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+        interviews={interviewWithPrepNotes}
+      />
+    );
+
+    expect(screen.getByText('Prep notes')).toBeInTheDocument();
+    expect(screen.getByText('Practice system design questions.')).toBeInTheDocument();
+  });
+
+  it('does not show prep notes section when interview has no prep_notes', () => {
+    render(
+      <JobDetailDialog
+        open={true}
+        job={mockJob}
+        onClose={mockOnClose}
+        onSave={mockOnSave}
+        onDelete={mockOnDelete}
+        onStageChange={mockOnStageChange}
+        onSaveInterview={mockOnSaveInterview}
+        interviews={interviews}
+      />
+    );
+
+    expect(screen.queryByText('Prep notes')).not.toBeInTheDocument();
+  });
+
+  it('includes company_research_notes in job save payload when filled in', async () => {
+    mockOnSave.mockResolvedValue(undefined);
+    renderDialog();
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.change(screen.getByLabelText(/company research notes/i), {
+      target: { value: 'Founded 2010, Series C, engineering-first culture.' },
+    });
+    fireEvent.click(screen.getByText('Save'));
+    await waitFor(() => {
+      expect(mockOnSave).toHaveBeenCalledWith(
+        expect.objectContaining({
+          company_research_notes: 'Founded 2010, Series C, engineering-first culture.',
+        })
+      );
+    });
+  });
+
+  it('displays company_research_notes when present on the job', () => {
+    renderDialog({ ...mockJob, company_research_notes: 'Competes with Acme. Remote-friendly.' });
+    expect(screen.getByText('Company Research Notes')).toBeInTheDocument();
+    expect(screen.getByText('Competes with Acme. Remote-friendly.')).toBeInTheDocument();
+  });
+
+  it('does not show company research notes section when notes are null', () => {
+    renderDialog({ ...mockJob, company_research_notes: null });
+    expect(screen.queryByText('Company Research Notes')).not.toBeInTheDocument();
+  });
+
   it('does not render application link when not provided', () => {
     renderDialog({ ...mockJob, application_link: null });
     expect(screen.queryByText('Application Link')).not.toBeInTheDocument();
@@ -511,13 +612,14 @@ describe('JobDetailDialog', () => {
 
   it('calls onClose when Close button is clicked', () => {
     renderDialog();
-    fireEvent.click(screen.getByText('Close'));
+    fireEvent.click(screen.getByRole('button', { name: /^close$/i }));
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onDelete when Delete button is clicked', () => {
+  it('calls onDelete when Delete button is clicked', async () => {
     renderDialog();
-    fireEvent.click(screen.getByText('Delete'));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }));
     expect(mockOnDelete).toHaveBeenCalledTimes(1);
   });
 
@@ -687,15 +789,17 @@ describe('JobDetailDialog', () => {
     },
   ];
 
-  it('shows an Archive button for jobs that are not archived', () => {
+  it('shows an Archive button for jobs that are not archived', async () => {
     renderDialog();
-    expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    expect(screen.getByRole('menuitem', { name: 'Archive' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Restore' })).not.toBeInTheDocument();
   });
 
   it('opens the non-forward warning when archiving from a non-Offer stage', async () => {
     renderDialog();
-    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archive' }));
     expect(screen.getByText(/non-standard transition/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
     expect(mockOnStageChange).toHaveBeenCalledWith('Archived');
@@ -715,8 +819,9 @@ describe('JobDetailDialog', () => {
       />
     );
 
-    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Restore' }));
     expect(screen.getByText(/restore job/i)).toBeInTheDocument();
     expect(screen.getByText('Offer')).toBeInTheDocument();
 
@@ -738,7 +843,8 @@ describe('JobDetailDialog', () => {
       />
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Restore' }));
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(mockOnDeleteStageHistory).not.toHaveBeenCalled();
   });
@@ -783,7 +889,8 @@ describe('JobDetailDialog', () => {
 
     it('does not show Improve Draft button when onImproveResume is not provided', async () => {
       renderWithResume(jest.fn().mockResolvedValue(GENERATED));
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       expect(screen.queryByRole('button', { name: /improve draft/i })).not.toBeInTheDocument();
     });
@@ -793,7 +900,8 @@ describe('JobDetailDialog', () => {
         jest.fn().mockResolvedValue(GENERATED),
         jest.fn().mockResolvedValue(IMPROVED)
       );
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       expect(screen.getByRole('button', { name: /improve draft/i })).toBeInTheDocument();
     });
@@ -802,7 +910,8 @@ describe('JobDetailDialog', () => {
       const mockImprove = jest.fn().mockResolvedValue(IMPROVED);
       renderWithResume(jest.fn().mockResolvedValue(GENERATED), mockImprove);
 
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       fireEvent.click(screen.getByRole('button', { name: /improve draft/i }));
 
@@ -817,7 +926,8 @@ describe('JobDetailDialog', () => {
       const mockImprove = jest.fn().mockResolvedValue(IMPROVED);
       renderWithResume(jest.fn().mockResolvedValue(GENERATED), mockImprove);
 
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       fireEvent.click(screen.getByRole('button', { name: /improve draft/i }));
       await screen.findByRole('button', { name: /^original$/i });
@@ -830,9 +940,8 @@ describe('JobDetailDialog', () => {
     });
   });
 
-  describe('Saved documents', () => {
+  describe('Linked Documents', () => {
     const mockOnSaveDocument = jest.fn();
-    const mockOnDeleteDocument = jest.fn();
     const savedDocuments = [
       {
         document_id: 'doc-1',
@@ -841,16 +950,18 @@ describe('JobDetailDialog', () => {
         doc_type: 'resume' as const,
         doc_title: 'Resume - Software Engineer at Acme Corp',
         content: 'Some content',
+        file_path: null,
         doc_version: 1,
+        status: 'active' as const,
+        tags: [] as string[],
+        updated_at: null,
         created_at: '2026-06-20T00:00:00Z',
       },
     ];
 
     beforeEach(() => {
       mockOnSaveDocument.mockReset();
-      mockOnDeleteDocument.mockReset();
       mockOnSaveDocument.mockResolvedValue(undefined);
-      mockOnDeleteDocument.mockResolvedValue(undefined);
     });
 
     it('does not show a Save button in the resume dialog when onSaveDocument is not provided', async () => {
@@ -865,7 +976,8 @@ describe('JobDetailDialog', () => {
           onGenerateResume={jest.fn().mockResolvedValue('# Resume draft')}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
     });
@@ -883,7 +995,8 @@ describe('JobDetailDialog', () => {
           onSaveDocument={mockOnSaveDocument}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
@@ -892,6 +1005,30 @@ describe('JobDetailDialog', () => {
         doc_title: 'Resume - Software Engineer at Acme Corp',
         content: '# Resume draft',
       });
+    });
+
+    it('shows an error when saving a generated resume fails', async () => {
+      mockOnSaveDocument.mockRejectedValueOnce(new Error('save failed'));
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          onGenerateResume={jest.fn().mockResolvedValue('# Resume draft')}
+          onSaveDocument={mockOnSaveDocument}
+        />
+      );
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
+      await screen.findByText('Generated Resume');
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(
+        await screen.findByText('Unable to save resume. Please try again.')
+      ).toBeInTheDocument();
     });
 
     it('saves the generated cover letter with an auto-generated title', async () => {
@@ -907,9 +1044,10 @@ describe('JobDetailDialog', () => {
           onSaveDocument={mockOnSaveDocument}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /^cover letter$/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /^cover letter$/i }));
       await screen.findByText('Generated Cover Letter');
-      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+      await userEvent.click(await screen.findByRole('button', { name: /^save$/i }));
 
       expect(mockOnSaveDocument).toHaveBeenCalledWith({
         doc_type: 'cover_letter',
@@ -918,13 +1056,37 @@ describe('JobDetailDialog', () => {
       });
     });
 
-    it('shows an empty state when there are no saved drafts', () => {
-      renderDialog();
-      expect(screen.getByText('Saved Drafts')).toBeInTheDocument();
-      expect(screen.getByText('No saved drafts yet.')).toBeInTheDocument();
+    it('shows an error when saving a generated cover letter fails', async () => {
+      mockOnSaveDocument.mockRejectedValueOnce(new Error('save failed'));
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          onGenerateCoverLetter={jest.fn().mockResolvedValue('Dear hiring manager...')}
+          onSaveDocument={mockOnSaveDocument}
+        />
+      );
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /^cover letter$/i }));
+      await screen.findByText('Generated Cover Letter');
+      await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+      expect(
+        await screen.findByText('Unable to save cover letter. Please try again.')
+      ).toBeInTheDocument();
     });
 
-    it('renders saved drafts with version and date', () => {
+    it('shows an empty state when there are no linked documents', () => {
+      renderDialog();
+      expect(screen.getByText('Linked Documents')).toBeInTheDocument();
+      expect(screen.getByText('No linked documents yet.')).toBeInTheDocument();
+    });
+
+    it('renders linked documents with version and date', () => {
       render(
         <JobDetailDialog
           open={true}
@@ -939,26 +1101,36 @@ describe('JobDetailDialog', () => {
       expect(screen.getByText('Resume - Software Engineer at Acme Corp')).toBeInTheDocument();
       expect(screen.getByText(/v1/)).toBeInTheDocument();
     });
+  });
 
-    it('asks for confirmation before deleting a saved draft', async () => {
-      render(
-        <JobDetailDialog
-          open={true}
-          job={mockJob}
-          onClose={mockOnClose}
-          onSave={mockOnSave}
-          onDelete={mockOnDelete}
-          onStageChange={mockOnStageChange}
-          savedDocuments={savedDocuments}
-          onDeleteDocument={mockOnDeleteDocument}
-        />
-      );
-      await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
-      expect(screen.getByText(/delete saved draft/i)).toBeInTheDocument();
-      expect(mockOnDeleteDocument).not.toHaveBeenCalled();
+  // -------------------------------------------------------------------------
+  // Document metadata: status, tags, updated_at (S3-002)
+  // -------------------------------------------------------------------------
+
+  describe('Document metadata', () => {
+    const mockOnUpdateDocument = jest.fn();
+
+    const buildDocument = (overrides: Partial<DocumentRecord> = {}): DocumentRecord => ({
+      document_id: 'doc-1',
+      user_id: 'user-1',
+      job_id: '123',
+      doc_type: 'resume',
+      doc_title: 'Resume - Software Engineer at Acme Corp',
+      content: 'Some content',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+      ...overrides,
     });
 
-    it('calls onDeleteDocument after confirming deletion', async () => {
+    /** Renders the dialog with a single linked document and metadata editing enabled. */
+    const renderWithDocument = (
+      overrides: Partial<DocumentRecord> = {},
+      { withUpdateHandler = true } = {}
+    ) =>
       render(
         <JobDetailDialog
           open={true}
@@ -967,15 +1139,414 @@ describe('JobDetailDialog', () => {
           onSave={mockOnSave}
           onDelete={mockOnDelete}
           onStageChange={mockOnStageChange}
-          savedDocuments={savedDocuments}
-          onDeleteDocument={mockOnDeleteDocument}
+          savedDocuments={[buildDocument(overrides)]}
+          onUpdateDocument={withUpdateHandler ? mockOnUpdateDocument : undefined}
         />
       );
-      await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
-      const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
-      await userEvent.click(deleteButtons[deleteButtons.length - 1]);
 
-      expect(mockOnDeleteDocument).toHaveBeenCalledWith('doc-1');
+    const DOCUMENT_TITLE = 'Resume - Software Engineer at Acme Corp';
+
+    /**
+     * Scopes queries to a linked document's row. The dialog also renders an "Edit"
+     * button for the job itself, so row-scoping is required to disambiguate.
+     */
+    const getDocumentRow = (title = DOCUMENT_TITLE): HTMLElement => {
+      // eslint-disable-next-line testing-library/no-node-access
+      let element = screen.getByText(title).parentElement;
+      // eslint-disable-next-line testing-library/no-node-access
+      while (element && !within(element).queryByRole('button', { name: /^view$/i })) {
+        // eslint-disable-next-line testing-library/no-node-access
+        element = element.parentElement;
+      }
+      return element as HTMLElement;
+    };
+
+    /** Scopes queries to the "Edit Document" modal, which is portaled alongside others. */
+    const getEditDialog = () =>
+      // eslint-disable-next-line testing-library/no-node-access
+      screen.getByText('Edit Document').closest('[role="dialog"]') as HTMLElement;
+
+    const openEditDialog = async () => {
+      await userEvent.click(within(getDocumentRow()).getByRole('button', { name: /^edit$/i }));
+      return getEditDialog();
+    };
+
+    beforeEach(() => {
+      mockOnUpdateDocument.mockReset();
+      mockOnUpdateDocument.mockResolvedValue(undefined);
+    });
+
+    describe('metadata display', () => {
+      it('should render the document status as a chip when the document is active', () => {
+        // Arrange & Act
+        renderWithDocument({ status: 'active' });
+
+        // Assert
+        expect(screen.getByText('active')).toBeInTheDocument();
+      });
+
+      it('should render the archived status when the document is archived', () => {
+        // Arrange & Act
+        renderWithDocument({ status: 'archived' });
+
+        // Assert
+        expect(screen.getByText('archived')).toBeInTheDocument();
+      });
+
+      it('should render one chip per tag when the document has tags', () => {
+        // Arrange & Act
+        renderWithDocument({ tags: ['backend', 'remote'] });
+
+        // Assert
+        expect(screen.getByText('backend')).toBeInTheDocument();
+        expect(screen.getByText('remote')).toBeInTheDocument();
+      });
+
+      it('should render no tag chips when the document has no tags', () => {
+        // Arrange
+        const tag = 'backend';
+
+        // Act
+        renderWithDocument({ tags: [] });
+
+        // Assert
+        expect(screen.queryByText(tag)).not.toBeInTheDocument();
+      });
+
+      it('should show the updated timestamp in the viewer when the document has been edited', async () => {
+        // Arrange
+        renderWithDocument({ updated_at: '2026-07-01T12:00:00Z' });
+
+        // Act
+        await userEvent.click(within(getDocumentRow()).getByRole('button', { name: /^view$/i }));
+
+        // Assert
+        expect(await screen.findByText(/Updated/)).toBeInTheDocument();
+      });
+
+      it('should omit the updated timestamp in the viewer when the document has never been edited', async () => {
+        // Arrange
+        renderWithDocument({ updated_at: null });
+
+        // Act
+        await userEvent.click(within(getDocumentRow()).getByRole('button', { name: /^view$/i }));
+
+        // Assert
+        await waitFor(() => expect(screen.getAllByText(/^v1/).length).toBeGreaterThan(0));
+        expect(screen.queryByText(/Updated/)).not.toBeInTheDocument();
+      });
+    });
+
+    describe('edit affordance', () => {
+      it('should not show an Edit button when onUpdateDocument is not provided', () => {
+        // Arrange & Act
+        renderWithDocument({}, { withUpdateHandler: false });
+
+        // Assert
+        expect(
+          within(getDocumentRow()).queryByRole('button', { name: /^edit$/i })
+        ).not.toBeInTheDocument();
+      });
+
+      it('should show an Edit button when onUpdateDocument is provided', () => {
+        // Arrange & Act
+        renderWithDocument();
+
+        // Assert
+        expect(
+          within(getDocumentRow()).getByRole('button', { name: /^edit$/i })
+        ).toBeInTheDocument();
+      });
+
+      it('should prefill the edit form with the current title, status, and comma-joined tags', async () => {
+        // Arrange
+        renderWithDocument({ status: 'draft', tags: ['backend', 'remote'] });
+
+        // Act
+        const editDialog = await openEditDialog();
+
+        // Assert
+        expect(within(editDialog).getByLabelText('Title')).toHaveValue(
+          'Resume - Software Engineer at Acme Corp'
+        );
+        expect(within(editDialog).getByLabelText('Tags')).toHaveValue('backend, remote');
+        expect(within(editDialog).getByRole('combobox')).toHaveTextContent('Draft');
+      });
+    });
+
+    describe('saving metadata changes', () => {
+      it('should call onUpdateDocument with the edited title, status, and tags', async () => {
+        // Arrange
+        renderWithDocument({ tags: ['backend'] });
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Title'), {
+          target: { value: 'Resume (final)' },
+        });
+        fireEvent.change(within(editDialog).getByLabelText('Tags'), {
+          target: { value: 'senior, remote' },
+        });
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() =>
+          expect(mockOnUpdateDocument).toHaveBeenCalledWith('doc-1', {
+            doc_title: 'Resume (final)',
+            status: 'active',
+            tags: ['senior', 'remote'],
+          })
+        );
+      });
+
+      it('should submit the newly selected status when the status dropdown is changed', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        await userEvent.click(within(editDialog).getByRole('combobox'));
+        await userEvent.click(await screen.findByRole('option', { name: 'Archived' }));
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() =>
+          expect(mockOnUpdateDocument).toHaveBeenCalledWith(
+            'doc-1',
+            expect.objectContaining({ status: 'archived' })
+          )
+        );
+      });
+
+      it('should trim whitespace and drop empty entries when parsing the tags input', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Tags'), {
+          target: { value: '  react ,, node ,  ' },
+        });
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() =>
+          expect(mockOnUpdateDocument).toHaveBeenCalledWith(
+            'doc-1',
+            expect.objectContaining({ tags: ['react', 'node'] })
+          )
+        );
+      });
+
+      it('should submit an empty tag list when the tags input is cleared', async () => {
+        // Arrange
+        renderWithDocument({ tags: ['stale'] });
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Tags'), { target: { value: '' } });
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() =>
+          expect(mockOnUpdateDocument).toHaveBeenCalledWith(
+            'doc-1',
+            expect.objectContaining({ tags: [] })
+          )
+        );
+      });
+
+      it('should close the edit dialog after a successful save', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        await waitFor(() => expect(screen.queryByText('Edit Document')).not.toBeInTheDocument());
+      });
+    });
+
+    describe('edit validation and error handling', () => {
+      it('should disable the Save button when the title is empty', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Title'), { target: { value: '' } });
+
+        // Assert
+        expect(within(editDialog).getByRole('button', { name: /^save$/i })).toBeDisabled();
+      });
+
+      it('should disable the Save button when the title is only whitespace', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        fireEvent.change(within(editDialog).getByLabelText('Title'), { target: { value: '   ' } });
+
+        // Assert
+        expect(within(editDialog).getByRole('button', { name: /^save$/i })).toBeDisabled();
+      });
+
+      it('should show an error alert and keep the dialog open when the update fails', async () => {
+        // Arrange
+        mockOnUpdateDocument.mockRejectedValue(new Error('Unable to update document.'));
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+        // Assert
+        expect(await screen.findByText('Failed to update document.')).toBeInTheDocument();
+        expect(screen.getByText('Edit Document')).toBeInTheDocument();
+      });
+
+      it('should close the dialog without calling onUpdateDocument when cancelled', async () => {
+        // Arrange
+        renderWithDocument();
+        const editDialog = await openEditDialog();
+
+        // Act
+        await userEvent.click(within(editDialog).getByRole('button', { name: /^cancel$/i }));
+
+        // Assert
+        await waitFor(() => expect(screen.queryByText('Edit Document')).not.toBeInTheDocument());
+        expect(mockOnUpdateDocument).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Linking documents from the library and unlinking (S3-021)
+  // -------------------------------------------------------------------------
+
+  describe('link and unlink flows', () => {
+    const mockOnLinkDocument = jest.fn();
+    const mockOnUnlinkDocument = jest.fn();
+
+    const buildDocument = (overrides: Partial<DocumentRecord> = {}): DocumentRecord => ({
+      document_id: 'doc-1',
+      user_id: 'user-1',
+      job_id: '123',
+      doc_type: 'resume',
+      doc_title: 'Resume - Software Engineer at Acme Corp',
+      content: 'Some content',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+      ...overrides,
+    });
+
+    const renderWithLinking = (props: {
+      savedDocuments?: DocumentRecord[];
+      libraryDocuments?: DocumentRecord[];
+      withUnlink?: boolean;
+    }) =>
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          savedDocuments={props.savedDocuments ?? []}
+          libraryDocuments={props.libraryDocuments}
+          onLinkDocument={mockOnLinkDocument}
+          onUnlinkDocument={props.withUnlink ? mockOnUnlinkDocument : undefined}
+        />
+      );
+
+    beforeEach(() => {
+      mockOnLinkDocument.mockReset();
+      mockOnUnlinkDocument.mockReset();
+      mockOnLinkDocument.mockResolvedValue(undefined);
+      mockOnUnlinkDocument.mockResolvedValue(undefined);
+    });
+
+    it('should call onLinkDocument with the document id when linking a library doc without conflicts', async () => {
+      // Arrange
+      const libraryDoc = buildDocument({
+        document_id: 'library-doc-1',
+        doc_title: 'Library Resume',
+      });
+      renderWithLinking({ savedDocuments: [], libraryDocuments: [libraryDoc] });
+
+      // Act
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert
+      await waitFor(() => expect(mockOnLinkDocument).toHaveBeenCalledWith('library-doc-1'));
+    });
+
+    it('should not link and should show the replace dialog when a resume is already linked', async () => {
+      // Arrange
+      const existingResume = buildDocument({ document_id: 'doc-1', doc_type: 'resume' });
+      const libraryResume = buildDocument({
+        document_id: 'library-doc-1',
+        doc_type: 'resume',
+        doc_title: 'Library Resume',
+      });
+      renderWithLinking({ savedDocuments: [existingResume], libraryDocuments: [libraryResume] });
+
+      // Act
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert
+      expect(screen.getByText(/Replace existing document/i)).toBeInTheDocument();
+      expect(mockOnLinkDocument).not.toHaveBeenCalled();
+    });
+
+    it('should not link and should show the replace dialog when a cover letter is already linked', async () => {
+      // Arrange
+      const existingCoverLetter = buildDocument({
+        document_id: 'doc-1',
+        doc_type: 'cover_letter',
+        doc_title: 'Cover Letter - Software Engineer at Acme Corp',
+      });
+      const libraryCoverLetter = buildDocument({
+        document_id: 'library-doc-1',
+        doc_type: 'cover_letter',
+        doc_title: 'Library Cover Letter',
+      });
+      renderWithLinking({
+        savedDocuments: [existingCoverLetter],
+        libraryDocuments: [libraryCoverLetter],
+      });
+
+      // Act
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert
+      expect(screen.getByText(/Replace existing document/i)).toBeInTheDocument();
+      expect(mockOnLinkDocument).not.toHaveBeenCalled();
+    });
+
+    it('should call onUnlinkDocument with the document id when the Unlink button is clicked', async () => {
+      // Arrange
+      const linkedDoc = buildDocument({ document_id: 'doc-1' });
+      renderWithLinking({ savedDocuments: [linkedDoc], withUnlink: true });
+
+      // Act
+      const unlinkButton = screen.getByRole('button', { name: /^unlink$/i });
+
+      // Assert
+      expect(unlinkButton).toBeInTheDocument();
+      await userEvent.click(unlinkButton);
+      await waitFor(() => expect(mockOnUnlinkDocument).toHaveBeenCalledWith('doc-1'));
     });
   });
 });

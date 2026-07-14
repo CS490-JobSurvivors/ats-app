@@ -19,5 +19,6 @@ class Interview(Base):
         DateTime(timezone=True), nullable=True
     )
     interview_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prep_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     round_type: Mapped[str | None] = mapped_column(Text, nullable=True)

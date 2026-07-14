@@ -187,6 +187,7 @@ const EducationSection = ({
     if (!form.is_current && form.end_date && form.end_date < form.start_date) {
       errors.end_date = 'End date cannot be earlier than start date.';
     }
+    if (form.GPA != null && form.GPA < 0) errors.GPA = 'GPA cannot be negative.';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -384,14 +385,21 @@ const EducationSection = ({
               label="GPA (optional)"
               type="number"
               value={form.GPA ?? ''}
-              onChange={(e) =>
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                setFieldErrors((errs) => ({
+                  ...errs,
+                  GPA: !isNaN(val) && val < 0 ? 'GPA cannot be negative.' : '',
+                }));
                 setForm((f) => ({
                   ...f,
-                  GPA: e.target.value === '' ? null : parseFloat(e.target.value),
-                }))
-              }
+                  GPA: e.target.value === '' ? null : isNaN(val) ? null : val,
+                }));
+              }}
               fullWidth
               inputProps={{ min: 0, max: 4, step: 0.01 }}
+              error={!!fieldErrors.GPA}
+              helperText={fieldErrors.GPA}
             />
           </Box>
         </DialogContent>

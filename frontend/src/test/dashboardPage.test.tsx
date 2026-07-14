@@ -1,6 +1,6 @@
 import React from 'react';
 import '@testing-library/jest-dom';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DashboardPage from '../pages/dashboardPage';
 import { supabase } from '../utils/supabaseClient';
@@ -11,6 +11,7 @@ import {
   getJobMetrics,
   listJobFollowUps,
   listJobDocuments,
+  listDocuments,
   createJob,
   updateJob,
   deleteJob,
@@ -22,6 +23,10 @@ import {
   deleteJobFollowUp,
   createJobDocument,
   deleteJobDocument,
+  getJobAnalytics,
+  updateJobDocument,
+  linkDocumentToJob,
+  unlinkDocumentFromJob,
 } from '../api/jobs';
 import { generateResume } from '../api/resume';
 
@@ -57,6 +62,13 @@ jest.mock('../api/jobs', () => ({
   deleteJobFollowUp: jest.fn(),
   createJobDocument: jest.fn(),
   deleteJobDocument: jest.fn(),
+  getJobAnalytics: jest.fn(),
+  updateJobDocument: jest.fn(),
+  listDocuments: jest.fn(),
+  linkDocumentToJob: jest.fn(),
+  unlinkDocumentFromJob: jest.fn(),
+  listDocumentVersions: jest.fn(),
+  generateCompanyResearch: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
@@ -77,6 +89,11 @@ const mockUpdateJobFollowUp = updateJobFollowUp as jest.Mock;
 const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
 const mockCreateJobDocument = createJobDocument as jest.Mock;
 const mockDeleteJobDocument = deleteJobDocument as jest.Mock;
+const mockGetJobAnalytics = getJobAnalytics as jest.Mock;
+const mockUpdateJobDocument = updateJobDocument as jest.Mock;
+const mockListDocuments = listDocuments as jest.Mock;
+const mockLinkDocumentToJob = linkDocumentToJob as jest.Mock;
+const mockUnlinkDocumentFromJob = unlinkDocumentFromJob as jest.Mock;
 const mockGenerateResume = generateResume as jest.Mock;
 
 const zeroMetrics = {
@@ -113,6 +130,11 @@ beforeEach(() => {
   mockGetJobMetrics.mockResolvedValue(zeroMetrics);
   mockListJobFollowUps.mockResolvedValue([]);
   mockListJobDocuments.mockResolvedValue([]);
+  mockGetJobAnalytics.mockResolvedValue({
+    conversion_rates: [],
+    time_in_stage: [],
+    weekly_velocity: [],
+  });
   mockCreateJob.mockReset();
   mockUpdateJob.mockReset();
   mockDeleteJob.mockReset();
@@ -124,6 +146,10 @@ beforeEach(() => {
   mockDeleteJobFollowUp.mockReset();
   mockCreateJobDocument.mockReset();
   mockDeleteJobDocument.mockReset();
+  mockUpdateJobDocument.mockReset();
+  mockListDocuments.mockResolvedValue([]);
+  mockLinkDocumentToJob.mockReset();
+  mockUnlinkDocumentFromJob.mockReset();
   mockGenerateResume.mockReset();
 });
 
@@ -258,7 +284,8 @@ describe('DashboardPage', () => {
     mockListJobs.mockResolvedValue([sampleJob]);
     render(<DashboardPage />);
     await userEvent.click(await screen.findByText('Software Engineer'));
-    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }));
     expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument();
   });
 
@@ -308,7 +335,7 @@ describe('DashboardPage', () => {
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Technical' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-08' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '15:30' } });
-    fireEvent.change(screen.getByLabelText(/notes/i), {
+    fireEvent.change(screen.getByLabelText(/^notes$/i), {
       target: { value: 'Review system design.' },
     });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -384,11 +411,11 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByText('Software Engineer'));
     expect(await screen.findByText('Phone screen')).toBeInTheDocument();
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Final' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-10' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '18:00' } });
-    fireEvent.change(screen.getByLabelText(/notes/i), {
+    fireEvent.change(screen.getByLabelText(/^notes$/i), {
       target: { value: 'Meet hiring manager.' },
     });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -482,7 +509,7 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByText('Software Engineer'));
     expect(await screen.findByText('Email recruiter.')).toBeInTheDocument();
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-12' } });
     fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Followed up.' } });
     await userEvent.click(screen.getByLabelText(/completed/i));
@@ -555,6 +582,9 @@ describe('DashboardPage', () => {
         doc_title: 'Resume - Software Engineer at Test Co',
         content: '# Resume draft',
         doc_version: 1,
+        status: 'active',
+        tags: [],
+        updated_at: null,
         created_at: '2026-06-20T00:00:00Z',
       },
     ]);
@@ -566,13 +596,17 @@ describe('DashboardPage', () => {
       doc_title: 'Resume - Software Engineer at Test Co',
       content: '# Resume draft',
       doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
       created_at: '2026-06-20T00:00:00Z',
     });
     render(<DashboardPage />);
     await userEvent.click(await screen.findByText('Software Engineer'));
-    expect(await screen.findByText('No saved drafts yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No linked documents yet.')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
     await screen.findByText('Generated Resume');
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
@@ -584,37 +618,6 @@ describe('DashboardPage', () => {
       });
     });
     expect(await screen.findByText('Resume - Software Engineer at Test Co')).toBeInTheDocument();
-  });
-
-  it('deletes a saved document from job detail', async () => {
-    mockListJobs.mockResolvedValue([sampleJob]);
-    mockListJobDocuments
-      .mockResolvedValueOnce([
-        {
-          document_id: 'doc-1',
-          user_id: 'user-1',
-          job_id: 'job-1',
-          doc_type: 'resume',
-          doc_title: 'Resume - Software Engineer at Test Co',
-          content: '# Resume draft',
-          doc_version: 1,
-          created_at: '2026-06-20T00:00:00Z',
-        },
-      ])
-      .mockResolvedValueOnce([]);
-    mockDeleteJobDocument.mockResolvedValue(undefined);
-    render(<DashboardPage />);
-    await userEvent.click(await screen.findByText('Software Engineer'));
-    expect(await screen.findByText('Resume - Software Engineer at Test Co')).toBeInTheDocument();
-
-    await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
-    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
-    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
-
-    await waitFor(() => {
-      expect(mockDeleteJobDocument).toHaveBeenCalledWith('test-token', 'job-1', 'doc-1');
-    });
-    expect(await screen.findByText('No saved drafts yet.')).toBeInTheDocument();
   });
 
   it('deletes a stage history event from the activity timeline', async () => {
@@ -682,9 +685,9 @@ describe('DashboardPage', () => {
     mockDeleteJob.mockResolvedValue(undefined);
     render(<DashboardPage />);
     await userEvent.click(await screen.findByText('Software Engineer'));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }));
     await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
-    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
-    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
     await waitFor(() => {
       expect(mockDeleteJob).toHaveBeenCalledWith('test-token', 'job-1');
     });
@@ -697,7 +700,8 @@ describe('DashboardPage', () => {
     mockListJobs.mockResolvedValue([sampleJob]);
     render(<DashboardPage />);
     await userEvent.click(await screen.findByText('Software Engineer'));
-    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }));
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(mockDeleteJob).not.toHaveBeenCalled();
     await waitFor(() => {
@@ -721,6 +725,284 @@ describe('DashboardPage', () => {
         'job-1',
         expect.objectContaining({ job_title: 'Senior Engineer' })
       );
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Document metadata updates (S3-002)
+  // -------------------------------------------------------------------------
+
+  describe('updating document metadata', () => {
+    const DOCUMENT_TITLE = 'Resume - Software Engineer at Test Co';
+
+    const savedDocument = {
+      document_id: 'doc-1',
+      user_id: 'user-1',
+      job_id: 'job-1',
+      doc_type: 'resume',
+      doc_title: DOCUMENT_TITLE,
+      content: '# Resume draft',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: ['backend'],
+      updated_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+    };
+
+    /**
+     * Scopes queries to the saved document's row. The job detail dialog also
+     * renders its own "Edit" button, so row-scoping is required to disambiguate.
+     */
+    const getDocumentRow = (): HTMLElement => {
+      // eslint-disable-next-line testing-library/no-node-access
+      let element = screen.getByText(DOCUMENT_TITLE).parentElement;
+      // eslint-disable-next-line testing-library/no-node-access
+      while (element && !within(element).queryByRole('button', { name: /^view$/i })) {
+        // eslint-disable-next-line testing-library/no-node-access
+        element = element.parentElement;
+      }
+      return element as HTMLElement;
+    };
+
+    /** Opens the job, then the document's "Edit Document" modal. */
+    const openDocumentEditor = async (): Promise<HTMLElement> => {
+      await userEvent.click(await screen.findByText('Software Engineer'));
+      expect(await screen.findByText(DOCUMENT_TITLE)).toBeInTheDocument();
+      await userEvent.click(within(getDocumentRow()).getByRole('button', { name: /^edit$/i }));
+      // eslint-disable-next-line testing-library/no-node-access
+      return screen.getByText('Edit Document').closest('[role="dialog"]') as HTMLElement;
+    };
+
+    it('should call updateJobDocument with the token, ids, and edited metadata', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([savedDocument]);
+      mockUpdateJobDocument.mockResolvedValue({ ...savedDocument, status: 'archived' });
+      render(<DashboardPage />);
+
+      // Act
+      const editDialog = await openDocumentEditor();
+      fireEvent.change(within(editDialog).getByLabelText('Tags'), {
+        target: { value: 'backend, remote' },
+      });
+      await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+      // Assert
+      await waitFor(() => {
+        expect(mockUpdateJobDocument).toHaveBeenCalledWith('test-token', 'job-1', 'doc-1', {
+          doc_title: DOCUMENT_TITLE,
+          status: 'active',
+          tags: ['backend', 'remote'],
+        });
+      });
+    });
+
+    it('should reload the job documents so the updated metadata is displayed', async () => {
+      // Arrange
+      const renamedTitle = 'Resume (final)';
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments
+        .mockResolvedValueOnce([savedDocument])
+        .mockResolvedValueOnce([{ ...savedDocument, doc_title: renamedTitle, status: 'archived' }]);
+      mockUpdateJobDocument.mockResolvedValue({ ...savedDocument, doc_title: renamedTitle });
+      render(<DashboardPage />);
+
+      // Act
+      const editDialog = await openDocumentEditor();
+      fireEvent.change(within(editDialog).getByLabelText('Title'), {
+        target: { value: renamedTitle },
+      });
+      await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+      // Assert
+      expect(await screen.findByText(renamedTitle)).toBeInTheDocument();
+      expect(await screen.findByText('archived')).toBeInTheDocument();
+    });
+
+    it('should surface an error message when the update request fails', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([savedDocument]);
+      mockUpdateJobDocument.mockRejectedValue(new Error('Unable to update document.'));
+      render(<DashboardPage />);
+
+      // Act
+      const editDialog = await openDocumentEditor();
+      await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+      // Assert
+      expect(
+        await screen.findByText('Unable to update that document. Please try again.')
+      ).toBeInTheDocument();
+    });
+
+    it('should not call updateJobDocument when there is no active session token', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([savedDocument]);
+      render(<DashboardPage />);
+      const editDialog = await openDocumentEditor();
+
+      // Act
+      mockGetSession.mockResolvedValueOnce({ data: { session: null } });
+      await userEvent.click(within(editDialog).getByRole('button', { name: /^save$/i }));
+
+      // Assert
+      await waitFor(() => expect(mockGetSession).toHaveBeenCalled());
+      expect(mockUpdateJobDocument).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Link and unlink document flows (S3-009)
+  // -------------------------------------------------------------------------
+
+  describe('link and unlink document flows', () => {
+    const linkedDoc = {
+      document_id: 'doc-linked',
+      user_id: 'user-1',
+      job_id: 'job-1',
+      doc_type: 'resume',
+      doc_title: 'My Resume',
+      content: '# Resume',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+    };
+
+    const libraryDoc = {
+      document_id: 'doc-library',
+      user_id: 'user-1',
+      job_id: null,
+      doc_type: 'resume',
+      doc_title: 'Library Resume',
+      content: '# Library Resume',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-06-21T00:00:00Z',
+    };
+
+    const openJobDetail = async () => {
+      await userEvent.click(await screen.findByText('Software Engineer'));
+      // Wait for the dialog's Close button to confirm it is mounted
+      expect(await screen.findByRole('button', { name: /^close$/i })).toBeInTheDocument();
+    };
+
+    it('calls linkDocumentToJob when Link is clicked in the picker with no conflict', async () => {
+      // Arrange — job has no linked docs, library has one doc
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([]);
+      mockListDocuments.mockResolvedValue([libraryDoc]);
+      mockLinkDocumentToJob.mockResolvedValue({ ...libraryDoc, job_id: 'job-1' });
+      render(<DashboardPage />);
+
+      // Act
+      await openJobDetail();
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      expect(await screen.findByText('Library Resume')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert
+      await waitFor(() => {
+        expect(mockLinkDocumentToJob).toHaveBeenCalledWith('test-token', 'job-1', 'doc-library');
+      });
+    });
+
+    it('shows replace confirmation dialog when linking a doc of the same type already linked', async () => {
+      // Arrange — job already has a resume linked; library also has a resume
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([linkedDoc]);
+      mockListDocuments.mockResolvedValue([libraryDoc]);
+      render(<DashboardPage />);
+
+      // Act
+      await openJobDetail();
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      expect(await screen.findByText('Library Resume')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert — picker closes, confirmation dialog appears
+      expect(await screen.findByText(/replace existing document/i)).toBeInTheDocument();
+      expect(mockLinkDocumentToJob).not.toHaveBeenCalled();
+    });
+
+    it('calls unlinkDocumentFromJob then linkDocumentToJob when Replace is confirmed', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([linkedDoc]);
+      mockListDocuments.mockResolvedValue([libraryDoc]);
+      mockUnlinkDocumentFromJob.mockResolvedValue({ ...linkedDoc, job_id: null });
+      mockLinkDocumentToJob.mockResolvedValue({ ...libraryDoc, job_id: 'job-1' });
+      render(<DashboardPage />);
+
+      // Act — trigger replace confirmation then confirm
+      await openJobDetail();
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      expect(await screen.findByText('Library Resume')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+      expect(await screen.findByText(/replace existing document/i)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^replace$/i }));
+
+      // Assert — unlink first, then link
+      await waitFor(() => {
+        expect(mockUnlinkDocumentFromJob).toHaveBeenCalledWith('test-token', 'job-1', 'doc-linked');
+      });
+      await waitFor(() => {
+        expect(mockLinkDocumentToJob).toHaveBeenCalledWith('test-token', 'job-1', 'doc-library');
+      });
+    });
+
+    it('calls unlinkDocumentFromJob when Unlink is clicked on a linked document', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([linkedDoc]);
+      mockListDocuments.mockResolvedValue([]);
+      mockUnlinkDocumentFromJob.mockResolvedValue({ ...linkedDoc, job_id: null });
+      render(<DashboardPage />);
+
+      // Act
+      await openJobDetail();
+      expect(await screen.findByText('My Resume')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^unlink$/i }));
+
+      // Assert
+      await waitFor(() => {
+        expect(mockUnlinkDocumentFromJob).toHaveBeenCalledWith('test-token', 'job-1', 'doc-linked');
+      });
+    });
+  });
+
+  describe('analytics panels', () => {
+    it('renders analytics panels when the analytics endpoint returns data', async () => {
+      mockGetJobAnalytics.mockResolvedValueOnce({
+        conversion_rates: [{ from_stage: 'Applied', to_stage: 'Interview', count: 5, rate: 0.5 }],
+        time_in_stage: [{ stage: 'Applied', avg_days: 7.3, count: 4 }],
+        weekly_velocity: [{ week_start: '2026-06-30', count: 3 }],
+      });
+
+      render(<DashboardPage />);
+
+      expect(await screen.findByText('Stage Conversion Rates')).toBeInTheDocument();
+      expect(screen.getByText('Avg. Time in Stage')).toBeInTheDocument();
+      expect(screen.getByText('Weekly Application Volume')).toBeInTheDocument();
+      // 50% = (rate 0.5 * 100).toFixed(0) + '%' — unique in the page (all stage counts are 0)
+      expect(screen.getByText('50%')).toBeInTheDocument();
+    });
+
+    it('does not render analytics panels when all analytics data is empty', async () => {
+      render(<DashboardPage />);
+      await screen.findByText(/no recent applications/i);
+
+      expect(screen.queryByText('Stage Conversion Rates')).not.toBeInTheDocument();
+      expect(screen.queryByText('Avg. Time in Stage')).not.toBeInTheDocument();
+      expect(screen.queryByText('Weekly Application Volume')).not.toBeInTheDocument();
     });
   });
 });

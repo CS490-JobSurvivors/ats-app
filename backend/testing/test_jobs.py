@@ -1,11 +1,13 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.database import get_db
 from app.main import app
 from app.models.document import Document
+from app.models.document_version import DocumentVersion
 from app.models.followup import FollowUp
 from app.models.interviews import Interview
 from app.models.job_stage_history import JobStageHistory
@@ -18,6 +20,7 @@ stage_histories: list[JobStageHistory] = []
 followups: list[FollowUp] = []
 interviews: list[Interview] = []
 documents: list[Document] = []
+document_versions: list[DocumentVersion] = []
 active_user_id = ""
 
 
@@ -55,7 +58,18 @@ class FakeDb:
                 obj.document_id = uuid4()
             if obj.created_at is None:
                 obj.created_at = datetime.now(UTC)
+            if obj.status is None:
+                obj.status = "active"
+            if obj.tags is None:
+                obj.tags = []
             documents.append(obj)
+            return
+        if isinstance(obj, DocumentVersion):
+            if obj.version_id is None:
+                obj.version_id = uuid4()
+            if obj.created_at is None:
+                obj.created_at = datetime.now(UTC)
+            document_versions.append(obj)
             return
         if obj.job_id is None:
             obj.job_id = uuid4()
@@ -68,8 +82,12 @@ class FakeDb:
     def commit(self):
         return None
 
-    def refresh(self, job: Job):
-        job.updated_at = datetime.now(UTC)
+    def refresh(self, obj: Job | JobStageHistory | Interview | FollowUp | Document):
+        # Only Job stamps updated_at on refresh. Documents manage updated_at
+        # explicitly in the route, so refreshing must not fabricate one --
+        # otherwise a freshly created document would look like it was edited.
+        if isinstance(obj, Job):
+            obj.updated_at = datetime.now(UTC)
 
     def scalars(self, query):
         entity = query.column_descriptions[0]["entity"]
@@ -80,6 +98,17 @@ class FakeDb:
             return FakeScalarResult([job for job in jobs if str(job.job_poster_id) == user_id])
 
         if entity is JobStageHistory:
+            if "job_poster_id_1" in params:
+                owner_id = str(params["job_poster_id_1"])
+                owned_job_ids = {
+                    str(job.job_id) for job in jobs if str(job.job_poster_id) == owner_id
+                }
+                results = [
+                    history for history in stage_histories if str(history.job_id) in owned_job_ids
+                ]
+                return FakeScalarResult(
+                    sorted(results, key=lambda history: (str(history.job_id), history.changed_at))
+                )
             job_id = str(params["job_id_1"])
             results = [history for history in stage_histories if str(history.job_id) == job_id]
             return FakeScalarResult(sorted(results, key=lambda history: history.changed_at))
@@ -107,16 +136,48 @@ class FakeDb:
             )
 
         if entity is Document:
-            job_id = str(params["job_id_1"])
             user_id = str(params["user_id_1"])
-            results = [
-                document
-                for document in documents
-                if str(document.job_id) == job_id and str(document.user_id) == user_id
-            ]
+            results = [document for document in documents if str(document.user_id) == user_id]
+            for document in results:
+                if document.status is None:
+                    document.status = "active"
+            if "job_id_1" in params:
+                job_id = str(params["job_id_1"])
+                results = [document for document in results if str(document.job_id) == job_id]
+            if "status_1" in params:
+                status = params["status_1"]
+                results = [
+                    document for document in results if (document.status or "active") == status
+                ]
+            if "doc_type_1" in params:
+                # Each doc_type_* param is an independent constraint (the base
+                # .in_(("resume", "cover_letter")) plus any == doc_type query
+                # filter), so intersect them to mirror the SQL AND semantics.
+                constraint_sets = []
+                for key, value in params.items():
+                    if not key.startswith("doc_type_"):
+                        continue
+                    if isinstance(value, (list, tuple, set)):
+                        constraint_sets.append(set(value))
+                    else:
+                        constraint_sets.append({value})
+                allowed_types = set.intersection(*constraint_sets)
+                results = [document for document in results if document.doc_type in allowed_types]
+            if "array_to_string_2" in params:
+                pattern = str(params["array_to_string_2"]).strip("%").lower()
+                results = [
+                    document
+                    for document in results
+                    if pattern in ",".join(document.tags or []).lower()
+                ]
             return FakeScalarResult(
                 sorted(results, key=lambda document: document.created_at, reverse=True)
             )
+
+        if entity is DocumentVersion:
+            document_id = str(params["document_id_1"])
+            results = [v for v in document_versions if str(v.document_id) == document_id]
+            return FakeScalarResult(sorted(results, key=lambda v: v.version_number, reverse=True))
 
         return FakeScalarResult([])
 
@@ -163,8 +224,25 @@ class FakeDb:
 
             return None
 
+        if entity is DocumentVersion:
+            document_id = str(params["document_id_1"])
+            nums = [
+                v.version_number for v in document_versions if str(v.document_id) == document_id
+            ]
+            return max(nums) if nums else None
+
         if entity is Document:
             if "document_id_1" not in params:
+                if "status_1" in params:
+                    for document in documents:
+                        if (
+                            str(document.job_id) == str(params["job_id_1"])
+                            and str(document.user_id) == str(params["user_id_1"])
+                            and document.doc_type == params["doc_type_1"]
+                            and (document.status or "active") == params["status_1"]
+                        ):
+                            return document
+                    return None
                 versions = [
                     document.doc_version
                     for document in documents
@@ -175,12 +253,16 @@ class FakeDb:
                 return max(versions) if versions else None
 
             for document in documents:
-                if (
-                    str(document.document_id) == str(params["document_id_1"])
-                    and str(document.job_id) == str(params["job_id_1"])
-                    and str(document.user_id) == str(params["user_id_1"])
-                ):
-                    return document
+                if str(document.document_id) != str(params["document_id_1"]) or str(
+                    document.user_id
+                ) != str(params["user_id_1"]):
+                    continue
+                if "job_id_1" in params and str(document.job_id) != str(params["job_id_1"]):
+                    continue
+                if document.status is None:
+                    document.status = "active"
+
+                return document
 
             return None
 
@@ -241,6 +323,7 @@ def setup_function():
     followups.clear()
     interviews.clear()
     documents.clear()
+    document_versions.clear()
     app.dependency_overrides[get_db] = override_db
 
 
@@ -414,6 +497,105 @@ def test_job_metrics_only_includes_owned_jobs():
     assert response.json()["total_applications"] == 1
 
 
+# ---------------------------------------------------------------------------
+# Stage conversion analytics (S3-BR-014)
+# ---------------------------------------------------------------------------
+
+
+def test_job_analytics_returns_empty_conversion_rates_when_no_jobs_exist():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+
+    # Act
+    response = client.get("/jobs/analytics")
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["conversion_rates"] == []
+    assert body["time_in_stage"] == []
+    assert body["weekly_velocity"] == []
+
+
+def test_job_analytics_counts_applied_to_interview_within_14_days():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    applied_at = datetime(2026, 7, 1, tzinfo=UTC)
+    stage_histories.extend(
+        [
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Interested",
+                to_stage="Applied",
+                changed_by=user_id,
+                changed_at=applied_at,
+            ),
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Applied",
+                to_stage="Interview",
+                changed_by=user_id,
+                changed_at=applied_at + timedelta(days=10),
+            ),
+        ]
+    )
+
+    # Act
+    response = client.get("/jobs/analytics")
+
+    # Assert
+    assert response.status_code == 200
+    rates = response.json()["conversion_rates"]
+    assert len(rates) == 1
+    assert rates[0]["from_stage"] == "Applied"
+    assert rates[0]["to_stage"] == "Interview"
+    assert rates[0]["count"] == 1
+    assert rates[0]["rate"] == 1.0
+
+
+def test_job_analytics_excludes_applied_to_interview_beyond_14_days():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    applied_at = datetime(2026, 7, 1, tzinfo=UTC)
+    stage_histories.extend(
+        [
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Interested",
+                to_stage="Applied",
+                changed_by=user_id,
+                changed_at=applied_at,
+            ),
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Applied",
+                to_stage="Interview",
+                changed_by=user_id,
+                changed_at=applied_at + timedelta(days=20),
+            ),
+        ]
+    )
+
+    # Act
+    response = client.get("/jobs/analytics")
+
+    # Assert
+    assert response.status_code == 200
+    rates = response.json()["conversion_rates"]
+    assert len(rates) == 1
+    assert rates[0]["count"] == 0
+    assert rates[0]["rate"] == 0.0
+
+
 def test_update_job_only_updates_owned_jobs():
     owner_id = str(uuid4())
     other_user_id = str(uuid4())
@@ -458,13 +640,14 @@ def test_job_activity_timeline_returns_key_events_for_owned_job():
     assert create_response.status_code == 201
     job_id = create_response.json()["job_id"]
 
+    now = datetime.now(UTC)
     stage_histories.append(
         JobStageHistory(
             job_id=job_id,
             from_stage="Interview",
             to_stage="Offer",
             changed_by=owner_id,
-            changed_at=datetime(2026, 7, 4, tzinfo=UTC),
+            changed_at=now + timedelta(days=12),
         )
     )
     followups.append(
@@ -472,7 +655,7 @@ def test_job_activity_timeline_returns_key_events_for_owned_job():
             followup_id=uuid4(),
             job_id=job_id,
             user_id=owner_id,
-            due_date=date(2026, 7, 2),
+            due_date=(now + timedelta(days=10)).date(),
             notes="Email recruiter",
             is_completed=False,
         )
@@ -482,8 +665,8 @@ def test_job_activity_timeline_returns_key_events_for_owned_job():
             interview_id=uuid4(),
             job_id=job_id,
             user_id=owner_id,
-            scheduled_at_date=date(2026, 7, 3),
-            scheduled_at_time=datetime(2026, 7, 3, 15, tzinfo=UTC),
+            scheduled_at_date=(now + timedelta(days=11)).date(),
+            scheduled_at_time=now + timedelta(days=11),
             interview_notes="Technical round",
             round_type="Technical interview",
         )
@@ -493,7 +676,7 @@ def test_job_activity_timeline_returns_key_events_for_owned_job():
             followup_id=uuid4(),
             job_id=job_id,
             user_id=other_user_id,
-            due_date=date(2026, 7, 5),
+            due_date=(now + timedelta(days=13)).date(),
             notes="Other user's reminder",
             is_completed=False,
         )
@@ -818,6 +1001,73 @@ def test_delete_job_interview_rejects_non_owner():
     assert len(still_exists.json()) == 1
 
 
+# ---------------------------------------------------------------------------
+# S3-013: Interview preparation notes
+# ---------------------------------------------------------------------------
+
+
+def test_create_interview_with_prep_notes_persists_and_returns_prep_notes():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    response = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Technical",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+            "prep_notes": "Review system design patterns and practice LeetCode.",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["prep_notes"] == "Review system design patterns and practice LeetCode."
+
+
+def test_create_interview_without_prep_notes_defaults_to_null():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    response = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Phone screen",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["prep_notes"] is None
+
+
+def test_update_interview_prep_notes_rejects_non_owner():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    interview_id = client.post(
+        f"/jobs/{job_id}/interviews",
+        json={
+            "round_type": "Technical",
+            "scheduled_at_date": "2026-07-08",
+            "scheduled_at_time": "2026-07-08T15:30:00Z",
+            "prep_notes": "Study graphs.",
+        },
+    ).json()["interview_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.patch(
+        f"/jobs/{job_id}/interviews/{interview_id}",
+        json={"prep_notes": "Unauthorized update."},
+    )
+
+    assert denied_response.status_code == 404
+    assert interviews[0].prep_notes == "Study graphs."
+
+
 def test_create_job_with_recruiter_notes():
     user_id = str(uuid4())
     set_authenticated_user(user_id)
@@ -872,6 +1122,148 @@ def test_update_job_outcome_notes_on_rejection():
     assert update_response.status_code == 200
     assert update_response.json()["job_stage"] == "Rejected"
     assert update_response.json()["outcome_notes"] == "Went with an internal candidate."
+
+
+# ---------------------------------------------------------------------------
+# S3-012: Company research notes
+# ---------------------------------------------------------------------------
+
+
+def test_create_job_with_company_research_notes_persists_and_returns_notes():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    notes = "Founded in 2020, 500 employees, strong RPG gamer culture."
+    payload = {**create_job_payload(), "company_research_notes": notes}
+
+    response = client.post("/jobs", json=payload)
+
+    assert response.status_code == 201
+    assert response.json()["company_research_notes"] == notes
+
+
+def test_update_job_company_research_notes_via_patch():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    notes = (
+        "Competes with Activision. Incredibly competitive culture, "
+        "but they have slides on their website about work-life balance."
+    )
+    response = client.patch(
+        f"/jobs/{job_id}",
+        json={"company_research_notes": notes},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["company_research_notes"] == notes
+
+
+def test_update_job_company_research_notes_rejects_non_owner():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    set_authenticated_user(other_user_id)
+    response = client.patch(
+        f"/jobs/{job_id}",
+        json={"company_research_notes": "Unauthorized notes."},
+    )
+
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# S3-020: Security and ownership rules
+# ---------------------------------------------------------------------------
+
+
+def test_security_non_owner_cannot_delete_job():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    set_authenticated_user(other_user_id)
+    denied_response = client.delete(f"/jobs/{job_id}")
+
+    set_authenticated_user(owner_id)
+    owner_list_response = client.get("/jobs")
+
+    assert denied_response.status_code == 404
+    assert [job["job_id"] for job in owner_list_response.json()] == [job_id]
+
+
+@pytest.mark.parametrize(
+    ("method", "path_suffix", "payload"),
+    [
+        ("get", "interviews", None),
+        (
+            "post",
+            "interviews",
+            {
+                "round_type": "Technical",
+                "scheduled_at_date": "2026-07-08",
+                "scheduled_at_time": "2026-07-08T15:30:00Z",
+            },
+        ),
+        ("get", "followups", None),
+        ("post", "followups", {"due_date": "2026-07-08", "notes": "Email recruiter."}),
+        ("get", "documents", None),
+        (
+            "post",
+            "documents",
+            {"doc_type": "resume", "doc_title": "Unauthorized Resume", "content": "Draft."},
+        ),
+        ("get", "activity", None),
+    ],
+)
+def test_security_non_owner_cannot_access_job_scoped_resources(
+    method: str,
+    path_suffix: str,
+    payload: dict | None,
+):
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    prev_interviews = len(interviews)
+    prev_followups = len(followups)
+    prev_documents = len(documents)
+
+    set_authenticated_user(other_user_id)
+    request = getattr(client, method)
+    response = (
+        request(f"/jobs/{job_id}/{path_suffix}", json=payload)
+        if payload
+        else request(f"/jobs/{job_id}/{path_suffix}")
+    )
+
+    assert response.status_code == 404
+    assert len(interviews) == prev_interviews
+    assert len(followups) == prev_followups
+    assert len(documents) == prev_documents
+
+
+def test_security_non_owner_document_update_does_not_create_version_history():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id, document = seed_job_and_document(owner_id)
+    initial_version_count = len(document_versions)
+
+    set_authenticated_user(other_user_id)
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"doc_title": "Stolen Rename", "status": "archived"},
+    )
+
+    assert response.status_code == 404
+    assert documents[0].doc_title == "Resume"
+    assert documents[0].status == "active"
+    assert len(document_versions) == initial_version_count
 
 
 def test_create_and_list_job_followups_for_owned_job():
@@ -991,6 +1383,7 @@ def test_create_job_document_starts_at_version_one():
     assert body["doc_title"] == "Resume - Software Engineer at Acme"
     assert body["content"] == "## Resume\nTailored content."
     assert body["doc_version"] == 1
+    assert body["status"] == "active"
     assert body["job_id"] == job_id
     assert body["user_id"] == user_id
 
@@ -1059,7 +1452,219 @@ def test_list_job_documents_returns_only_that_jobs_documents():
     assert titles == ["Resume for First Co"]
 
 
-def test_delete_job_document_only_deletes_owned_document():
+def test_list_user_documents_returns_all_owned_resume_and_cover_letter_documents():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    first_job = client.post("/jobs", json=create_job_payload("First Co")).json()["job_id"]
+    second_job = client.post("/jobs", json=create_job_payload("Second Co")).json()["job_id"]
+
+    client.post(
+        f"/jobs/{first_job}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume for First Co", "content": "Draft."},
+    )
+    client.post(
+        f"/jobs/{second_job}/documents",
+        json={
+            "doc_type": "cover_letter",
+            "doc_title": "Cover Letter for Second Co",
+            "content": "Draft.",
+        },
+    )
+
+    set_authenticated_user(other_user_id)
+    other_job = client.post("/jobs", json=create_job_payload("Other Co")).json()["job_id"]
+    client.post(
+        f"/jobs/{other_job}/documents",
+        json={"doc_type": "resume", "doc_title": "Other User Resume", "content": "Draft."},
+    )
+
+    set_authenticated_user(owner_id)
+    response = client.get("/jobs/documents")
+
+    assert response.status_code == 200
+    titles = [document["doc_title"] for document in response.json()]
+    assert titles == ["Cover Letter for Second Co", "Resume for First Co"]
+
+
+def test_list_user_documents_filters_to_supported_business_types():
+    user_id = str(uuid4())
+    job_id = uuid4()
+    set_authenticated_user(user_id)
+    documents.extend(
+        [
+            Document(
+                document_id=uuid4(),
+                user_id=user_id,
+                job_id=job_id,
+                doc_type="resume",
+                doc_title="Resume",
+                content="Draft.",
+                doc_version=1,
+                status="active",
+                tags=[],
+                created_at=datetime(2026, 7, 1, tzinfo=UTC),
+            ),
+            Document(
+                document_id=uuid4(),
+                user_id=user_id,
+                job_id=job_id,
+                doc_type="portfolio",
+                doc_title="Portfolio",
+                content="Draft.",
+                doc_version=1,
+                status="active",
+                tags=[],
+                created_at=datetime(2026, 7, 2, tzinfo=UTC),
+            ),
+        ]
+    )
+
+    response = client.get("/jobs/documents")
+
+    assert response.status_code == 200
+    assert [document["doc_title"] for document in response.json()] == ["Resume"]
+
+
+def test_list_user_documents_filters_by_doc_type_query_param():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "My Resume", "content": "Draft."},
+    )
+    client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "cover_letter", "doc_title": "My Cover Letter", "content": "Draft."},
+    )
+
+    # Act
+    response = client.get("/jobs/documents?doc_type=resume")
+
+    # Assert
+    assert response.status_code == 200
+    assert [document["doc_title"] for document in response.json()] == ["My Resume"]
+
+
+def test_list_user_documents_filters_by_tag_query_param():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    client.post(
+        f"/jobs/{job_id}/documents",
+        json={
+            "doc_type": "resume",
+            "doc_title": "Backend Resume",
+            "content": "Draft.",
+            "tags": ["backend", "python"],
+        },
+    )
+    client.post(
+        f"/jobs/{job_id}/documents",
+        json={
+            "doc_type": "cover_letter",
+            "doc_title": "Design Cover Letter",
+            "content": "Draft.",
+            "tags": ["design"],
+        },
+    )
+
+    # Act
+    response = client.get("/jobs/documents?tag=back")
+
+    # Assert
+    assert response.status_code == 200
+    assert [document["doc_title"] for document in response.json()] == ["Backend Resume"]
+
+
+def test_archive_user_document_hides_it_without_changing_version_history():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    document_response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume", "content": "Draft."},
+    )
+    document_id = document_response.json()["document_id"]
+
+    archive_response = client.patch(f"/jobs/documents/{document_id}/archive")
+    active_list_response = client.get("/jobs/documents")
+    archived_list_response = client.get("/jobs/documents?include_archived=true")
+
+    assert archive_response.status_code == 200
+    assert archive_response.json()["status"] == "archived"
+    assert archive_response.json()["updated_at"] is not None
+    assert archive_response.json()["doc_version"] == 1
+    assert active_list_response.status_code == 200
+    assert active_list_response.json() == []
+    assert [document["document_id"] for document in archived_list_response.json()] == [document_id]
+    assert len(documents) == 1
+
+
+def test_restore_user_document_returns_it_to_active_library_without_changing_version():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    document_response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "cover_letter", "doc_title": "Cover Letter", "content": "Draft."},
+    )
+    document_id = document_response.json()["document_id"]
+    client.patch(f"/jobs/documents/{document_id}/archive")
+
+    restore_response = client.patch(f"/jobs/documents/{document_id}/restore")
+    active_list_response = client.get("/jobs/documents")
+
+    assert restore_response.status_code == 200
+    assert restore_response.json()["status"] == "active"
+    assert restore_response.json()["updated_at"] is not None
+    assert restore_response.json()["doc_version"] == 1
+    assert [document["document_id"] for document in active_list_response.json()] == [document_id]
+    assert len(documents) == 1
+
+
+def test_archive_and_restore_user_document_reject_unowned_document():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    create_response = client.post("/jobs", json=create_job_payload())
+    job_id = create_response.json()["job_id"]
+    document_response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume", "content": "Draft."},
+    )
+    document_id = document_response.json()["document_id"]
+
+    set_authenticated_user(other_user_id)
+    archive_response = client.patch(f"/jobs/documents/{document_id}/archive")
+    restore_response = client.patch(f"/jobs/documents/{document_id}/restore")
+
+    assert archive_response.status_code == 404
+    assert restore_response.status_code == 404
+    assert documents[0].status == "active"
+
+
+def test_archive_and_restore_user_document_return_404_for_unknown_document():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    unknown_document_id = uuid4()
+
+    # Act
+    archive_response = client.patch(f"/jobs/documents/{unknown_document_id}/archive")
+    restore_response = client.patch(f"/jobs/documents/{unknown_document_id}/restore")
+
+    # Assert
+    assert archive_response.status_code == 404
+    assert restore_response.status_code == 404
+
+
+def test_delete_job_document_archives_owned_document_without_hard_deleting():
     owner_id = str(uuid4())
     other_user_id = str(uuid4())
     set_authenticated_user(owner_id)
@@ -1082,6 +1687,467 @@ def test_delete_job_document_only_deletes_owned_document():
     assert delete_response.status_code == 204
     assert list_response.status_code == 200
     assert list_response.json() == []
+    assert len(documents) == 1
+    assert documents[0].status == "archived"
+    assert documents[0].doc_version == 1
+
+
+# ---------------------------------------------------------------------------
+# Document metadata: status, tags, updated_at (S3-002)
+# ---------------------------------------------------------------------------
+
+
+def seed_job_and_document(user_id: str, **document_overrides) -> tuple[str, dict]:
+    """Create an owned job plus one document, returning (job_id, document_body)."""
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    payload = {"doc_type": "resume", "doc_title": "Resume", "content": "Draft."}
+    payload.update(document_overrides)
+    document = client.post(f"/jobs/{job_id}/documents", json=payload).json()
+    return job_id, document
+
+
+def test_create_job_document_defaults_to_active_status_and_no_tags():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+
+    # Act
+    _, document = seed_job_and_document(user_id)
+
+    # Assert
+    assert document["status"] == "active"
+    assert document["tags"] == []
+
+
+def test_create_job_document_persists_supplied_status_and_tags():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    supplied_tags = ["backend", "python"]
+
+    # Act
+    _, document = seed_job_and_document(user_id, status="draft", tags=supplied_tags)
+
+    # Assert
+    assert document["status"] == "draft"
+    assert document["tags"] == supplied_tags
+
+
+def test_create_job_document_leaves_updated_at_unset():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+
+    # Act
+    _, document = seed_job_and_document(user_id)
+
+    # Assert
+    assert document["updated_at"] is None
+
+
+@pytest.mark.parametrize("invalid_status", ["deleted", "ACTIVE", "", "published"])
+def test_create_job_document_rejects_unsupported_status(invalid_status: str):
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    # Act
+    response = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume", "status": invalid_status},
+    )
+
+    # Assert
+    assert response.status_code == 422
+
+
+def test_update_job_document_updates_title_status_and_tags_together():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    # Act
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"doc_title": "Resume (final)", "status": "archived", "tags": ["senior", "remote"]},
+    )
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["doc_title"] == "Resume (final)"
+    assert body["status"] == "archived"
+    assert body["tags"] == ["senior", "remote"]
+
+
+def test_update_job_document_applies_partial_update_without_clearing_other_fields():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id, tags=["python"])
+
+    # Act
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"status": "draft"},
+    )
+
+    # Assert
+    body = response.json()
+    assert body["status"] == "draft"
+    assert body["doc_title"] == "Resume"
+    assert body["tags"] == ["python"]
+
+
+def test_update_job_document_stamps_updated_at():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+    assert document["updated_at"] is None
+
+    # Act
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"status": "archived"},
+    )
+
+    # Assert
+    assert response.json()["updated_at"] is not None
+
+
+def test_update_job_document_can_clear_tags_with_empty_list():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id, tags=["stale", "obsolete"])
+
+    # Act
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"tags": []},
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json()["tags"] == []
+
+
+def test_update_job_document_preserves_doc_version():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    # Act
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"doc_title": "Renamed", "status": "draft"},
+    )
+
+    # Assert
+    assert response.json()["doc_version"] == document["doc_version"] == 1
+
+
+def test_update_job_document_persists_change_for_subsequent_reads():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    # Act
+    client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"status": "archived", "tags": ["filed"]},
+    )
+    active_list = client.get(f"/jobs/{job_id}/documents").json()
+    archived_list = client.get("/jobs/documents?include_archived=true").json()
+
+    # Assert
+    assert active_list == []
+    assert archived_list[0]["status"] == "archived"
+    assert archived_list[0]["tags"] == ["filed"]
+
+
+@pytest.mark.parametrize(
+    "invalid_payload",
+    [
+        {"doc_title": ""},
+        {"status": "deleted"},
+        {"tags": "not-a-list"},
+        {"tags": [1, 2]},
+    ],
+)
+def test_update_job_document_rejects_invalid_payload(invalid_payload: dict):
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    # Act
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json=invalid_payload,
+    )
+
+    # Assert
+    assert response.status_code == 422
+
+
+def test_update_job_document_rejects_non_owner():
+    # Arrange
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id, document = seed_job_and_document(owner_id)
+
+    # Act
+    set_authenticated_user(other_user_id)
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"status": "archived"},
+    )
+
+    # Assert
+    assert response.status_code == 404
+
+
+def test_update_job_document_returns_404_for_unknown_document():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, _ = seed_job_and_document(user_id)
+    unknown_document_id = uuid4()
+
+    # Act
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{unknown_document_id}",
+        json={"status": "archived"},
+    )
+
+    # Assert
+    assert response.status_code == 404
+
+
+def test_update_job_document_leaves_other_documents_untouched():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    resume = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Resume", "tags": ["keep"]},
+    ).json()
+    client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "cover_letter", "doc_title": "Cover Letter", "tags": ["keep"]},
+    )
+
+    # Act
+    client.patch(
+        f"/jobs/{job_id}/documents/{resume['document_id']}",
+        json={"status": "archived", "tags": ["changed"]},
+    )
+    listed = client.get(f"/jobs/{job_id}/documents").json()
+
+    # Assert
+    cover_letter = next(doc for doc in listed if doc["doc_type"] == "cover_letter")
+    assert cover_letter["status"] == "active"
+    assert cover_letter["tags"] == ["keep"]
+
+
+@pytest.mark.parametrize("null_field", ["status", "tags"])
+def test_update_job_document_ignores_explicit_null_fields(null_field: str):
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    # Act
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={null_field: None},
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json()[null_field] == document[null_field]
+
+
+def test_update_job_document_explicit_null_doc_title_is_rejected():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"doc_title": None},
+    )
+
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Document version history (S3-003)
+# ---------------------------------------------------------------------------
+
+
+def test_list_document_versions_happy_path_returns_rows():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.get(f"/jobs/{job_id}/documents/{document['document_id']}/versions")
+
+    assert response.status_code == 200
+    versions = response.json()
+    assert isinstance(versions, list)
+    assert len(versions) >= 1
+    assert "version_number" in versions[0]
+    assert "document_id" in versions[0]
+    assert "created_at" in versions[0]
+
+
+def test_create_job_document_seeds_version_1():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.get(f"/jobs/{job_id}/documents/{document['document_id']}/versions")
+
+    assert response.status_code == 200
+    versions = response.json()
+    assert len(versions) == 1
+    assert versions[0]["version_number"] == 1
+    assert versions[0]["document_id"] == document["document_id"]
+
+
+def test_patch_document_adds_version_with_incrementing_number():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    client.patch(
+        f"/jobs/{job_id}/documents/{document['document_id']}",
+        json={"doc_title": "Updated Title"},
+    )
+
+    response = client.get(f"/jobs/{job_id}/documents/{document['document_id']}/versions")
+
+    assert response.status_code == 200
+    versions = response.json()
+    assert len(versions) == 2
+    assert versions[0]["version_number"] == 2
+    assert versions[1]["version_number"] == 1
+
+
+def test_list_document_versions_returns_404_for_non_owner():
+    owner_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id, document = seed_job_and_document(owner_id)
+
+    other_user_id = str(uuid4())
+    set_authenticated_user(other_user_id)
+
+    response = client.get(f"/jobs/{job_id}/documents/{document['document_id']}/versions")
+
+    assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Link/unlink library documents to job applications (S3-009)
+# ---------------------------------------------------------------------------
+
+
+def test_link_document_to_job_sets_job_id():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+    client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/unlink")
+
+    response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/link")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == job_id
+    assert response.json()["document_id"] == document["document_id"]
+
+
+def test_link_document_returns_404_for_non_owner():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id, document = seed_job_and_document(owner_id)
+
+    set_authenticated_user(other_user_id)
+    response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/link")
+
+    assert response.status_code == 404
+
+
+def test_unlink_document_from_job_clears_job_id():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/unlink")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] is None
+    assert response.json()["document_id"] == document["document_id"]
+
+
+def test_unlink_document_returns_404_when_not_linked_to_job():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id_1, document = seed_job_and_document(user_id)
+    job_id_2 = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    response = client.patch(f"/jobs/{job_id_2}/documents/{document['document_id']}/unlink")
+
+    assert response.status_code == 404
+
+
+def test_link_document_rejects_duplicate_doc_type():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, first_doc = seed_job_and_document(user_id)
+    second_doc = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Second Resume", "content": "Content."},
+    ).json()
+    client.patch(f"/jobs/{job_id}/documents/{second_doc['document_id']}/unlink")
+
+    response = client.patch(f"/jobs/{job_id}/documents/{second_doc['document_id']}/link")
+
+    assert response.status_code == 409
+
+
+def test_link_document_allows_different_doc_type():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, _ = seed_job_and_document(user_id)
+    cover_letter = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "cover_letter", "doc_title": "Cover Letter", "content": "Content."},
+    ).json()
+    client.patch(f"/jobs/{job_id}/documents/{cover_letter['document_id']}/unlink")
+
+    response = client.patch(f"/jobs/{job_id}/documents/{cover_letter['document_id']}/link")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == job_id
+
+
+def test_link_document_rejects_document_already_linked_to_another_job():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id_a, document = seed_job_and_document(user_id)
+    job_id_b = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    # doc is already linked to job_a; attempting to link it to job_b should fail
+    response = client.patch(f"/jobs/{job_id_b}/documents/{document['document_id']}/link")
+    assert response.status_code == 409
 
 
 # ---------------------------------------------------------------------------

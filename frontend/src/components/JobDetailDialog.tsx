@@ -10,6 +10,7 @@ import {
   Box,
   Chip,
   Divider,
+  Menu,
   MenuItem,
   Select,
   FormControl,
@@ -19,8 +20,10 @@ import {
   IconButton,
   Checkbox,
   FormControlLabel,
+  Stack,
 } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import CloseIcon from '@mui/icons-material/Close';
@@ -30,8 +33,11 @@ import FlagIcon from '@mui/icons-material/Flag';
 import SendIcon from '@mui/icons-material/Send';
 import WorkHistoryIcon from '@mui/icons-material/WorkHistory';
 import {
+  DocStatus,
   DocumentPayload,
   DocumentRecord,
+  DocumentUpdatePayload,
+  DocumentVersion,
   FollowUpPayload,
   FollowUpRecord,
   InterviewPayload,
@@ -80,6 +86,13 @@ interface JobDetailDialogProps {
   savedDocuments?: DocumentRecord[];
   isSavedDocumentsLoading?: boolean;
   onDeleteDocument?: (documentId: string) => Promise<void>;
+  onUpdateDocument?: (documentId: string, payload: DocumentUpdatePayload) => Promise<void>;
+  onLoadVersions?: (documentId: string) => Promise<DocumentVersion[]>;
+  onGenerateResearch?: (userContext: string) => Promise<string>;
+  libraryDocuments?: DocumentRecord[];
+  onLinkDocument?: (documentId: string, existingDocumentId?: string) => Promise<void>;
+  onUnlinkDocument?: (documentId: string) => Promise<void>;
+  onDownloadDocument?: (documentId: string) => Promise<void>;
 }
 
 const emptyInterviewForm = {
@@ -87,6 +100,7 @@ const emptyInterviewForm = {
   scheduled_at_date: '',
   scheduled_at_time: '',
   interview_notes: '',
+  prep_notes: '',
 };
 
 const emptyFollowUpForm = {
@@ -129,6 +143,7 @@ const buildInterviewPayload = (form: typeof emptyInterviewForm): InterviewPayloa
   scheduled_at_date: form.scheduled_at_date,
   scheduled_at_time: new Date(`${form.scheduled_at_date}T${form.scheduled_at_time}`).toISOString(),
   interview_notes: form.interview_notes.trim() || null,
+  prep_notes: form.prep_notes.trim() || null,
 });
 
 const buildFollowUpPayload = (form: typeof emptyFollowUpForm): FollowUpPayload => ({
@@ -187,6 +202,13 @@ const JobDetailDialog = ({
   savedDocuments = [],
   isSavedDocumentsLoading = false,
   onDeleteDocument,
+  onUpdateDocument,
+  onLoadVersions,
+  onGenerateResearch,
+  libraryDocuments,
+  onLinkDocument,
+  onUnlinkDocument,
+  onDownloadDocument,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
@@ -213,9 +235,14 @@ const JobDetailDialog = ({
     deadline: '',
     recruiter_notes: '',
     outcome_notes: '',
+    company_research_notes: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [researchContext, setResearchContext] = useState('');
+  const [isResearching, setIsResearching] = useState(false);
+  const [researchError, setResearchError] = useState('');
+  const [wasAiGenerated, setWasAiGenerated] = useState(false);
   const [resumeDialogOpen, setResumeDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedResume, setGeneratedResume] = useState<string | null>(null);
@@ -230,6 +257,21 @@ const JobDetailDialog = ({
   const [isSavingDocument, setIsSavingDocument] = useState(false);
   const [pendingDeleteDocument, setPendingDeleteDocument] = useState<DocumentRecord | null>(null);
   const [viewingDocument, setViewingDocument] = useState<DocumentRecord | null>(null);
+  const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
+  const [editDocForm, setEditDocForm] = useState<{
+    doc_title: string;
+    status: DocStatus;
+    tags_input: string;
+  }>({ doc_title: '', status: 'active', tags_input: '' });
+  const [isUpdatingDocument, setIsUpdatingDocument] = useState(false);
+  const [editDocError, setEditDocError] = useState('');
+  const [documentVersions, setDocumentVersions] = useState<DocumentVersion[]>([]);
+  const [versionsLoading, setVersionsLoading] = useState(false);
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [isLinking, setIsLinking] = useState<string | null>(null);
+  const [pendingLinkDoc, setPendingLinkDoc] = useState<DocumentRecord | null>(null);
+  const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
+  const [actionMenuAnchor, setActionMenuAnchor] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
     if (job) {
@@ -242,10 +284,12 @@ const JobDetailDialog = ({
         deadline: job.deadline || '',
         recruiter_notes: job.recruiter_notes || '',
         outcome_notes: job.outcome_notes || '',
+        company_research_notes: job.company_research_notes || '',
       });
     }
     setIsEditing(false);
     setErrorMessage('');
+    setWasAiGenerated(false);
   }, [job, open]);
 
   if (!job) return null;
@@ -297,8 +341,19 @@ const JobDetailDialog = ({
   const saveDocument = async (docType: 'resume' | 'cover_letter', content: string) => {
     if (!onSaveDocument) return;
     setIsSavingDocument(true);
+    if (docType === 'resume') {
+      setResumeError('');
+    } else {
+      setCoverLetterError('');
+    }
     try {
       await onSaveDocument({ doc_type: docType, doc_title: buildDocTitle(docType), content });
+    } catch {
+      if (docType === 'resume') {
+        setResumeError('Unable to save resume. Please try again.');
+      } else {
+        setCoverLetterError('Unable to save cover letter. Please try again.');
+      }
     } finally {
       setIsSavingDocument(false);
     }
@@ -308,6 +363,38 @@ const JobDetailDialog = ({
     if (!pendingDeleteDocument || !onDeleteDocument) return;
     await onDeleteDocument(pendingDeleteDocument.document_id);
     setPendingDeleteDocument(null);
+  };
+
+  const openEditDocument = (document: DocumentRecord) => {
+    setEditDocError('');
+    setEditingDocument(document);
+    setEditDocForm({
+      doc_title: document.doc_title,
+      status: document.status as DocStatus,
+      tags_input: document.tags.join(', '),
+    });
+  };
+
+  const saveEditDocument = async () => {
+    if (!editingDocument || !onUpdateDocument) return;
+    setIsUpdatingDocument(true);
+    setEditDocError('');
+    try {
+      const tags = editDocForm.tags_input
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      await onUpdateDocument(editingDocument.document_id, {
+        doc_title: editDocForm.doc_title,
+        status: editDocForm.status,
+        tags,
+      });
+      setEditingDocument(null);
+    } catch {
+      setEditDocError('Failed to update document.');
+    } finally {
+      setIsUpdatingDocument(false);
+    }
   };
 
   const openInterviewForm = (interview?: InterviewRecord) => {
@@ -320,6 +407,7 @@ const JobDetailDialog = ({
             scheduled_at_date: interview.scheduled_at_date,
             scheduled_at_time: formatInterviewTimeForInput(interview.scheduled_at_time),
             interview_notes: interview.interview_notes || '',
+            prep_notes: interview.prep_notes || '',
           }
         : emptyInterviewForm
     );
@@ -426,6 +514,7 @@ const JobDetailDialog = ({
         deadline: form.deadline || null,
         recruiter_notes: form.recruiter_notes.trim() || null,
         outcome_notes: form.outcome_notes.trim() || null,
+        company_research_notes: form.company_research_notes.trim() || null,
       });
       setIsEditing(false);
     } catch {
@@ -441,11 +530,30 @@ const JobDetailDialog = ({
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">{isEditing ? 'Edit Job' : job.job_title}</Typography>
-            <Chip
-              label={job.job_stage}
-              size="small"
-              sx={{ color: stageStyle.color, bgcolor: stageStyle.bgcolor, fontWeight: 600 }}
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip
+                label={job.job_stage}
+                size="small"
+                sx={{ color: stageStyle.color, bgcolor: stageStyle.bgcolor, fontWeight: 600 }}
+              />
+              {!isEditing && (
+                <>
+                  <Button size="small" variant="contained" onClick={() => setIsEditing(true)}>
+                    Edit
+                  </Button>
+                  <IconButton
+                    size="small"
+                    aria-label="more options"
+                    onClick={(e) => setActionMenuAnchor(e.currentTarget)}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                </>
+              )}
+              <IconButton size="small" aria-label="close" onClick={onClose}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
           </Box>
           {!isEditing && (
             <Typography variant="body2" color="text.secondary">
@@ -558,6 +666,63 @@ const JobDetailDialog = ({
                 multiline
                 rows={3}
               />
+              <Box>
+                <TextField
+                  label="Company Research Notes"
+                  value={form.company_research_notes}
+                  onChange={(e) => {
+                    setWasAiGenerated(false);
+                    setForm((f) => ({ ...f, company_research_notes: e.target.value }));
+                  }}
+                  fullWidth
+                  multiline
+                  rows={3}
+                />
+                {wasAiGenerated && (
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5 }}>
+                    🤖 AI generated — review before saving.
+                  </Typography>
+                )}
+                {onGenerateResearch && (
+                  <Box sx={{ mt: 1, display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                    <TextField
+                      label="What do you want to research?"
+                      placeholder="e.g. tech stack, culture, recent news"
+                      value={researchContext}
+                      onChange={(e) => setResearchContext(e.target.value)}
+                      size="small"
+                      fullWidth
+                    />
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      disabled={isResearching || !researchContext.trim()}
+                      onClick={async () => {
+                        setIsResearching(true);
+                        setResearchError('');
+                        try {
+                          const result = await onGenerateResearch(researchContext.trim());
+                          setForm((f) => ({ ...f, company_research_notes: result }));
+                          setResearchContext('');
+                          setWasAiGenerated(true);
+                        } catch {
+                          setResearchError('Failed to generate research. Try again.');
+                        } finally {
+                          setIsResearching(false);
+                        }
+                      }}
+                      sx={{ whiteSpace: 'nowrap' }}
+                    >
+                      {isResearching ? <CircularProgress size={16} /> : 'Generate'}
+                    </Button>
+                  </Box>
+                )}
+                {researchError && (
+                  <Typography variant="caption" color="error" sx={{ mt: 0.5 }}>
+                    {researchError}
+                  </Typography>
+                )}
+              </Box>
               {OUTCOME_STAGES.includes(job.job_stage) && (
                 <TextField
                   label="Outcome Notes"
@@ -633,6 +798,21 @@ const JobDetailDialog = ({
                     sx={{ whiteSpace: 'pre-wrap' }}
                   >
                     {job.recruiter_notes}
+                  </Typography>
+                </Box>
+              )}
+
+              {job.company_research_notes && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Company Research Notes
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ whiteSpace: 'pre-wrap' }}
+                  >
+                    {job.company_research_notes}
                   </Typography>
                 </Box>
               )}
@@ -818,6 +998,16 @@ const JobDetailDialog = ({
                               {interview.interview_notes}
                             </Typography>
                           )}
+                          {interview.prep_notes && (
+                            <Box sx={{ mt: 0.5 }}>
+                              <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                                Prep notes
+                              </Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                {interview.prep_notes}
+                              </Typography>
+                            </Box>
+                          )}
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
                           {onSaveInterview && (
@@ -844,18 +1034,18 @@ const JobDetailDialog = ({
               <Divider sx={{ mb: 2 }} />
 
               <Typography variant="subtitle2" gutterBottom>
-                Saved Drafts
+                Linked Documents
               </Typography>
               {isSavedDocumentsLoading ? (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
                   <CircularProgress size={18} />
                   <Typography variant="body2" color="text.secondary">
-                    Loading saved drafts...
+                    Loading linked documents...
                   </Typography>
                 </Box>
               ) : savedDocuments.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  No saved drafts yet.
+                  No linked documents yet.
                 </Typography>
               ) : (
                 <Box sx={{ display: 'grid', gap: 1, mb: 2 }}>
@@ -886,18 +1076,84 @@ const JobDetailDialog = ({
                             v{document.doc_version} &middot;{' '}
                             {formatActivityDate(document.created_at)}
                           </Typography>
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                            {document.doc_type && (
+                              <Chip
+                                label={document.doc_type
+                                  .replace(/_/g, ' ')
+                                  .replace(/\b\w/g, (c) => c.toUpperCase())}
+                                size="small"
+                                variant="filled"
+                                color={document.doc_type === 'resume' ? 'primary' : 'secondary'}
+                              />
+                            )}
+                            <Chip
+                              label={document.status}
+                              size="small"
+                              variant="outlined"
+                              color={
+                                document.status === 'archived'
+                                  ? 'error'
+                                  : document.status === 'draft'
+                                    ? 'warning'
+                                    : 'success'
+                              }
+                            />
+                          </Box>
+                          {document.tags.length > 0 && (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                              {document.tags.map((tag) => (
+                                <Chip key={tag} label={tag} size="small" />
+                              ))}
+                            </Box>
+                          )}
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <Button size="small" onClick={() => setViewingDocument(document)}>
-                            View
-                          </Button>
-                          {onDeleteDocument && (
+                          {document.file_path ? (
                             <Button
                               size="small"
-                              color="error"
-                              onClick={() => setPendingDeleteDocument(document)}
+                              onClick={() =>
+                                onDownloadDocument?.(document.document_id).catch(() =>
+                                  setErrorMessage(
+                                    'Unable to download that document. Please try again.'
+                                  )
+                                )
+                              }
                             >
-                              Delete
+                              Download
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              onClick={async () => {
+                                setViewingDocument(document);
+                                setDocumentVersions([]);
+                                if (onLoadVersions) {
+                                  setVersionsLoading(true);
+                                  try {
+                                    const versions = await onLoadVersions(document.document_id);
+                                    setDocumentVersions(versions);
+                                  } finally {
+                                    setVersionsLoading(false);
+                                  }
+                                }
+                              }}
+                            >
+                              View
+                            </Button>
+                          )}
+                          {onUpdateDocument && (
+                            <Button size="small" onClick={() => openEditDocument(document)}>
+                              Edit
+                            </Button>
+                          )}
+                          {onUnlinkDocument && (
+                            <Button
+                              size="small"
+                              color="warning"
+                              onClick={() => onUnlinkDocument(document.document_id)}
+                            >
+                              Unlink
                             </Button>
                           )}
                         </Box>
@@ -905,6 +1161,17 @@ const JobDetailDialog = ({
                     </Box>
                   ))}
                 </Box>
+              )}
+
+              {onLinkDocument && libraryDocuments && libraryDocuments.length > 0 && (
+                <Button
+                  size="small"
+                  variant="outlined"
+                  sx={{ mb: 2 }}
+                  onClick={() => setLinkPickerOpen(true)}
+                >
+                  Link from Library
+                </Button>
               )}
 
               <Divider sx={{ mb: 2 }} />
@@ -1092,79 +1359,92 @@ const JobDetailDialog = ({
           )}
         </DialogContent>
 
-        <DialogActions>
-          <Button onClick={onDelete} color="error" sx={{ mr: 'auto' }}>
-            Delete
-          </Button>
-          {isEditing ? (
-            <>
-              <Button onClick={() => setIsEditing(false)} disabled={isSaving}>
-                Cancel
-              </Button>
-              <Button onClick={handleSave} variant="contained" disabled={isSaving}>
-                {isSaving ? 'Saving...' : 'Save'}
-              </Button>
-            </>
-          ) : (
-            <>
-              {onGenerateResume && (
-                <Button
-                  onClick={() => {
-                    setResumeError('');
-                    setGeneratedResume(null);
-                    setImprovedResume(null);
-                    setShowImproved(false);
-                    setResumeDialogOpen(true);
-                    setIsGenerating(true);
-                    onGenerateResume()
-                      .then((text) => setGeneratedResume(text))
-                      .catch(() => setResumeError('Failed to generate resume. Please try again.'))
-                      .finally(() => setIsGenerating(false));
-                  }}
-                  disabled={isGenerating}
-                >
-                  Generate Resume
-                </Button>
-              )}
-              {onGenerateCoverLetter && (
-                <Button
-                  onClick={async () => {
-                    setCoverLetterError('');
-                    setGeneratedCoverLetter(null);
-                    setCoverLetterDialogOpen(true);
-                    setIsGeneratingCoverLetter(true);
-                    try {
-                      const text = await onGenerateCoverLetter();
-                      setGeneratedCoverLetter(text);
-                    } catch {
-                      setCoverLetterError('Failed to generate cover letter. Please try again.');
-                    } finally {
-                      setIsGeneratingCoverLetter(false);
-                    }
-                  }}
-                  disabled={isGeneratingCoverLetter}
-                  startIcon={isGeneratingCoverLetter ? <CircularProgress size={16} /> : undefined}
-                >
-                  {isGeneratingCoverLetter ? 'Generating...' : 'Cover Letter'}
-                </Button>
-              )}
-              <Button onClick={onClose}>Close</Button>
-              {job.job_stage !== 'Archived' && (
-                <Button onClick={() => handleStageSelect('Archived')} color="secondary">
-                  Archive
-                </Button>
-              )}
-              {canRestoreFromArchive && (
-                <Button onClick={() => setRestoreConfirmOpen(true)} color="secondary">
-                  Restore
-                </Button>
-              )}
-              <Button onClick={() => setIsEditing(true)} variant="contained">
-                Edit
-              </Button>
-            </>
+        {isEditing && (
+          <DialogActions>
+            <Button onClick={() => setIsEditing(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} variant="contained" disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogActions>
+        )}
+
+        <Menu
+          anchorEl={actionMenuAnchor}
+          open={Boolean(actionMenuAnchor)}
+          onClose={() => setActionMenuAnchor(null)}
+        >
+          {onGenerateResume && (
+            <MenuItem
+              onClick={() => {
+                setActionMenuAnchor(null);
+                setResumeError('');
+                setGeneratedResume(null);
+                setImprovedResume(null);
+                setShowImproved(false);
+                setResumeDialogOpen(true);
+                setIsGenerating(true);
+                onGenerateResume()
+                  .then((text) => setGeneratedResume(text))
+                  .catch(() => setResumeError('Failed to generate resume. Please try again.'))
+                  .finally(() => setIsGenerating(false));
+              }}
+            >
+              Generate Resume
+            </MenuItem>
           )}
-        </DialogActions>
+          {onGenerateCoverLetter && (
+            <MenuItem
+              onClick={async () => {
+                setActionMenuAnchor(null);
+                setCoverLetterError('');
+                setGeneratedCoverLetter(null);
+                setCoverLetterDialogOpen(true);
+                setIsGeneratingCoverLetter(true);
+                try {
+                  const text = await onGenerateCoverLetter();
+                  setGeneratedCoverLetter(text);
+                } catch {
+                  setCoverLetterError('Failed to generate cover letter. Please try again.');
+                } finally {
+                  setIsGeneratingCoverLetter(false);
+                }
+              }}
+            >
+              Cover Letter
+            </MenuItem>
+          )}
+          {job.job_stage !== 'Archived' && (
+            <MenuItem
+              onClick={() => {
+                setActionMenuAnchor(null);
+                handleStageSelect('Archived');
+              }}
+            >
+              Archive
+            </MenuItem>
+          )}
+          {canRestoreFromArchive && (
+            <MenuItem
+              onClick={() => {
+                setActionMenuAnchor(null);
+                setRestoreConfirmOpen(true);
+              }}
+            >
+              Restore
+            </MenuItem>
+          )}
+          <MenuItem
+            onClick={() => {
+              setActionMenuAnchor(null);
+              onDelete();
+            }}
+            sx={{ color: 'error.main' }}
+          >
+            Delete
+          </MenuItem>
+        </Menu>
       </Dialog>
 
       <Dialog open={restoreConfirmOpen} onClose={() => setRestoreConfirmOpen(false)}>
@@ -1442,6 +1722,14 @@ const JobDetailDialog = ({
               value={interviewForm.interview_notes}
               onChange={(event) => updateInterviewForm('interview_notes', event.target.value)}
             />
+            <TextField
+              label="Preparation Notes"
+              size="small"
+              multiline
+              minRows={3}
+              value={interviewForm.prep_notes}
+              onChange={(event) => updateInterviewForm('prep_notes', event.target.value)}
+            />
             {interviewError && (
               <Typography variant="body2" color="error">
                 {interviewError}
@@ -1572,7 +1860,29 @@ const JobDetailDialog = ({
             <Typography variant="caption" color="text.secondary" display="block">
               v{viewingDocument?.doc_version} &middot;{' '}
               {viewingDocument ? formatActivityDate(viewingDocument.created_at) : ''}
+              {viewingDocument?.updated_at
+                ? ` Â· Updated ${formatActivityDate(viewingDocument.updated_at)}`
+                : ''}
             </Typography>
+            {viewingDocument && (
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                <Chip
+                  label={viewingDocument.status}
+                  size="small"
+                  variant="outlined"
+                  color={
+                    viewingDocument.status === 'archived'
+                      ? 'error'
+                      : viewingDocument.status === 'draft'
+                        ? 'warning'
+                        : 'default'
+                  }
+                />
+                {viewingDocument.tags.map((tag) => (
+                  <Chip key={tag} label={tag} size="small" />
+                ))}
+              </Box>
+            )}
           </Box>
           <IconButton size="small" onClick={() => setViewingDocument(null)}>
             <CloseIcon fontSize="small" />
@@ -1588,12 +1898,243 @@ const JobDetailDialog = ({
             maxRows={24}
             sx={{ fontFamily: 'monospace' }}
           />
+          {onLoadVersions && (
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" fontWeight={700} mb={1}>
+                Version History
+              </Typography>
+              {versionsLoading ? (
+                <CircularProgress size={20} />
+              ) : documentVersions.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No version history available.
+                </Typography>
+              ) : (
+                <Stack spacing={0.5}>
+                  {documentVersions.map((v) => (
+                    <Box
+                      key={v.version_id}
+                      sx={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        py: 0.5,
+                        borderBottom: '1px solid',
+                        borderColor: 'divider',
+                      }}
+                    >
+                      <Typography variant="body2">
+                        v{v.version_number} &middot; {formatActivityDate(v.created_at)}
+                      </Typography>
+                      {v.content && (
+                        <Button
+                          size="small"
+                          onClick={() =>
+                            setViewingDocument((prev) =>
+                              prev ? { ...prev, content: v.content } : prev
+                            )
+                          }
+                        >
+                          Restore
+                        </Button>
+                      )}
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+            </Box>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => navigator.clipboard.writeText(viewingDocument?.content ?? '')}>
             Copy
           </Button>
+          <Button
+            onClick={() => {
+              const blob = new Blob([viewingDocument?.content ?? ''], { type: 'text/plain' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `${viewingDocument?.doc_title ?? 'document'}.txt`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            Download
+          </Button>
           <Button onClick={() => setViewingDocument(null)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(editingDocument)}
+        onClose={() => setEditingDocument(null)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Edit Document</DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+          {editDocError && <Alert severity="error">{editDocError}</Alert>}
+          <TextField
+            label="Title"
+            fullWidth
+            value={editDocForm.doc_title}
+            onChange={(e) => setEditDocForm((f) => ({ ...f, doc_title: e.target.value }))}
+          />
+          <FormControl fullWidth>
+            <InputLabel>Status</InputLabel>
+            <Select
+              label="Status"
+              value={editDocForm.status}
+              onChange={(e) =>
+                setEditDocForm((f) => ({ ...f, status: e.target.value as DocStatus }))
+              }
+            >
+              <MenuItem value="active">Active</MenuItem>
+              <MenuItem value="draft">Draft</MenuItem>
+              <MenuItem value="archived">Archived</MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            label="Tags"
+            fullWidth
+            value={editDocForm.tags_input}
+            onChange={(e) => setEditDocForm((f) => ({ ...f, tags_input: e.target.value }))}
+            helperText="Separate with commas"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setEditingDocument(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={saveEditDocument}
+            disabled={isUpdatingDocument || !editDocForm.doc_title.trim()}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={linkPickerOpen}
+        onClose={() => setLinkPickerOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Link from Library</DialogTitle>
+        <DialogContent>
+          {!libraryDocuments || libraryDocuments.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>
+              No library documents available to link.
+            </Typography>
+          ) : (
+            <Box sx={{ display: 'grid', gap: 1, pt: 1 }}>
+              {libraryDocuments.map((doc) => (
+                <Box
+                  key={doc.document_id}
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1,
+                    p: 1.5,
+                  }}
+                >
+                  <Box>
+                    <Typography variant="body2" fontWeight={700}>
+                      {doc.doc_title}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, alignItems: 'center' }}>
+                      {doc.doc_type && (
+                        <Chip
+                          label={doc.doc_type
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, (c) => c.toUpperCase())}
+                          size="small"
+                          variant="filled"
+                          color={doc.doc_type === 'resume' ? 'primary' : 'secondary'}
+                        />
+                      )}
+                      <Typography variant="caption" color="text.secondary">
+                        {formatActivityDate(doc.created_at)}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Button
+                    size="small"
+                    variant="contained"
+                    disabled={isLinking === doc.document_id}
+                    onClick={() => {
+                      if (!onLinkDocument) return;
+                      const conflict = savedDocuments.find((d) => d.doc_type === doc.doc_type);
+                      if (conflict) {
+                        setPendingLinkDoc(doc);
+                        setLinkPickerOpen(false);
+                        setReplaceConfirmOpen(true);
+                        return;
+                      }
+                      setIsLinking(doc.document_id);
+                      onLinkDocument(doc.document_id)
+                        .then(() => setLinkPickerOpen(false))
+                        .finally(() => setIsLinking(null));
+                    }}
+                  >
+                    {isLinking === doc.document_id ? <CircularProgress size={16} /> : 'Link'}
+                  </Button>
+                </Box>
+              ))}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLinkPickerOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={replaceConfirmOpen}
+        onClose={() => {
+          setReplaceConfirmOpen(false);
+          setPendingLinkDoc(null);
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Replace existing document?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            A {pendingLinkDoc?.doc_type} is already linked to this job. Linking{' '}
+            <strong>{pendingLinkDoc?.doc_title}</strong> will unlink the existing one. Continue?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            onClick={() => {
+              setReplaceConfirmOpen(false);
+              setPendingLinkDoc(null);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={async () => {
+              if (!pendingLinkDoc || !onLinkDocument) return;
+              const conflict = savedDocuments.find((d) => d.doc_type === pendingLinkDoc.doc_type);
+              setReplaceConfirmOpen(false);
+              setPendingLinkDoc(null);
+              setIsLinking(pendingLinkDoc.document_id);
+              try {
+                await onLinkDocument(pendingLinkDoc.document_id, conflict?.document_id);
+              } finally {
+                setIsLinking(null);
+              }
+            }}
+          >
+            Replace
+          </Button>
         </DialogActions>
       </Dialog>
     </>
