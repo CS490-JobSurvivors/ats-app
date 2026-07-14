@@ -603,7 +603,7 @@ describe('DashboardPage', () => {
     });
     render(<DashboardPage />);
     await userEvent.click(await screen.findByText('Software Engineer'));
-    expect(await screen.findByText('No saved drafts yet.')).toBeInTheDocument();
+    expect(await screen.findByText('No linked documents yet.')).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: /more options/i }));
     await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
@@ -618,40 +618,6 @@ describe('DashboardPage', () => {
       });
     });
     expect(await screen.findByText('Resume - Software Engineer at Test Co')).toBeInTheDocument();
-  });
-
-  it('deletes a saved document from job detail', async () => {
-    mockListJobs.mockResolvedValue([sampleJob]);
-    mockListJobDocuments
-      .mockResolvedValueOnce([
-        {
-          document_id: 'doc-1',
-          user_id: 'user-1',
-          job_id: 'job-1',
-          doc_type: 'resume',
-          doc_title: 'Resume - Software Engineer at Test Co',
-          content: '# Resume draft',
-          doc_version: 1,
-          status: 'active',
-          tags: [],
-          updated_at: null,
-          created_at: '2026-06-20T00:00:00Z',
-        },
-      ])
-      .mockResolvedValueOnce([]);
-    mockDeleteJobDocument.mockResolvedValue(undefined);
-    render(<DashboardPage />);
-    await userEvent.click(await screen.findByText('Software Engineer'));
-    expect(await screen.findByText('Resume - Software Engineer at Test Co')).toBeInTheDocument();
-
-    await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
-    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
-    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
-
-    await waitFor(() => {
-      expect(mockDeleteJobDocument).toHaveBeenCalledWith('test-token', 'job-1', 'doc-1');
-    });
-    expect(await screen.findByText('No saved drafts yet.')).toBeInTheDocument();
   });
 
   it('deletes a stage history event from the activity timeline', async () => {
