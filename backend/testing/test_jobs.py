@@ -213,6 +213,16 @@ class FakeDb:
 
         if entity is Document:
             if "document_id_1" not in params:
+                if "status_1" in params:
+                    for document in documents:
+                        if (
+                            str(document.job_id) == str(params["job_id_1"])
+                            and str(document.user_id) == str(params["user_id_1"])
+                            and document.doc_type == params["doc_type_1"]
+                            and (document.status or "active") == params["status_1"]
+                        ):
+                            return document
+                    return None
                 versions = [
                     document.doc_version
                     for document in documents
@@ -1764,6 +1774,100 @@ def test_list_document_versions_returns_404_for_non_owner():
     response = client.get(f"/jobs/{job_id}/documents/{document['document_id']}/versions")
 
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Link/unlink library documents to job applications (S3-009)
+# ---------------------------------------------------------------------------
+
+
+def test_link_document_to_job_sets_job_id():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+    client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/unlink")
+
+    response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/link")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == job_id
+    assert response.json()["document_id"] == document["document_id"]
+
+
+def test_link_document_returns_404_for_non_owner():
+    owner_id = str(uuid4())
+    other_user_id = str(uuid4())
+    set_authenticated_user(owner_id)
+    job_id, document = seed_job_and_document(owner_id)
+
+    set_authenticated_user(other_user_id)
+    response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/link")
+
+    assert response.status_code == 404
+
+
+def test_unlink_document_from_job_clears_job_id():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, document = seed_job_and_document(user_id)
+
+    response = client.patch(f"/jobs/{job_id}/documents/{document['document_id']}/unlink")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] is None
+    assert response.json()["document_id"] == document["document_id"]
+
+
+def test_unlink_document_returns_404_when_not_linked_to_job():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id_1, document = seed_job_and_document(user_id)
+    job_id_2 = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+
+    response = client.patch(f"/jobs/{job_id_2}/documents/{document['document_id']}/unlink")
+
+    assert response.status_code == 404
+
+
+def test_link_document_rejects_duplicate_doc_type():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, first_doc = seed_job_and_document(user_id)
+    second_doc = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "Second Resume", "content": "Content."},
+    ).json()
+    client.patch(f"/jobs/{job_id}/documents/{second_doc['document_id']}/unlink")
+
+    response = client.patch(f"/jobs/{job_id}/documents/{second_doc['document_id']}/link")
+
+    assert response.status_code == 409
+
+
+def test_link_document_allows_different_doc_type():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id, _ = seed_job_and_document(user_id)
+    cover_letter = client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "cover_letter", "doc_title": "Cover Letter", "content": "Content."},
+    ).json()
+    client.patch(f"/jobs/{job_id}/documents/{cover_letter['document_id']}/unlink")
+
+    response = client.patch(f"/jobs/{job_id}/documents/{cover_letter['document_id']}/link")
+
+    assert response.status_code == 200
+    assert response.json()["job_id"] == job_id
+
+
+def test_link_document_rejects_document_already_linked_to_another_job():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id_a, document = seed_job_and_document(user_id)
+    job_id_b = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    # doc is already linked to job_a; attempting to link it to job_b should fail
+    response = client.patch(f"/jobs/{job_id_b}/documents/{document['document_id']}/link")
+    assert response.status_code == 409
 
 
 # ---------------------------------------------------------------------------

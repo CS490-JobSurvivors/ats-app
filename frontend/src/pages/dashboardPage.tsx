@@ -42,6 +42,9 @@ import {
   deleteJobDocument,
   updateJobDocument,
   listDocumentVersions,
+  listDocuments,
+  linkDocumentToJob,
+  unlinkDocumentFromJob,
   generateCompanyResearch,
   DocumentVersion,
   InterviewPayload,
@@ -129,6 +132,7 @@ const DashboardPage = () => {
   const [isFollowUpsLoading, setIsFollowUpsLoading] = useState(false);
   const [selectedJobDocuments, setSelectedJobDocuments] = useState<DocumentRecord[]>([]);
   const [isDocumentsLoading, setIsDocumentsLoading] = useState(false);
+  const [libraryDocuments, setLibraryDocuments] = useState<DocumentRecord[]>([]);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>('last_activity');
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
@@ -308,6 +312,18 @@ const DashboardPage = () => {
     }
   };
 
+  const loadLibraryDocuments = async () => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    try {
+      const all = await listDocuments(token);
+      setLibraryDocuments(all.filter((d) => d.job_id === null));
+    } catch {
+      setLibraryDocuments([]);
+    }
+  };
+
   const openDetailDialog = async (job: JobRecord) => {
     setSelectedJob(job);
     setSelectedJobActivity([]);
@@ -320,6 +336,7 @@ const DashboardPage = () => {
       loadJobInterviews(job.job_id),
       loadJobFollowUps(job.job_id),
       loadJobDocuments(job.job_id),
+      loadLibraryDocuments(),
     ]);
   };
 
@@ -504,6 +521,39 @@ const DashboardPage = () => {
       return await listDocumentVersions(token, selectedJob.job_id, documentId);
     } catch {
       return [];
+    }
+  };
+
+  const handleLinkDocument = async (documentId: string, existingDocumentId?: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      if (existingDocumentId) {
+        await unlinkDocumentFromJob(token, selectedJob.job_id, existingDocumentId);
+      }
+      await linkDocumentToJob(token, selectedJob.job_id, documentId);
+      await Promise.all([loadJobDocuments(selectedJob.job_id), loadLibraryDocuments()]);
+    } catch {
+      setErrorMessage('Unable to link that document. Please try again.');
+    }
+  };
+
+  const handleUnlinkDocument = async (documentId: string) => {
+    if (!selectedJob) return;
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+
+    setErrorMessage('');
+    try {
+      await unlinkDocumentFromJob(token, selectedJob.job_id, documentId);
+      await Promise.all([loadJobDocuments(selectedJob.job_id), loadLibraryDocuments()]);
+    } catch {
+      setErrorMessage('Unable to unlink that document. Please try again.');
     }
   };
 
@@ -777,6 +827,9 @@ const DashboardPage = () => {
         onDeleteDocument={handleDeleteDocument}
         onUpdateDocument={handleUpdateDocument}
         onLoadVersions={handleLoadVersions}
+        libraryDocuments={libraryDocuments}
+        onLinkDocument={handleLinkDocument}
+        onUnlinkDocument={handleUnlinkDocument}
         onGenerateResearch={async (userContext: string) => {
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;

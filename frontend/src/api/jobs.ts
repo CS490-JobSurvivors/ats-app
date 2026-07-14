@@ -646,3 +646,37 @@ export const listDocumentVersions = async (
 
   return await response.json();
 };
+
+export const linkDocumentToJob = async (
+  accessToken: string,
+  jobId: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents/${documentId}/link`, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to link document.');
+  }
+
+  return await response.json();
+};
+
+export const unlinkDocumentFromJob = async (
+  accessToken: string,
+  jobId: string,
+  documentId: string
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/${jobId}/documents/${documentId}/unlink`, {
+    method: 'PATCH',
+    headers: authHeaders(accessToken),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to unlink document.');
+  }
+
+  return await response.json();
+};

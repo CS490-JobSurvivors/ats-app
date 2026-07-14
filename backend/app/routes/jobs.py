@@ -766,6 +766,59 @@ def list_document_versions(
     return versions
 
 
+@router.patch("/{job_id}/documents/{document_id}/link", response_model=DocumentRead)
+def link_document_to_job(
+    job_id: UUID,
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    get_owned_job_or_404(job_id, owner_id, db)
+    db_document = get_owned_library_document_or_404(document_id, owner_id, db)
+
+    if db_document.job_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document is already linked to a job",
+        )
+
+    if db_document.doc_type:
+        existing = db.scalar(
+            select(Document).where(
+                Document.job_id == job_id,
+                Document.user_id == owner_id,
+                Document.doc_type == db_document.doc_type,
+                Document.status == "active",
+            )
+        )
+        if existing is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A {db_document.doc_type} is already linked to this job",
+            )
+
+    db_document.job_id = job_id
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+
+@router.patch("/{job_id}/documents/{document_id}/unlink", response_model=DocumentRead)
+def unlink_document_from_job(
+    job_id: UUID,
+    document_id: UUID,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_document_or_404(job_id, document_id, owner_id, db)
+    db_document.job_id = None
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+
 @router.delete("/{job_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_job_document(
     job_id: UUID,

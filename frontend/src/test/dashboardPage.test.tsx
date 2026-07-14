@@ -11,6 +11,7 @@ import {
   getJobMetrics,
   listJobFollowUps,
   listJobDocuments,
+  listDocuments,
   createJob,
   updateJob,
   deleteJob,
@@ -23,6 +24,8 @@ import {
   createJobDocument,
   deleteJobDocument,
   updateJobDocument,
+  linkDocumentToJob,
+  unlinkDocumentFromJob,
 } from '../api/jobs';
 import { generateResume } from '../api/resume';
 
@@ -59,6 +62,11 @@ jest.mock('../api/jobs', () => ({
   createJobDocument: jest.fn(),
   deleteJobDocument: jest.fn(),
   updateJobDocument: jest.fn(),
+  listDocuments: jest.fn(),
+  linkDocumentToJob: jest.fn(),
+  unlinkDocumentFromJob: jest.fn(),
+  listDocumentVersions: jest.fn(),
+  generateCompanyResearch: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
@@ -80,6 +88,9 @@ const mockDeleteJobFollowUp = deleteJobFollowUp as jest.Mock;
 const mockCreateJobDocument = createJobDocument as jest.Mock;
 const mockDeleteJobDocument = deleteJobDocument as jest.Mock;
 const mockUpdateJobDocument = updateJobDocument as jest.Mock;
+const mockListDocuments = listDocuments as jest.Mock;
+const mockLinkDocumentToJob = linkDocumentToJob as jest.Mock;
+const mockUnlinkDocumentFromJob = unlinkDocumentFromJob as jest.Mock;
 const mockGenerateResume = generateResume as jest.Mock;
 
 const zeroMetrics = {
@@ -128,6 +139,9 @@ beforeEach(() => {
   mockCreateJobDocument.mockReset();
   mockDeleteJobDocument.mockReset();
   mockUpdateJobDocument.mockReset();
+  mockListDocuments.mockResolvedValue([]);
+  mockLinkDocumentToJob.mockReset();
+  mockUnlinkDocumentFromJob.mockReset();
   mockGenerateResume.mockReset();
 });
 
@@ -860,6 +874,131 @@ describe('DashboardPage', () => {
       // Assert
       await waitFor(() => expect(mockGetSession).toHaveBeenCalled());
       expect(mockUpdateJobDocument).not.toHaveBeenCalled();
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Link and unlink document flows (S3-009)
+  // -------------------------------------------------------------------------
+
+  describe('link and unlink document flows', () => {
+    const linkedDoc = {
+      document_id: 'doc-linked',
+      user_id: 'user-1',
+      job_id: 'job-1',
+      doc_type: 'resume',
+      doc_title: 'My Resume',
+      content: '# Resume',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+    };
+
+    const libraryDoc = {
+      document_id: 'doc-library',
+      user_id: 'user-1',
+      job_id: null,
+      doc_type: 'resume',
+      doc_title: 'Library Resume',
+      content: '# Library Resume',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-06-21T00:00:00Z',
+    };
+
+    const openJobDetail = async () => {
+      await userEvent.click(await screen.findByText('Software Engineer'));
+      // Wait for the dialog's Close button to confirm it is mounted
+      expect(await screen.findByRole('button', { name: /^close$/i })).toBeInTheDocument();
+    };
+
+    it('calls linkDocumentToJob when Link is clicked in the picker with no conflict', async () => {
+      // Arrange — job has no linked docs, library has one doc
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([]);
+      mockListDocuments.mockResolvedValue([libraryDoc]);
+      mockLinkDocumentToJob.mockResolvedValue({ ...libraryDoc, job_id: 'job-1' });
+      render(<DashboardPage />);
+
+      // Act
+      await openJobDetail();
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      expect(await screen.findByText('Library Resume')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert
+      await waitFor(() => {
+        expect(mockLinkDocumentToJob).toHaveBeenCalledWith('test-token', 'job-1', 'doc-library');
+      });
+    });
+
+    it('shows replace confirmation dialog when linking a doc of the same type already linked', async () => {
+      // Arrange — job already has a resume linked; library also has a resume
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([linkedDoc]);
+      mockListDocuments.mockResolvedValue([libraryDoc]);
+      render(<DashboardPage />);
+
+      // Act
+      await openJobDetail();
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      expect(await screen.findByText('Library Resume')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert — picker closes, confirmation dialog appears
+      expect(await screen.findByText(/replace existing document/i)).toBeInTheDocument();
+      expect(mockLinkDocumentToJob).not.toHaveBeenCalled();
+    });
+
+    it('calls unlinkDocumentFromJob then linkDocumentToJob when Replace is confirmed', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([linkedDoc]);
+      mockListDocuments.mockResolvedValue([libraryDoc]);
+      mockUnlinkDocumentFromJob.mockResolvedValue({ ...linkedDoc, job_id: null });
+      mockLinkDocumentToJob.mockResolvedValue({ ...libraryDoc, job_id: 'job-1' });
+      render(<DashboardPage />);
+
+      // Act — trigger replace confirmation then confirm
+      await openJobDetail();
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      expect(await screen.findByText('Library Resume')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+      expect(await screen.findByText(/replace existing document/i)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^replace$/i }));
+
+      // Assert — unlink first, then link
+      await waitFor(() => {
+        expect(mockUnlinkDocumentFromJob).toHaveBeenCalledWith('test-token', 'job-1', 'doc-linked');
+      });
+      await waitFor(() => {
+        expect(mockLinkDocumentToJob).toHaveBeenCalledWith('test-token', 'job-1', 'doc-library');
+      });
+    });
+
+    it('calls unlinkDocumentFromJob when Unlink is clicked on a linked document', async () => {
+      // Arrange
+      mockListJobs.mockResolvedValue([sampleJob]);
+      mockListJobDocuments.mockResolvedValue([linkedDoc]);
+      mockListDocuments.mockResolvedValue([]);
+      mockUnlinkDocumentFromJob.mockResolvedValue({ ...linkedDoc, job_id: null });
+      render(<DashboardPage />);
+
+      // Act
+      await openJobDetail();
+      expect(await screen.findByText('My Resume')).toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button', { name: /^unlink$/i }));
+
+      // Assert
+      await waitFor(() => {
+        expect(mockUnlinkDocumentFromJob).toHaveBeenCalledWith('test-token', 'job-1', 'doc-linked');
+      });
     });
   });
 });
