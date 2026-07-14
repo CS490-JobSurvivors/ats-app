@@ -569,7 +569,7 @@ const DashboardPage = () => {
       const url = await getDocumentDownloadUrl(token, documentId);
       window.open(url, '_blank');
     } catch {
-      // signed URL failure — nothing actionable to show
+      throw new Error('Download failed');
     }
   };
 

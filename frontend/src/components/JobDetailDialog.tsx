@@ -1112,7 +1112,11 @@ const JobDetailDialog = ({
                           {document.file_path ? (
                             <Button
                               size="small"
-                              onClick={() => onDownloadDocument?.(document.document_id)}
+                              onClick={() =>
+                                onDownloadDocument?.(document.document_id).catch(() =>
+                                  setErrorMessage('Unable to download that document. Please try again.')
+                                )
+                              }
                             >
                               Download
                             </Button>
