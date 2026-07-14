@@ -1101,7 +1101,6 @@ describe('JobDetailDialog', () => {
       expect(screen.getByText('Resume - Software Engineer at Acme Corp')).toBeInTheDocument();
       expect(screen.getByText(/v1/)).toBeInTheDocument();
     });
-
   });
 
   // -------------------------------------------------------------------------
