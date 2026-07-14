@@ -120,7 +120,7 @@ const openFilters = async () => {
 };
 
 const chooseFilter = async (label: RegExp, optionName: RegExp) => {
-  await userEvent.click(screen.getByLabelText(label));
+  await userEvent.click(screen.getByRole('combobox', { name: label }));
   const listbox = await screen.findByRole('listbox');
   await userEvent.click(within(listbox).getByRole('option', { name: optionName }));
 };
@@ -165,12 +165,12 @@ describe('Dashboard job filters', () => {
     expect(await screen.findByText('Frontend Engineer')).toBeInTheDocument();
     await openFilters();
 
-    await userEvent.click(screen.getByLabelText(/location/i));
+    await userEvent.click(screen.getByRole('combobox', { name: /location/i }));
     let listbox = await screen.findByRole('listbox');
     expect(within(listbox).getByRole('option', { name: /chicago/i })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
 
-    await userEvent.click(screen.getByLabelText(/deadline/i));
+    await userEvent.click(screen.getByRole('combobox', { name: /deadline/i }));
     listbox = await screen.findByRole('listbox');
     expect(within(listbox).getByRole('option', { name: /upcoming/i })).toBeInTheDocument();
   });
