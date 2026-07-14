@@ -567,10 +567,17 @@ const DashboardPage = () => {
     if (!token) return;
 
     setErrorMessage('');
+    const unlinked = selectedJobDocuments.find((d) => d.document_id === documentId);
+    setSelectedJobDocuments((prev) => prev.filter((d) => d.document_id !== documentId));
+    if (unlinked) setLibraryDocuments((prev) => [...prev, { ...unlinked, job_id: null }]);
+
     try {
       await unlinkDocumentFromJob(token, selectedJob.job_id, documentId);
-      await Promise.all([loadJobDocuments(selectedJob.job_id), loadLibraryDocuments()]);
     } catch {
+      if (unlinked) {
+        setSelectedJobDocuments((prev) => [...prev, unlinked]);
+        setLibraryDocuments((prev) => prev.filter((d) => d.document_id !== documentId));
+      }
       setErrorMessage('Unable to unlink that document. Please try again.');
     }
   };

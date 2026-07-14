@@ -1144,7 +1144,7 @@ const JobDetailDialog = ({
                 </Box>
               )}
 
-              {onLinkDocument && libraryDocuments && (
+              {onLinkDocument && libraryDocuments && libraryDocuments.length > 0 && (
                 <Button
                   size="small"
                   variant="outlined"
@@ -2050,7 +2050,9 @@ const JobDetailDialog = ({
                         return;
                       }
                       setIsLinking(doc.document_id);
-                      onLinkDocument(doc.document_id).finally(() => setIsLinking(null));
+                      onLinkDocument(doc.document_id)
+                        .then(() => setLinkPickerOpen(false))
+                        .finally(() => setIsLinking(null));
                     }}
                   >
                     {isLinking === doc.document_id ? <CircularProgress size={16} /> : 'Link'}
