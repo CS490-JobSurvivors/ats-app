@@ -12,6 +12,7 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  InputAdornment,
   InputLabel,
   MenuItem,
   Paper,
@@ -22,6 +23,7 @@ import {
   Typography,
 } from '@mui/material';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import SearchIcon from '@mui/icons-material/Search';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { supabase } from '../utils/supabaseClient';
 import {
@@ -86,9 +88,12 @@ const DocumentLibraryPage = () => {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   const hasActiveFilters = Boolean(filterType || filterTag || filterStatus);
-  const visibleDocuments = filterStatus
-    ? documents.filter((d) => d.status === filterStatus)
-    : documents;
+  const visibleDocuments = documents.filter((d) => {
+    if (filterStatus && d.status !== filterStatus) return false;
+    if (filterTag && !d.tags.some((t) => t.toLowerCase().includes(filterTag.toLowerCase())))
+      return false;
+    return true;
+  });
 
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
@@ -121,7 +126,7 @@ const DocumentLibraryPage = () => {
         token,
         includeArchived,
         filterType || undefined,
-        filterTag || undefined,
+        undefined,
         sortOrder
       );
       setDocuments(result);
@@ -130,7 +135,7 @@ const DocumentLibraryPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [getAccessToken, includeArchived, filterType, filterTag, sortOrder]);
+  }, [getAccessToken, includeArchived, filterType, sortOrder]);
 
   useEffect(() => {
     loadDocuments();
@@ -364,13 +369,6 @@ const DocumentLibraryPage = () => {
               <MenuItem value="draft">Draft</MenuItem>
             </Select>
           </FormControl>
-          <TextField
-            size="small"
-            label="Tag"
-            value={filterTag}
-            onChange={(e) => setFilterTag(e.target.value)}
-            sx={{ minWidth: 140 }}
-          />
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel id="sort-order-label">Sort by Date</InputLabel>
             <Select
@@ -383,6 +381,20 @@ const DocumentLibraryPage = () => {
               <MenuItem value="asc">Oldest First</MenuItem>
             </Select>
           </FormControl>
+          <TextField
+            size="small"
+            label="Search by tag"
+            value={filterTag}
+            onChange={(e) => setFilterTag(e.target.value)}
+            sx={{ minWidth: 180 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon fontSize="small" />
+                </InputAdornment>
+              ),
+            }}
+          />
         </Stack>
       )}
 
