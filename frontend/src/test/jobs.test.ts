@@ -234,7 +234,9 @@ describe('jobs API — unlinkDocumentFromJob', () => {
 
   it('should send a PATCH request to the unlink route with the auth header', async () => {
     // Arrange
-    (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse(buildDocument({ job_id: null })));
+    (global.fetch as jest.Mock).mockResolvedValue(
+      mockFetchResponse(buildDocument({ job_id: null }))
+    );
 
     // Act
     await unlinkDocumentFromJob(ACCESS_TOKEN, JOB_ID, DOCUMENT_ID);

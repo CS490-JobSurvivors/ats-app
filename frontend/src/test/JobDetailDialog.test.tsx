@@ -1517,7 +1517,10 @@ describe('JobDetailDialog', () => {
 
     it('should call onLinkDocument with the document id when linking a library doc without conflicts', async () => {
       // Arrange
-      const libraryDoc = buildDocument({ document_id: 'library-doc-1', doc_title: 'Library Resume' });
+      const libraryDoc = buildDocument({
+        document_id: 'library-doc-1',
+        doc_title: 'Library Resume',
+      });
       renderWithLinking({ savedDocuments: [], libraryDocuments: [libraryDoc] });
 
       // Act
