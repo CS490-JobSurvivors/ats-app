@@ -1860,6 +1860,16 @@ def test_link_document_allows_different_doc_type():
     assert response.json()["job_id"] == job_id
 
 
+def test_link_document_rejects_document_already_linked_to_another_job():
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id_a, document = seed_job_and_document(user_id)
+    job_id_b = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    # doc is already linked to job_a; attempting to link it to job_b should fail
+    response = client.patch(f"/jobs/{job_id_b}/documents/{document['document_id']}/link")
+    assert response.status_code == 409
+
+
 # ---------------------------------------------------------------------------
 # Stage transition integrity (S2-BR-008, S2-BR-009)
 # ---------------------------------------------------------------------------

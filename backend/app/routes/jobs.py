@@ -760,6 +760,12 @@ def link_document_to_job(
     get_owned_job_or_404(job_id, owner_id, db)
     db_document = get_owned_library_document_or_404(document_id, owner_id, db)
 
+    if db_document.job_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Document is already linked to a job",
+        )
+
     if db_document.doc_type:
         existing = db.scalar(
             select(Document).where(
