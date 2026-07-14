@@ -40,7 +40,9 @@ const NavigationBar = () => {
           <img
             src="/logo.png"
             alt="Job Survivors logo"
-            style={{ height: 28, width: 'auto', display: 'block' }}
+            width={28}
+            height={28}
+            style={{ display: 'block' }}
           />
           <Typography
             variant="h6"

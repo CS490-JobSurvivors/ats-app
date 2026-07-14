@@ -535,14 +535,22 @@ const JobDetailDialog = ({
                 sx={{ color: stageStyle.color, bgcolor: stageStyle.bgcolor, fontWeight: 600 }}
               />
               {!isEditing && (
-                <IconButton
-                  size="small"
-                  aria-label="job options"
-                  onClick={(e) => setActionMenuAnchor(e.currentTarget)}
-                >
-                  <MoreVertIcon fontSize="small" />
-                </IconButton>
+                <>
+                  <Button size="small" variant="contained" onClick={() => setIsEditing(true)}>
+                    Edit
+                  </Button>
+                  <IconButton
+                    size="small"
+                    aria-label="more options"
+                    onClick={(e) => setActionMenuAnchor(e.currentTarget)}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                </>
               )}
+              <IconButton size="small" aria-label="close" onClick={onClose}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
             </Box>
           </Box>
           {!isEditing && (
@@ -1332,25 +1340,16 @@ const JobDetailDialog = ({
           )}
         </DialogContent>
 
-        <DialogActions>
-          {isEditing ? (
-            <>
-              <Button onClick={() => setIsEditing(false)} disabled={isSaving}>
-                Cancel
-              </Button>
-              <Button onClick={handleSave} variant="contained" disabled={isSaving}>
-                {isSaving ? 'Saving...' : 'Save'}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button onClick={onClose}>Close</Button>
-              <Button onClick={() => setIsEditing(true)} variant="contained">
-                Edit
-              </Button>
-            </>
-          )}
-        </DialogActions>
+        {isEditing && (
+          <DialogActions>
+            <Button onClick={() => setIsEditing(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} variant="contained" disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogActions>
+        )}
 
         <Menu
           anchorEl={actionMenuAnchor}
