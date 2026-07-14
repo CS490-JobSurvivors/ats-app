@@ -1,4 +1,4 @@
-import { Paper, Typography, Box, Chip } from '@mui/material';
+import { Paper, Typography, Box, Chip, ButtonBase } from '@mui/material';
 import { stageColors } from '../utils/stageColors';
 
 interface JobCardProps {
@@ -13,27 +13,47 @@ const JobCard = ({ title, company, stage, lastActivity, onClick }: JobCardProps)
   const stageStyle = stageColors[stage] ?? { color: '#424242', bgcolor: '#F5F5F5' };
 
   return (
-    <Paper sx={{ p: 2, mb: 2, cursor: 'pointer' }} onClick={onClick}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <Box>
+    <Paper sx={{ mb: 2, overflow: 'hidden' }}>
+      <Box sx={{ display: 'flex', alignItems: 'stretch' }}>
+        <ButtonBase
+          onClick={onClick}
+          aria-label={`${title} at ${company}, ${stage} stage`}
+          sx={{
+            flex: 1,
+            p: 2,
+            textAlign: 'left',
+            display: 'block',
+            '&:focus-visible': {
+              outline: '2px solid',
+              outlineColor: 'primary.main',
+              outlineOffset: -2,
+            },
+          }}
+        >
           <Typography variant="h6">{title}</Typography>
           <Typography variant="body2" color="text.secondary">
             {company}
           </Typography>
-        </Box>
-        <Chip
-          label={stage}
-          size="small"
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+            Last activity: {lastActivity}
+          </Typography>
+        </ButtonBase>
+
+        <Box
           sx={{
-            color: stageStyle.color,
-            bgcolor: stageStyle.bgcolor,
-            fontWeight: 600,
+            p: 1.5,
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'flex-end',
           }}
-        />
+        >
+          <Chip
+            label={stage}
+            size="small"
+            sx={{ color: stageStyle.color, bgcolor: stageStyle.bgcolor, fontWeight: 600 }}
+          />
+        </Box>
       </Box>
-      <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-        Last activity: {lastActivity}
-      </Typography>
     </Paper>
   );
 };

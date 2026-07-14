@@ -753,7 +753,7 @@ const DashboardPage = () => {
                     sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem' }}
                   >
                     <Typography variant="body2" color="text.secondary">
-                      {new Date(row.week_start).toLocaleDateString('en-US', {
+                      {new Date(row.week_start + 'T00:00:00').toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                       })}
