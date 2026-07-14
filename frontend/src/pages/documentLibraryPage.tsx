@@ -62,7 +62,7 @@ const formatCreatedAt = (value: string) =>
 const statusColor = (status: DocStatus) => {
   if (status === 'archived') return 'error';
   if (status === 'draft') return 'warning';
-  return 'default';
+  return 'success';
 };
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt'];
@@ -436,13 +436,23 @@ const DocumentLibraryPage = () => {
               }}
             >
               <Box>
+                <Typography variant="h6" fontWeight={700} mb={0.5}>
+                  {document.doc_title}
+                </Typography>
                 <Box
-                  sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    flexWrap: 'wrap',
+                    mb: 0.5,
+                  }}
                 >
-                  <Typography variant="h6" fontWeight={700}>
-                    {document.doc_title}
-                  </Typography>
-                  <Chip size="small" label={documentTypeLabel(document.doc_type)} />
+                  <Chip
+                    size="small"
+                    label={documentTypeLabel(document.doc_type)}
+                    variant="filled"
+                  />
                   {document.file_path && (
                     <Chip size="small" label="Uploaded File" color="primary" variant="outlined" />
                   )}
@@ -454,7 +464,18 @@ const DocumentLibraryPage = () => {
                   />
                 </Box>
                 {document.tags.length > 0 && (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 0.5,
+                      mb: 0.5,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                      Tags:
+                    </Typography>
                     {document.tags.map((tag) => (
                       <Chip key={tag} label={tag} size="small" />
                     ))}
