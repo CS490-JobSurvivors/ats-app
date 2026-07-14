@@ -1114,7 +1114,9 @@ const JobDetailDialog = ({
                               size="small"
                               onClick={() =>
                                 onDownloadDocument?.(document.document_id).catch(() =>
-                                  setErrorMessage('Unable to download that document. Please try again.')
+                                  setErrorMessage(
+                                    'Unable to download that document. Please try again.'
+                                  )
                                 )
                               }
                             >
