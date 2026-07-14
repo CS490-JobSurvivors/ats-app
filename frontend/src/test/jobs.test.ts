@@ -4,7 +4,16 @@
 // body, returns the parsed DocumentRecord, and throws when the response is not ok.
 
 import '@testing-library/jest-dom';
-import { updateJobDocument, DocumentRecord, DocumentUpdatePayload } from '../api/jobs';
+import {
+  createJobDocument,
+  linkDocumentToJob,
+  listDocuments,
+  unlinkDocumentFromJob,
+  updateJobDocument,
+  DocumentPayload,
+  DocumentRecord,
+  DocumentUpdatePayload,
+} from '../api/jobs';
 
 // ---------------------------------------------------------------------------
 // Constants & helpers
@@ -169,5 +178,169 @@ describe('jobs API — updateJobDocument', () => {
         updateJobDocument(ACCESS_TOKEN, JOB_ID, DOCUMENT_ID, { status: 'draft' })
       ).rejects.toThrow('Network down');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// linkDocumentToJob Tests
+// ---------------------------------------------------------------------------
+
+describe('jobs API — linkDocumentToJob', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should send a PATCH request to the link route with the auth header', async () => {
+    // Arrange
+    (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse(buildDocument()));
+
+    // Act
+    await linkDocumentToJob(ACCESS_TOKEN, JOB_ID, DOCUMENT_ID);
+
+    // Assert
+    expect(global.fetch).toHaveBeenCalledWith(`${DOCUMENT_URL}/link`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+    });
+  });
+
+  it('should throw an "Unable to link document." error when the response is not ok', async () => {
+    // Arrange
+    (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse({}, false));
+
+    // Act & Assert
+    await expect(linkDocumentToJob(ACCESS_TOKEN, JOB_ID, DOCUMENT_ID)).rejects.toThrow(
+      'Unable to link document.'
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// unlinkDocumentFromJob Tests
+// ---------------------------------------------------------------------------
+
+describe('jobs API — unlinkDocumentFromJob', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should send a PATCH request to the unlink route with the auth header', async () => {
+    // Arrange
+    (global.fetch as jest.Mock).mockResolvedValue(
+      mockFetchResponse(buildDocument({ job_id: null }))
+    );
+
+    // Act
+    await unlinkDocumentFromJob(ACCESS_TOKEN, JOB_ID, DOCUMENT_ID);
+
+    // Assert
+    expect(global.fetch).toHaveBeenCalledWith(`${DOCUMENT_URL}/unlink`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${ACCESS_TOKEN}` },
+    });
+  });
+
+  it('should throw an "Unable to unlink document." error when the response is not ok', async () => {
+    // Arrange
+    (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse({}, false));
+
+    // Act & Assert
+    await expect(unlinkDocumentFromJob(ACCESS_TOKEN, JOB_ID, DOCUMENT_ID)).rejects.toThrow(
+      'Unable to unlink document.'
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// listDocuments Tests
+// ---------------------------------------------------------------------------
+
+describe('jobs API — listDocuments', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should send a GET request to the library route with the auth header and return the array', async () => {
+    // Arrange
+    const library = [buildDocument(), buildDocument({ document_id: 'doc-9999' })];
+    (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse(library));
+
+    // Act
+    const result = await listDocuments(ACCESS_TOKEN);
+
+    // Assert
+    expect(global.fetch).toHaveBeenCalledWith(
+      `${API_URL}/jobs/documents?include_archived=false&sort_order=desc`,
+      { method: 'GET', headers: { Authorization: `Bearer ${ACCESS_TOKEN}` } }
+    );
+    expect(result).toEqual(library);
+  });
+
+  it('should throw an "Unable to load documents." error when the response is not ok', async () => {
+    // Arrange
+    (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse({}, false));
+
+    // Act & Assert
+    await expect(listDocuments(ACCESS_TOKEN)).rejects.toThrow('Unable to load documents.');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createJobDocument Tests
+// ---------------------------------------------------------------------------
+
+describe('jobs API — createJobDocument', () => {
+  beforeEach(() => {
+    global.fetch = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should send a POST request to the nested documents route with the payload and JSON headers', async () => {
+    // Arrange
+    const payload: DocumentPayload = {
+      doc_type: 'resume',
+      doc_title: 'Resume - Software Engineer at Acme',
+      content: '# Resume',
+    };
+    (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse(buildDocument()));
+
+    // Act
+    await createJobDocument(ACCESS_TOKEN, JOB_ID, payload);
+
+    // Assert
+    expect(global.fetch).toHaveBeenCalledWith(`${API_URL}/jobs/${JOB_ID}/documents`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  });
+
+  it('should throw an "Unable to save document." error when the response is not ok', async () => {
+    // Arrange
+    const payload: DocumentPayload = { doc_type: 'cover_letter', doc_title: 'Cover Letter' };
+    (global.fetch as jest.Mock).mockResolvedValue(mockFetchResponse({}, false));
+
+    // Act & Assert
+    await expect(createJobDocument(ACCESS_TOKEN, JOB_ID, payload)).rejects.toThrow(
+      'Unable to save document.'
+    );
   });
 });

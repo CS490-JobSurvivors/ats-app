@@ -1463,4 +1463,131 @@ describe('JobDetailDialog', () => {
       });
     });
   });
+
+  // -------------------------------------------------------------------------
+  // Linking documents from the library and unlinking (S3-021)
+  // -------------------------------------------------------------------------
+
+  describe('link and unlink flows', () => {
+    const mockOnLinkDocument = jest.fn();
+    const mockOnUnlinkDocument = jest.fn();
+
+    const buildDocument = (overrides: Partial<DocumentRecord> = {}): DocumentRecord => ({
+      document_id: 'doc-1',
+      user_id: 'user-1',
+      job_id: '123',
+      doc_type: 'resume',
+      doc_title: 'Resume - Software Engineer at Acme Corp',
+      content: 'Some content',
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-06-20T00:00:00Z',
+      ...overrides,
+    });
+
+    const renderWithLinking = (props: {
+      savedDocuments?: DocumentRecord[];
+      libraryDocuments?: DocumentRecord[];
+      withUnlink?: boolean;
+    }) =>
+      render(
+        <JobDetailDialog
+          open={true}
+          job={mockJob}
+          onClose={mockOnClose}
+          onSave={mockOnSave}
+          onDelete={mockOnDelete}
+          onStageChange={mockOnStageChange}
+          savedDocuments={props.savedDocuments ?? []}
+          libraryDocuments={props.libraryDocuments}
+          onLinkDocument={mockOnLinkDocument}
+          onUnlinkDocument={props.withUnlink ? mockOnUnlinkDocument : undefined}
+        />
+      );
+
+    beforeEach(() => {
+      mockOnLinkDocument.mockReset();
+      mockOnUnlinkDocument.mockReset();
+      mockOnLinkDocument.mockResolvedValue(undefined);
+      mockOnUnlinkDocument.mockResolvedValue(undefined);
+    });
+
+    it('should call onLinkDocument with the document id when linking a library doc without conflicts', async () => {
+      // Arrange
+      const libraryDoc = buildDocument({
+        document_id: 'library-doc-1',
+        doc_title: 'Library Resume',
+      });
+      renderWithLinking({ savedDocuments: [], libraryDocuments: [libraryDoc] });
+
+      // Act
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert
+      await waitFor(() => expect(mockOnLinkDocument).toHaveBeenCalledWith('library-doc-1'));
+    });
+
+    it('should not link and should show the replace dialog when a resume is already linked', async () => {
+      // Arrange
+      const existingResume = buildDocument({ document_id: 'doc-1', doc_type: 'resume' });
+      const libraryResume = buildDocument({
+        document_id: 'library-doc-1',
+        doc_type: 'resume',
+        doc_title: 'Library Resume',
+      });
+      renderWithLinking({ savedDocuments: [existingResume], libraryDocuments: [libraryResume] });
+
+      // Act
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert
+      expect(screen.getByText(/Replace existing document/i)).toBeInTheDocument();
+      expect(mockOnLinkDocument).not.toHaveBeenCalled();
+    });
+
+    it('should not link and should show the replace dialog when a cover letter is already linked', async () => {
+      // Arrange
+      const existingCoverLetter = buildDocument({
+        document_id: 'doc-1',
+        doc_type: 'cover_letter',
+        doc_title: 'Cover Letter - Software Engineer at Acme Corp',
+      });
+      const libraryCoverLetter = buildDocument({
+        document_id: 'library-doc-1',
+        doc_type: 'cover_letter',
+        doc_title: 'Library Cover Letter',
+      });
+      renderWithLinking({
+        savedDocuments: [existingCoverLetter],
+        libraryDocuments: [libraryCoverLetter],
+      });
+
+      // Act
+      await userEvent.click(screen.getByRole('button', { name: /link from library/i }));
+      await userEvent.click(screen.getByRole('button', { name: /^link$/i }));
+
+      // Assert
+      expect(screen.getByText(/Replace existing document/i)).toBeInTheDocument();
+      expect(mockOnLinkDocument).not.toHaveBeenCalled();
+    });
+
+    it('should call onUnlinkDocument with the document id when the Unlink button is clicked', async () => {
+      // Arrange
+      const linkedDoc = buildDocument({ document_id: 'doc-1' });
+      renderWithLinking({ savedDocuments: [linkedDoc], withUnlink: true });
+
+      // Act
+      const unlinkButton = screen.getByRole('button', { name: /^unlink$/i });
+
+      // Assert
+      expect(unlinkButton).toBeInTheDocument();
+      await userEvent.click(unlinkButton);
+      await waitFor(() => expect(mockOnUnlinkDocument).toHaveBeenCalledWith('doc-1'));
+    });
+  });
 });

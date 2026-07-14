@@ -148,6 +148,33 @@ def test_download_document_rejects_non_owner_without_requesting_signed_url():
     get_signed_url.assert_not_called()
 
 
+def test_download_document_returns_signed_url_for_owner():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    documents.clear()
+
+    with patch("app.services.storage.upload_file", return_value=f"{user_id}/fakeid.pdf"):
+        upload_response = client.post(
+            "/documents/upload",
+            data={"doc_type": "resume", "doc_title": "My Resume"},
+            files={"file": make_pdf()},
+        )
+    document_id = upload_response.json()["document_id"]
+    fake_url = "https://storage.example.com/signed/resume.pdf?token=abc123"
+
+    # Act
+    with patch("app.services.storage.get_signed_url", return_value=fake_url):
+        response = client.get(f"/documents/download/{document_id}")
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert "url" in body
+    assert isinstance(body["url"], str)
+    assert body["url"]
+
+
 # ---------------------------------------------------------------------------
 # Document metadata: status, tags, updated_at (S3-002)
 # ---------------------------------------------------------------------------

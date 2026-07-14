@@ -98,6 +98,17 @@ class FakeDb:
             return FakeScalarResult([job for job in jobs if str(job.job_poster_id) == user_id])
 
         if entity is JobStageHistory:
+            if "job_poster_id_1" in params:
+                owner_id = str(params["job_poster_id_1"])
+                owned_job_ids = {
+                    str(job.job_id) for job in jobs if str(job.job_poster_id) == owner_id
+                }
+                results = [
+                    history for history in stage_histories if str(history.job_id) in owned_job_ids
+                ]
+                return FakeScalarResult(
+                    sorted(results, key=lambda history: (str(history.job_id), history.changed_at))
+                )
             job_id = str(params["job_id_1"])
             results = [history for history in stage_histories if str(history.job_id) == job_id]
             return FakeScalarResult(sorted(results, key=lambda history: history.changed_at))
@@ -139,15 +150,26 @@ class FakeDb:
                     document for document in results if (document.status or "active") == status
                 ]
             if "doc_type_1" in params:
-                allowed_types = set()
+                # Each doc_type_* param is an independent constraint (the base
+                # .in_(("resume", "cover_letter")) plus any == doc_type query
+                # filter), so intersect them to mirror the SQL AND semantics.
+                constraint_sets = []
                 for key, value in params.items():
                     if not key.startswith("doc_type_"):
                         continue
                     if isinstance(value, (list, tuple, set)):
-                        allowed_types.update(value)
+                        constraint_sets.append(set(value))
                     else:
-                        allowed_types.add(value)
+                        constraint_sets.append({value})
+                allowed_types = set.intersection(*constraint_sets)
                 results = [document for document in results if document.doc_type in allowed_types]
+            if "array_to_string_2" in params:
+                pattern = str(params["array_to_string_2"]).strip("%").lower()
+                results = [
+                    document
+                    for document in results
+                    if pattern in ",".join(document.tags or []).lower()
+                ]
             return FakeScalarResult(
                 sorted(results, key=lambda document: document.created_at, reverse=True)
             )
@@ -473,6 +495,105 @@ def test_job_metrics_only_includes_owned_jobs():
 
     assert response.status_code == 200
     assert response.json()["total_applications"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Stage conversion analytics (S3-BR-014)
+# ---------------------------------------------------------------------------
+
+
+def test_job_analytics_returns_empty_conversion_rates_when_no_jobs_exist():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+
+    # Act
+    response = client.get("/jobs/analytics")
+
+    # Assert
+    assert response.status_code == 200
+    body = response.json()
+    assert body["conversion_rates"] == []
+    assert body["time_in_stage"] == []
+    assert body["weekly_velocity"] == []
+
+
+def test_job_analytics_counts_applied_to_interview_within_14_days():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    applied_at = datetime(2026, 7, 1, tzinfo=UTC)
+    stage_histories.extend(
+        [
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Interested",
+                to_stage="Applied",
+                changed_by=user_id,
+                changed_at=applied_at,
+            ),
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Applied",
+                to_stage="Interview",
+                changed_by=user_id,
+                changed_at=applied_at + timedelta(days=10),
+            ),
+        ]
+    )
+
+    # Act
+    response = client.get("/jobs/analytics")
+
+    # Assert
+    assert response.status_code == 200
+    rates = response.json()["conversion_rates"]
+    assert len(rates) == 1
+    assert rates[0]["from_stage"] == "Applied"
+    assert rates[0]["to_stage"] == "Interview"
+    assert rates[0]["count"] == 1
+    assert rates[0]["rate"] == 1.0
+
+
+def test_job_analytics_excludes_applied_to_interview_beyond_14_days():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    applied_at = datetime(2026, 7, 1, tzinfo=UTC)
+    stage_histories.extend(
+        [
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Interested",
+                to_stage="Applied",
+                changed_by=user_id,
+                changed_at=applied_at,
+            ),
+            JobStageHistory(
+                job_history_id=uuid4(),
+                job_id=job_id,
+                from_stage="Applied",
+                to_stage="Interview",
+                changed_by=user_id,
+                changed_at=applied_at + timedelta(days=20),
+            ),
+        ]
+    )
+
+    # Act
+    response = client.get("/jobs/analytics")
+
+    # Assert
+    assert response.status_code == 200
+    rates = response.json()["conversion_rates"]
+    assert len(rates) == 1
+    assert rates[0]["count"] == 0
+    assert rates[0]["rate"] == 0.0
 
 
 def test_update_job_only_updates_owned_jobs():
@@ -1405,6 +1526,60 @@ def test_list_user_documents_filters_to_supported_business_types():
     assert [document["doc_title"] for document in response.json()] == ["Resume"]
 
 
+def test_list_user_documents_filters_by_doc_type_query_param():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "resume", "doc_title": "My Resume", "content": "Draft."},
+    )
+    client.post(
+        f"/jobs/{job_id}/documents",
+        json={"doc_type": "cover_letter", "doc_title": "My Cover Letter", "content": "Draft."},
+    )
+
+    # Act
+    response = client.get("/jobs/documents?doc_type=resume")
+
+    # Assert
+    assert response.status_code == 200
+    assert [document["doc_title"] for document in response.json()] == ["My Resume"]
+
+
+def test_list_user_documents_filters_by_tag_query_param():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
+    client.post(
+        f"/jobs/{job_id}/documents",
+        json={
+            "doc_type": "resume",
+            "doc_title": "Backend Resume",
+            "content": "Draft.",
+            "tags": ["backend", "python"],
+        },
+    )
+    client.post(
+        f"/jobs/{job_id}/documents",
+        json={
+            "doc_type": "cover_letter",
+            "doc_title": "Design Cover Letter",
+            "content": "Draft.",
+            "tags": ["design"],
+        },
+    )
+
+    # Act
+    response = client.get("/jobs/documents?tag=back")
+
+    # Assert
+    assert response.status_code == 200
+    assert [document["doc_title"] for document in response.json()] == ["Backend Resume"]
+
+
 def test_archive_user_document_hides_it_without_changing_version_history():
     owner_id = str(uuid4())
     set_authenticated_user(owner_id)
@@ -1472,6 +1647,21 @@ def test_archive_and_restore_user_document_reject_unowned_document():
     assert archive_response.status_code == 404
     assert restore_response.status_code == 404
     assert documents[0].status == "active"
+
+
+def test_archive_and_restore_user_document_return_404_for_unknown_document():
+    # Arrange
+    user_id = str(uuid4())
+    set_authenticated_user(user_id)
+    unknown_document_id = uuid4()
+
+    # Act
+    archive_response = client.patch(f"/jobs/documents/{unknown_document_id}/archive")
+    restore_response = client.patch(f"/jobs/documents/{unknown_document_id}/restore")
+
+    # Assert
+    assert archive_response.status_code == 404
+    assert restore_response.status_code == 404
 
 
 def test_delete_job_document_archives_owned_document_without_hard_deleting():
