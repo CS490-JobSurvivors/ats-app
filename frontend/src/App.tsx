@@ -20,57 +20,57 @@ function App() {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <ErrorBoundary>
-      <ProfileProvider>
-        <Router>
-          <Routes>
-            <Route element={<AppShell />}>
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/signup" element={<SignupPage />} />
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <DashboardPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
-                    <ProfilePage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/documents"
-                element={
-                  <ProtectedRoute>
-                    <DocumentLibraryPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <SettingsPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/reset-password"
-                element={
-                  <ProtectedRoute>
-                    <ResetPasswordPage />
-                  </ProtectedRoute>
-                }
-              />
-              <Route path="*" element={<ErrorPage />} />
-            </Route>
-          </Routes>
-        </Router>
-      </ProfileProvider>
+        <ProfileProvider>
+          <Router>
+            <Routes>
+              <Route element={<AppShell />}>
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/signup" element={<SignupPage />} />
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute>
+                      <DashboardPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <ProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/documents"
+                  element={
+                    <ProtectedRoute>
+                      <DocumentLibraryPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute>
+                      <SettingsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/reset-password"
+                  element={
+                    <ProtectedRoute>
+                      <ResetPasswordPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="*" element={<ErrorPage />} />
+              </Route>
+            </Routes>
+          </Router>
+        </ProfileProvider>
       </ErrorBoundary>
     </ThemeProvider>
   );

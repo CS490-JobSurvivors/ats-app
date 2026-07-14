@@ -3,7 +3,6 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.services.error_handling import configure_logging, unhandled_exception_handler
 from app.routes.auth import router as auth_router
 from app.routes.career_preferences import router as career_preferences_router
 from app.routes.documents import router as documents_router
@@ -16,6 +15,7 @@ from app.routes.protected import router as protected_router
 from app.routes.research import router as research_router
 from app.routes.resume import router as resume_router
 from app.routes.skills import router as skills_router
+from app.services.error_handling import configure_logging, unhandled_exception_handler
 
 configure_logging()
 
