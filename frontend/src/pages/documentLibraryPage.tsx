@@ -83,13 +83,11 @@ const DocumentLibraryPage = () => {
 
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'' | DocType>('');
-  const [filterStatus, setFilterStatus] = useState<'' | DocStatus>('');
   const [filterTag, setFilterTag] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
-  const hasActiveFilters = Boolean(filterType || filterTag || filterStatus);
+  const hasActiveFilters = Boolean(filterType || filterTag);
   const visibleDocuments = documents.filter((d) => {
-    if (filterStatus && d.status !== filterStatus) return false;
     if (filterTag && !d.tags.some((t) => t.toLowerCase().includes(filterTag.toLowerCase())))
       return false;
     return true;
@@ -320,7 +318,50 @@ const DocumentLibraryPage = () => {
         </Alert>
       )}
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+      <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap" alignItems="center">
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <InputLabel id="filter-type-label" shrink>
+            Type
+          </InputLabel>
+          <Select
+            labelId="filter-type-label"
+            label="Type"
+            value={filterType}
+            displayEmpty
+            notched
+            onChange={(e) => setFilterType(e.target.value as '' | DocType)}
+          >
+            <MenuItem value="">All</MenuItem>
+            <MenuItem value="resume">Resume</MenuItem>
+            <MenuItem value="cover_letter">Cover Letter</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel id="sort-order-label">Sort by Date</InputLabel>
+          <Select
+            labelId="sort-order-label"
+            label="Sort by Date"
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}
+          >
+            <MenuItem value="desc">Newest First</MenuItem>
+            <MenuItem value="asc">Oldest First</MenuItem>
+          </Select>
+        </FormControl>
+        <TextField
+          size="small"
+          label="Search by tag"
+          value={filterTag}
+          onChange={(e) => setFilterTag(e.target.value)}
+          sx={{ minWidth: 180 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
         <FormControlLabel
           control={
             <Switch
@@ -329,74 +370,9 @@ const DocumentLibraryPage = () => {
             />
           }
           label="Show archived"
+          sx={{ ml: 'auto' }}
         />
-      </Box>
-
-      {!isLoading && (documents.length > 0 || hasActiveFilters) && (
-        <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="filter-type-label" shrink>
-              Type
-            </InputLabel>
-            <Select
-              labelId="filter-type-label"
-              label="Type"
-              value={filterType}
-              displayEmpty
-              notched
-              onChange={(e) => setFilterType(e.target.value as '' | DocType)}
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="resume">Resume</MenuItem>
-              <MenuItem value="cover_letter">Cover Letter</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="filter-status-label" shrink>
-              Status
-            </InputLabel>
-            <Select
-              labelId="filter-status-label"
-              label="Status"
-              value={filterStatus}
-              displayEmpty
-              notched
-              onChange={(e) => setFilterStatus(e.target.value as '' | DocStatus)}
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="active">Active</MenuItem>
-              <MenuItem value="archived">Archived</MenuItem>
-              <MenuItem value="draft">Draft</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel id="sort-order-label">Sort by Date</InputLabel>
-            <Select
-              labelId="sort-order-label"
-              label="Sort by Date"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}
-            >
-              <MenuItem value="desc">Newest First</MenuItem>
-              <MenuItem value="asc">Oldest First</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField
-            size="small"
-            label="Search by tag"
-            value={filterTag}
-            onChange={(e) => setFilterTag(e.target.value)}
-            sx={{ minWidth: 180 }}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon fontSize="small" />
-                </InputAdornment>
-              ),
-            }}
-          />
-        </Stack>
-      )}
+      </Stack>
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -432,7 +408,6 @@ const DocumentLibraryPage = () => {
             size="small"
             onClick={() => {
               setFilterType('');
-              setFilterStatus('');
               setFilterTag('');
             }}
           >
