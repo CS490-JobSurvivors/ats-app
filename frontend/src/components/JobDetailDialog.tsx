@@ -1119,15 +1119,6 @@ const JobDetailDialog = ({
                               Edit
                             </Button>
                           )}
-                          {onDeleteDocument && (
-                            <Button
-                              size="small"
-                              color="error"
-                              onClick={() => setPendingDeleteDocument(document)}
-                            >
-                              Delete
-                            </Button>
-                          )}
                           {onUnlinkDocument && (
                             <Button
                               size="small"
