@@ -1108,6 +1108,10 @@ def test_security_non_owner_cannot_access_job_scoped_resources(
     set_authenticated_user(owner_id)
     job_id = client.post("/jobs", json=create_job_payload()).json()["job_id"]
 
+    prev_interviews = len(interviews)
+    prev_followups = len(followups)
+    prev_documents = len(documents)
+
     set_authenticated_user(other_user_id)
     request = getattr(client, method)
     response = (
@@ -1117,9 +1121,9 @@ def test_security_non_owner_cannot_access_job_scoped_resources(
     )
 
     assert response.status_code == 404
-    assert interviews == []
-    assert followups == []
-    assert documents == []
+    assert len(interviews) == prev_interviews
+    assert len(followups) == prev_followups
+    assert len(documents) == prev_documents
 
 
 def test_security_non_owner_document_update_does_not_create_version_history():
