@@ -92,6 +92,7 @@ interface JobDetailDialogProps {
   libraryDocuments?: DocumentRecord[];
   onLinkDocument?: (documentId: string, existingDocumentId?: string) => Promise<void>;
   onUnlinkDocument?: (documentId: string) => Promise<void>;
+  onDownloadDocument?: (documentId: string) => Promise<void>;
 }
 
 const emptyInterviewForm = {
@@ -207,6 +208,7 @@ const JobDetailDialog = ({
   libraryDocuments,
   onLinkDocument,
   onUnlinkDocument,
+  onDownloadDocument,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
@@ -1032,18 +1034,18 @@ const JobDetailDialog = ({
               <Divider sx={{ mb: 2 }} />
 
               <Typography variant="subtitle2" gutterBottom>
-                Saved Drafts
+                Linked Documents
               </Typography>
               {isSavedDocumentsLoading ? (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
                   <CircularProgress size={18} />
                   <Typography variant="body2" color="text.secondary">
-                    Loading saved drafts...
+                    Loading linked documents...
                   </Typography>
                 </Box>
               ) : savedDocuments.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  No saved drafts yet.
+                  No linked documents yet.
                 </Typography>
               ) : (
                 <Box sx={{ display: 'grid', gap: 1, mb: 2 }}>
@@ -1074,19 +1076,30 @@ const JobDetailDialog = ({
                             v{document.doc_version} &middot;{' '}
                             {formatActivityDate(document.created_at)}
                           </Typography>
-                          <Chip
-                            label={document.status}
-                            size="small"
-                            variant="outlined"
-                            color={
-                              document.status === 'archived'
-                                ? 'error'
-                                : document.status === 'draft'
-                                  ? 'warning'
-                                  : 'default'
-                            }
-                            sx={{ mt: 0.5 }}
-                          />
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                            {document.doc_type && (
+                              <Chip
+                                label={document.doc_type
+                                  .replace(/_/g, ' ')
+                                  .replace(/\b\w/g, (c) => c.toUpperCase())}
+                                size="small"
+                                variant="filled"
+                                color={document.doc_type === 'resume' ? 'primary' : 'secondary'}
+                              />
+                            )}
+                            <Chip
+                              label={document.status}
+                              size="small"
+                              variant="outlined"
+                              color={
+                                document.status === 'archived'
+                                  ? 'error'
+                                  : document.status === 'draft'
+                                    ? 'warning'
+                                    : 'success'
+                              }
+                            />
+                          </Box>
                           {document.tags.length > 0 && (
                             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
                               {document.tags.map((tag) => (
@@ -1096,36 +1109,42 @@ const JobDetailDialog = ({
                           )}
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <Button
-                            size="small"
-                            onClick={async () => {
-                              setViewingDocument(document);
-                              setDocumentVersions([]);
-                              if (onLoadVersions) {
-                                setVersionsLoading(true);
-                                try {
-                                  const versions = await onLoadVersions(document.document_id);
-                                  setDocumentVersions(versions);
-                                } finally {
-                                  setVersionsLoading(false);
-                                }
+                          {document.file_path ? (
+                            <Button
+                              size="small"
+                              onClick={() =>
+                                onDownloadDocument?.(document.document_id).catch(() =>
+                                  setErrorMessage(
+                                    'Unable to download that document. Please try again.'
+                                  )
+                                )
                               }
-                            }}
-                          >
-                            View
-                          </Button>
+                            >
+                              Download
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              onClick={async () => {
+                                setViewingDocument(document);
+                                setDocumentVersions([]);
+                                if (onLoadVersions) {
+                                  setVersionsLoading(true);
+                                  try {
+                                    const versions = await onLoadVersions(document.document_id);
+                                    setDocumentVersions(versions);
+                                  } finally {
+                                    setVersionsLoading(false);
+                                  }
+                                }
+                              }}
+                            >
+                              View
+                            </Button>
+                          )}
                           {onUpdateDocument && (
                             <Button size="small" onClick={() => openEditDocument(document)}>
                               Edit
-                            </Button>
-                          )}
-                          {onDeleteDocument && (
-                            <Button
-                              size="small"
-                              color="error"
-                              onClick={() => setPendingDeleteDocument(document)}
-                            >
-                              Delete
                             </Button>
                           )}
                           {onUnlinkDocument && (
@@ -1144,7 +1163,7 @@ const JobDetailDialog = ({
                 </Box>
               )}
 
-              {onLinkDocument && libraryDocuments && (
+              {onLinkDocument && libraryDocuments && libraryDocuments.length > 0 && (
                 <Button
                   size="small"
                   variant="outlined"
@@ -2029,7 +2048,14 @@ const JobDetailDialog = ({
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5, alignItems: 'center' }}>
                       {doc.doc_type && (
-                        <Chip label={doc.doc_type} size="small" variant="outlined" />
+                        <Chip
+                          label={doc.doc_type
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, (c) => c.toUpperCase())}
+                          size="small"
+                          variant="filled"
+                          color={doc.doc_type === 'resume' ? 'primary' : 'secondary'}
+                        />
                       )}
                       <Typography variant="caption" color="text.secondary">
                         {formatActivityDate(doc.created_at)}
@@ -2050,7 +2076,9 @@ const JobDetailDialog = ({
                         return;
                       }
                       setIsLinking(doc.document_id);
-                      onLinkDocument(doc.document_id).finally(() => setIsLinking(null));
+                      onLinkDocument(doc.document_id)
+                        .then(() => setLinkPickerOpen(false))
+                        .finally(() => setIsLinking(null));
                     }}
                   >
                     {isLinking === doc.document_id ? <CircularProgress size={16} /> : 'Link'}

@@ -52,6 +52,12 @@ const documentTypeLabel = (type: DocumentRecord['doc_type']) => {
   return 'Document';
 };
 
+const documentTypeColor = (type: DocumentRecord['doc_type']) => {
+  if (type === 'resume') return 'primary' as const;
+  if (type === 'cover_letter') return 'secondary' as const;
+  return 'default' as const;
+};
+
 const formatCreatedAt = (value: string) =>
   new Date(value).toLocaleDateString('en-US', {
     month: 'short',
@@ -477,6 +483,7 @@ const DocumentLibraryPage = () => {
                     size="small"
                     label={documentTypeLabel(document.doc_type)}
                     variant="filled"
+                    color={documentTypeColor(document.doc_type)}
                   />
                   {document.file_path && (
                     <Chip size="small" label="Uploaded File" color="primary" variant="outlined" />

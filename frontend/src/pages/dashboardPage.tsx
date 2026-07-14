@@ -46,6 +46,7 @@ import {
   listDocuments,
   linkDocumentToJob,
   unlinkDocumentFromJob,
+  getDocumentDownloadUrl,
   generateCompanyResearch,
   DocumentVersion,
   InterviewPayload,
@@ -366,6 +367,7 @@ const DashboardPage = () => {
     setConfirmDeleteOpen(false);
     setDetailOpen(false);
     await fetchMetrics();
+    await fetchAnalytics();
   };
 
   const handleDetailSave = async (payload: JobPayload) => {
@@ -394,6 +396,7 @@ const DashboardPage = () => {
       }
       await loadJobActivity(selectedJob.job_id);
       await fetchMetrics();
+      await fetchAnalytics();
     } catch {
       setErrorMessage('Unable to delete that stage history. Please try again.');
     }
@@ -558,6 +561,18 @@ const DashboardPage = () => {
     }
   };
 
+  const handleDownloadDocument = async (documentId: string) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    try {
+      const url = await getDocumentDownloadUrl(token, documentId);
+      window.open(url, '_blank');
+    } catch {
+      throw new Error('Download failed');
+    }
+  };
+
   const handleUnlinkDocument = async (documentId: string) => {
     if (!selectedJob) return;
     const { data } = await supabase.auth.getSession();
@@ -565,10 +580,17 @@ const DashboardPage = () => {
     if (!token) return;
 
     setErrorMessage('');
+    const unlinked = selectedJobDocuments.find((d) => d.document_id === documentId);
+    setSelectedJobDocuments((prev) => prev.filter((d) => d.document_id !== documentId));
+    if (unlinked) setLibraryDocuments((prev) => [...prev, { ...unlinked, job_id: null }]);
+
     try {
       await unlinkDocumentFromJob(token, selectedJob.job_id, documentId);
-      await Promise.all([loadJobDocuments(selectedJob.job_id), loadLibraryDocuments()]);
     } catch {
+      if (unlinked) {
+        setSelectedJobDocuments((prev) => [...prev, unlinked]);
+        setLibraryDocuments((prev) => prev.filter((d) => d.document_id !== documentId));
+      }
       setErrorMessage('Unable to unlink that document. Please try again.');
     }
   };
@@ -581,6 +603,7 @@ const DashboardPage = () => {
     setDialogOpen(false);
     await fetchJobs();
     await fetchMetrics();
+    await fetchAnalytics();
   };
 
   return (
@@ -975,6 +998,7 @@ const DashboardPage = () => {
         libraryDocuments={libraryDocuments}
         onLinkDocument={handleLinkDocument}
         onUnlinkDocument={handleUnlinkDocument}
+        onDownloadDocument={handleDownloadDocument}
         onGenerateResearch={async (userContext: string) => {
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;
@@ -992,6 +1016,7 @@ const DashboardPage = () => {
           setSelectedJob(updated);
           await loadJobActivity(updated.job_id);
           await fetchMetrics();
+          await fetchAnalytics();
         }}
         activityEvents={selectedJobActivity}
         isActivityLoading={isActivityLoading}

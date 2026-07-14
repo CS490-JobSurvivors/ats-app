@@ -940,9 +940,8 @@ describe('JobDetailDialog', () => {
     });
   });
 
-  describe('Saved documents', () => {
+  describe('Linked Documents', () => {
     const mockOnSaveDocument = jest.fn();
-    const mockOnDeleteDocument = jest.fn();
     const savedDocuments = [
       {
         document_id: 'doc-1',
@@ -962,9 +961,7 @@ describe('JobDetailDialog', () => {
 
     beforeEach(() => {
       mockOnSaveDocument.mockReset();
-      mockOnDeleteDocument.mockReset();
       mockOnSaveDocument.mockResolvedValue(undefined);
-      mockOnDeleteDocument.mockResolvedValue(undefined);
     });
 
     it('does not show a Save button in the resume dialog when onSaveDocument is not provided', async () => {
@@ -1083,13 +1080,13 @@ describe('JobDetailDialog', () => {
       ).toBeInTheDocument();
     });
 
-    it('shows an empty state when there are no saved drafts', () => {
+    it('shows an empty state when there are no linked documents', () => {
       renderDialog();
-      expect(screen.getByText('Saved Drafts')).toBeInTheDocument();
-      expect(screen.getByText('No saved drafts yet.')).toBeInTheDocument();
+      expect(screen.getByText('Linked Documents')).toBeInTheDocument();
+      expect(screen.getByText('No linked documents yet.')).toBeInTheDocument();
     });
 
-    it('renders saved drafts with version and date', () => {
+    it('renders linked documents with version and date', () => {
       render(
         <JobDetailDialog
           open={true}
@@ -1103,44 +1100,6 @@ describe('JobDetailDialog', () => {
       );
       expect(screen.getByText('Resume - Software Engineer at Acme Corp')).toBeInTheDocument();
       expect(screen.getByText(/v1/)).toBeInTheDocument();
-    });
-
-    it('asks for confirmation before deleting a saved draft', async () => {
-      render(
-        <JobDetailDialog
-          open={true}
-          job={mockJob}
-          onClose={mockOnClose}
-          onSave={mockOnSave}
-          onDelete={mockOnDelete}
-          onStageChange={mockOnStageChange}
-          savedDocuments={savedDocuments}
-          onDeleteDocument={mockOnDeleteDocument}
-        />
-      );
-      await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
-      expect(screen.getByText(/delete saved draft/i)).toBeInTheDocument();
-      expect(mockOnDeleteDocument).not.toHaveBeenCalled();
-    });
-
-    it('calls onDeleteDocument after confirming deletion', async () => {
-      render(
-        <JobDetailDialog
-          open={true}
-          job={mockJob}
-          onClose={mockOnClose}
-          onSave={mockOnSave}
-          onDelete={mockOnDelete}
-          onStageChange={mockOnStageChange}
-          savedDocuments={savedDocuments}
-          onDeleteDocument={mockOnDeleteDocument}
-        />
-      );
-      await userEvent.click(screen.getAllByRole('button', { name: /^delete$/i })[0]);
-      const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
-      await userEvent.click(deleteButtons[deleteButtons.length - 1]);
-
-      expect(mockOnDeleteDocument).toHaveBeenCalledWith('doc-1');
     });
   });
 
@@ -1167,7 +1126,7 @@ describe('JobDetailDialog', () => {
       ...overrides,
     });
 
-    /** Renders the dialog with a single saved document and metadata editing enabled. */
+    /** Renders the dialog with a single linked document and metadata editing enabled. */
     const renderWithDocument = (
       overrides: Partial<DocumentRecord> = {},
       { withUpdateHandler = true } = {}
@@ -1188,7 +1147,7 @@ describe('JobDetailDialog', () => {
     const DOCUMENT_TITLE = 'Resume - Software Engineer at Acme Corp';
 
     /**
-     * Scopes queries to a saved document's row. The dialog also renders an "Edit"
+     * Scopes queries to a linked document's row. The dialog also renders an "Edit"
      * button for the job itself, so row-scoping is required to disambiguate.
      */
     const getDocumentRow = (title = DOCUMENT_TITLE): HTMLElement => {
