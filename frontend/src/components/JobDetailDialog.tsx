@@ -1032,18 +1032,18 @@ const JobDetailDialog = ({
               <Divider sx={{ mb: 2 }} />
 
               <Typography variant="subtitle2" gutterBottom>
-                Saved Drafts
+                Linked Documents
               </Typography>
               {isSavedDocumentsLoading ? (
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 1 }}>
                   <CircularProgress size={18} />
                   <Typography variant="body2" color="text.secondary">
-                    Loading saved drafts...
+                    Loading linked documents...
                   </Typography>
                 </Box>
               ) : savedDocuments.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  No saved drafts yet.
+                  No linked documents yet.
                 </Typography>
               ) : (
                 <Box sx={{ display: 'grid', gap: 1, mb: 2 }}>

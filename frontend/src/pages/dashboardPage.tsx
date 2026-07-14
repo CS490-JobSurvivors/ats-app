@@ -366,6 +366,7 @@ const DashboardPage = () => {
     setConfirmDeleteOpen(false);
     setDetailOpen(false);
     await fetchMetrics();
+    await fetchAnalytics();
   };
 
   const handleDetailSave = async (payload: JobPayload) => {
@@ -394,6 +395,7 @@ const DashboardPage = () => {
       }
       await loadJobActivity(selectedJob.job_id);
       await fetchMetrics();
+      await fetchAnalytics();
     } catch {
       setErrorMessage('Unable to delete that stage history. Please try again.');
     }
@@ -581,6 +583,7 @@ const DashboardPage = () => {
     setDialogOpen(false);
     await fetchJobs();
     await fetchMetrics();
+    await fetchAnalytics();
   };
 
   return (
@@ -992,6 +995,7 @@ const DashboardPage = () => {
           setSelectedJob(updated);
           await loadJobActivity(updated.job_id);
           await fetchMetrics();
+          await fetchAnalytics();
         }}
         activityEvents={selectedJobActivity}
         isActivityLoading={isActivityLoading}

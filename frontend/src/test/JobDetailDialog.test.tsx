@@ -1083,10 +1083,10 @@ describe('JobDetailDialog', () => {
       ).toBeInTheDocument();
     });
 
-    it('shows an empty state when there are no saved drafts', () => {
+    it('shows an empty state when there are no linked documents', () => {
       renderDialog();
-      expect(screen.getByText('Saved Drafts')).toBeInTheDocument();
-      expect(screen.getByText('No saved drafts yet.')).toBeInTheDocument();
+      expect(screen.getByText('Linked Documents')).toBeInTheDocument();
+      expect(screen.getByText('No linked documents yet.')).toBeInTheDocument();
     });
 
     it('renders saved drafts with version and date', () => {
