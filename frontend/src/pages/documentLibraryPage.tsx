@@ -327,14 +327,18 @@ const DocumentLibraryPage = () => {
         />
       </Box>
 
-      {!isLoading && documents.length > 0 && (
+      {!isLoading && (documents.length > 0 || hasActiveFilters) && (
         <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
           <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="filter-type-label">Type</InputLabel>
+            <InputLabel id="filter-type-label" shrink>
+              Type
+            </InputLabel>
             <Select
               labelId="filter-type-label"
               label="Type"
               value={filterType}
+              displayEmpty
+              notched
               onChange={(e) => setFilterType(e.target.value as '' | DocType)}
             >
               <MenuItem value="">All</MenuItem>
@@ -343,11 +347,15 @@ const DocumentLibraryPage = () => {
             </Select>
           </FormControl>
           <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="filter-status-label">Status</InputLabel>
+            <InputLabel id="filter-status-label" shrink>
+              Status
+            </InputLabel>
             <Select
               labelId="filter-status-label"
               label="Status"
               value={filterStatus}
+              displayEmpty
+              notched
               onChange={(e) => setFilterStatus(e.target.value as '' | DocStatus)}
             >
               <MenuItem value="">All</MenuItem>
@@ -404,7 +412,21 @@ const DocumentLibraryPage = () => {
           </Typography>
         </Paper>
       ) : visibleDocuments.length === 0 ? (
-        <Typography color="text.secondary">No documents match the selected filter.</Typography>
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography color="text.secondary" sx={{ mb: 1 }}>
+            No documents match the selected filters.
+          </Typography>
+          <Button
+            size="small"
+            onClick={() => {
+              setFilterType('');
+              setFilterStatus('');
+              setFilterTag('');
+            }}
+          >
+            Clear filters
+          </Button>
+        </Box>
       ) : (
         <Stack spacing={2}>
           {visibleDocuments.map((document) => (
