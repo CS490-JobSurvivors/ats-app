@@ -187,7 +187,7 @@ const EducationSection = ({
     if (!form.is_current && form.end_date && form.end_date < form.start_date) {
       errors.end_date = 'End date cannot be earlier than start date.';
     }
-    if (form.GPA !== null && form.GPA < 0) errors.GPA = 'GPA cannot be negative.';
+    if (form.GPA != null && form.GPA < 0) errors.GPA = 'GPA cannot be negative.';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
