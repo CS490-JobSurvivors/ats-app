@@ -5,11 +5,13 @@ import DocumentLibraryPage from '../pages/documentLibraryPage';
 import { supabase } from '../utils/supabaseClient';
 import {
   archiveDocument,
+  duplicateDocument,
   getDocumentDownloadUrl,
   listDocumentVersions,
   listDocuments,
   restoreDocument,
   updateJobDocument,
+  updateLibraryDocument,
   uploadDocument,
 } from '../api/jobs';
 
@@ -23,21 +25,25 @@ jest.mock('../utils/supabaseClient', () => ({
 
 jest.mock('../api/jobs', () => ({
   archiveDocument: jest.fn(),
+  duplicateDocument: jest.fn(),
   getDocumentDownloadUrl: jest.fn(),
   listDocumentVersions: jest.fn(),
   listDocuments: jest.fn(),
   restoreDocument: jest.fn(),
   updateJobDocument: jest.fn(),
+  updateLibraryDocument: jest.fn(),
   uploadDocument: jest.fn(),
 }));
 
 const mockGetSession = supabase.auth.getSession as jest.Mock;
 const mockArchiveDocument = archiveDocument as jest.Mock;
+const mockDuplicateDocument = duplicateDocument as jest.Mock;
 const mockGetDocumentDownloadUrl = getDocumentDownloadUrl as jest.Mock;
 const mockListDocumentVersions = listDocumentVersions as jest.Mock;
 const mockListDocuments = listDocuments as jest.Mock;
 const mockRestoreDocument = restoreDocument as jest.Mock;
 const mockUpdateJobDocument = updateJobDocument as jest.Mock;
+const mockUpdateLibraryDocument = updateLibraryDocument as jest.Mock;
 const mockUploadDocument = uploadDocument as jest.Mock;
 
 const documents = [
@@ -87,7 +93,9 @@ describe('DocumentLibraryPage', () => {
     mockArchiveDocument.mockResolvedValue({ ...documents[0], status: 'archived' });
     mockRestoreDocument.mockResolvedValue({ ...archivedDocument, status: 'active' });
     mockUpdateJobDocument.mockResolvedValue({ ...documents[0], doc_title: 'Updated Resume' });
+    mockUpdateLibraryDocument.mockResolvedValue({ ...documents[0], doc_title: 'Updated Resume' });
     mockGetDocumentDownloadUrl.mockResolvedValue('https://example.com/signed-download');
+    mockDuplicateDocument.mockResolvedValue({ ...documents[0], document_id: 'doc-copy' });
   });
 
   afterEach(() => {
@@ -554,5 +562,105 @@ describe('DocumentLibraryPage', () => {
     expect(
       resumeEl.compareDocumentPosition(coverLetterEl) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+  });
+
+  it('opens the edit dialog for an unlinked document and saves via updateLibraryDocument', async () => {
+    const unlinkedDoc = {
+      document_id: 'doc-unlinked',
+      user_id: 'user-1',
+      job_id: null,
+      doc_type: 'resume',
+      doc_title: 'Standalone Resume',
+      content: null,
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-07-10T12:00:00Z',
+    };
+    mockListDocuments.mockResolvedValueOnce([unlinkedDoc]);
+    mockUpdateLibraryDocument.mockResolvedValueOnce({
+      ...unlinkedDoc,
+      doc_title: 'Updated Standalone',
+    });
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Standalone Resume');
+
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Updated Standalone' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() =>
+      expect(mockUpdateLibraryDocument).toHaveBeenCalledWith('test-token', 'doc-unlinked', {
+        doc_title: 'Updated Standalone',
+        status: 'active',
+        tags: [],
+      })
+    );
+    expect(await screen.findByText('Updated Standalone')).toBeInTheDocument();
+  });
+
+  it('calls duplicateDocument and prepends the copy to the document list', async () => {
+    const copy = {
+      ...documents[0],
+      document_id: 'doc-1-copy',
+      doc_title: 'Copy of Resume - Software Engineer at Acme',
+      doc_version: 1,
+    };
+    mockDuplicateDocument.mockResolvedValueOnce(copy);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    // default sort is newest-first; doc-2 (Cover Letter) is at [0], doc-1 (Resume) is at [1]
+    await userEvent.click(screen.getAllByRole('button', { name: /^duplicate$/i })[1]);
+
+    await waitFor(() => expect(mockDuplicateDocument).toHaveBeenCalledWith('test-token', 'doc-1'));
+    expect(
+      await screen.findByText('Copy of Resume - Software Engineer at Acme')
+    ).toBeInTheDocument();
+  });
+
+  it('shows an error in the edit dialog when saving an unlinked document fails', async () => {
+    const unlinkedDoc = {
+      document_id: 'doc-unlinked',
+      user_id: 'user-1',
+      job_id: null,
+      doc_type: 'resume',
+      doc_title: 'Standalone Resume',
+      content: null,
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-07-10T12:00:00Z',
+    };
+    mockListDocuments.mockResolvedValueOnce([unlinkedDoc]);
+    mockUpdateLibraryDocument.mockRejectedValueOnce(new Error('network error'));
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Standalone Resume');
+
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
+
+    expect(await screen.findByText('Failed to update document.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /edit document/i })).toBeInTheDocument();
+  });
+
+  it('shows an error when duplicate fails', async () => {
+    mockDuplicateDocument.mockRejectedValueOnce(new Error('network error'));
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    await userEvent.click(screen.getAllByRole('button', { name: /^duplicate$/i })[0]);
+
+    expect(
+      await screen.findByText('Unable to duplicate document. Please try again.')
+    ).toBeInTheDocument();
   });
 });

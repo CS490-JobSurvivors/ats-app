@@ -37,6 +37,8 @@ import {
   restoreDocument,
   updateJobDocument,
   uploadDocument,
+  updateLibraryDocument,
+  duplicateDocument,
 } from '../api/jobs';
 
 const documentTypeLabel = (type: DocumentRecord['doc_type']) => {
@@ -87,6 +89,8 @@ const DocumentLibraryPage = () => {
   const visibleDocuments = filterStatus
     ? documents.filter((d) => d.status === filterStatus)
     : documents;
+
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
   const [editDocForm, setEditDocForm] = useState<{
@@ -210,7 +214,7 @@ const DocumentLibraryPage = () => {
   };
 
   const saveEditDocument = async () => {
-    if (!editingDocument?.job_id) return;
+    if (!editingDocument) return;
     setIsUpdatingDocument(true);
     setEditDocError('');
     try {
@@ -224,12 +228,14 @@ const DocumentLibraryPage = () => {
         status: editDocForm.status,
         tags,
       };
-      const updated = await updateJobDocument(
-        token,
-        editingDocument.job_id,
-        editingDocument.document_id,
-        payload
-      );
+      const updated = editingDocument.job_id
+        ? await updateJobDocument(
+            token,
+            editingDocument.job_id,
+            editingDocument.document_id,
+            payload
+          )
+        : await updateLibraryDocument(token, editingDocument.document_id, payload);
       setDocuments((prev) =>
         prev.map((document) => (document.document_id === updated.document_id ? updated : document))
       );
@@ -253,6 +259,19 @@ const DocumentLibraryPage = () => {
       setDocumentVersions(versions);
     } finally {
       setVersionsLoading(false);
+    }
+  };
+
+  const handleDuplicate = async (doc: DocumentRecord) => {
+    setDuplicatingId(doc.document_id);
+    try {
+      const token = await getAccessToken();
+      const copy = await duplicateDocument(token, doc.document_id);
+      setDocuments((prev) => [copy, ...prev]);
+    } catch {
+      setErrorMessage('Unable to duplicate document. Please try again.');
+    } finally {
+      setDuplicatingId(null);
     }
   };
 
@@ -434,15 +453,9 @@ const DocumentLibraryPage = () => {
                 </Typography>
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
-                {document.job_id && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => openEditDocument(document)}
-                  >
-                    Edit
-                  </Button>
-                )}
+                <Button variant="outlined" size="small" onClick={() => openEditDocument(document)}>
+                  Edit
+                </Button>
                 {document.file_path && (
                   <Button
                     variant="outlined"
@@ -466,6 +479,14 @@ const DocumentLibraryPage = () => {
                   onClick={() => handleArchiveToggle(document)}
                 >
                   {document.status === 'archived' ? 'Restore' : 'Archive'}
+                </Button>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  disabled={duplicatingId === document.document_id}
+                  onClick={() => handleDuplicate(document)}
+                >
+                  {duplicatingId === document.document_id ? 'Duplicating...' : 'Duplicate'}
                 </Button>
               </Stack>
             </Paper>
