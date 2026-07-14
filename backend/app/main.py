@@ -15,8 +15,13 @@ from app.routes.protected import router as protected_router
 from app.routes.research import router as research_router
 from app.routes.resume import router as resume_router
 from app.routes.skills import router as skills_router
+from app.services.error_handling import configure_logging, unhandled_exception_handler
+
+configure_logging()
 
 app = FastAPI()
+
+app.add_exception_handler(Exception, unhandled_exception_handler)
 
 _raw_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000")
 _allowed_origins = [o.strip() for o in _raw_origins.split(",")]
