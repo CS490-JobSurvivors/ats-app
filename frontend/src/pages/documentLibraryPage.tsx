@@ -84,7 +84,6 @@ const DocumentLibraryPage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'' | DocType>('');
   const [filterTag, setFilterTag] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
@@ -180,15 +179,20 @@ const DocumentLibraryPage = () => {
   const handleDownload = async (doc: DocumentRecord) => {
     if (!doc.file_path) return;
     setActionErrorMessage('');
-    setDownloadingId(doc.document_id);
     try {
       const token = await getAccessToken();
       const url = await getDocumentDownloadUrl(token, doc.document_id);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const ext = doc.file_path.split('.').pop() ?? '';
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = ext ? `${doc.doc_title}.${ext}` : doc.doc_title;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
     } catch {
       setActionErrorMessage('Unable to download document. Please try again.');
-    } finally {
-      setDownloadingId(null);
     }
   };
 
@@ -517,14 +521,12 @@ const DocumentLibraryPage = () => {
         </MenuItem>
         {menuDocument?.file_path && (
           <MenuItem
-            disabled={downloadingId === menuDocument.document_id}
             onClick={() => {
               if (menuDocument) handleDownload(menuDocument);
               setMenuAnchor(null);
-              setMenuDocument(null);
             }}
           >
-            {downloadingId === menuDocument.document_id ? 'Downloading...' : 'Download'}
+            Download
           </MenuItem>
         )}
         {menuDocument?.content && (
@@ -532,7 +534,6 @@ const DocumentLibraryPage = () => {
             onClick={() => {
               if (menuDocument) openDocument(menuDocument);
               setMenuAnchor(null);
-              setMenuDocument(null);
             }}
           >
             View
