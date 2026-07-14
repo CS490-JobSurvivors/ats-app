@@ -17,7 +17,7 @@ const JobCard = ({ title, company, stage, lastActivity, onClick }: JobCardProps)
       <Box sx={{ display: 'flex', alignItems: 'stretch' }}>
         <ButtonBase
           onClick={onClick}
-          aria-label={`${title} at ${company}, ${stage} stage`}
+          aria-label={`${title} at ${company}, ${stage}`}
           sx={{
             flex: 1,
             p: 2,
