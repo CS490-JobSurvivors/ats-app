@@ -37,7 +37,7 @@ import {
   restoreDocument,
   updateJobDocument,
   uploadDocument,
-  renameDocument,
+  updateLibraryDocument,
   duplicateDocument,
 } from '../api/jobs';
 
@@ -90,9 +90,6 @@ const DocumentLibraryPage = () => {
     ? documents.filter((d) => d.status === filterStatus)
     : documents;
 
-  const [renamingDocument, setRenamingDocument] = useState<DocumentRecord | null>(null);
-  const [renameTitle, setRenameTitle] = useState('');
-  const [renameError, setRenameError] = useState('');
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
@@ -217,7 +214,7 @@ const DocumentLibraryPage = () => {
   };
 
   const saveEditDocument = async () => {
-    if (!editingDocument?.job_id) return;
+    if (!editingDocument) return;
     setIsUpdatingDocument(true);
     setEditDocError('');
     try {
@@ -231,12 +228,14 @@ const DocumentLibraryPage = () => {
         status: editDocForm.status,
         tags,
       };
-      const updated = await updateJobDocument(
-        token,
-        editingDocument.job_id,
-        editingDocument.document_id,
-        payload
-      );
+      const updated = editingDocument.job_id
+        ? await updateJobDocument(
+            token,
+            editingDocument.job_id,
+            editingDocument.document_id,
+            payload
+          )
+        : await updateLibraryDocument(token, editingDocument.document_id, payload);
       setDocuments((prev) =>
         prev.map((document) => (document.document_id === updated.document_id ? updated : document))
       );
@@ -260,21 +259,6 @@ const DocumentLibraryPage = () => {
       setDocumentVersions(versions);
     } finally {
       setVersionsLoading(false);
-    }
-  };
-
-  const handleRenameSubmit = async () => {
-    if (!renamingDocument || !renameTitle.trim()) return;
-    setRenameError('');
-    try {
-      const token = await getAccessToken();
-      const updated = await renameDocument(token, renamingDocument.document_id, renameTitle.trim());
-      setDocuments((prev) =>
-        prev.map((d) => (d.document_id === updated.document_id ? updated : d))
-      );
-      setRenamingDocument(null);
-    } catch {
-      setRenameError('Unable to rename document. Please try again.');
     }
   };
 
@@ -469,15 +453,9 @@ const DocumentLibraryPage = () => {
                 </Typography>
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
-                {document.job_id && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={() => openEditDocument(document)}
-                  >
-                    Edit
-                  </Button>
-                )}
+                <Button variant="outlined" size="small" onClick={() => openEditDocument(document)}>
+                  Edit
+                </Button>
                 {document.file_path && (
                   <Button
                     variant="outlined"
@@ -501,17 +479,6 @@ const DocumentLibraryPage = () => {
                   onClick={() => handleArchiveToggle(document)}
                 >
                   {document.status === 'archived' ? 'Restore' : 'Archive'}
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    setRenamingDocument(document);
-                    setRenameTitle(document.doc_title);
-                    setRenameError('');
-                  }}
-                >
-                  Rename
                 </Button>
                 <Button
                   variant="outlined"
@@ -767,36 +734,6 @@ const DocumentLibraryPage = () => {
             disabled={!uploadFile || !uploadDocTitle.trim() || isUploading}
           >
             {isUploading ? 'Uploading...' : 'Upload'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Rename dialog */}
-      <Dialog
-        open={Boolean(renamingDocument)}
-        onClose={() => setRenamingDocument(null)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>Rename Document</DialogTitle>
-        <Divider />
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            {renameError && <Alert severity="error">{renameError}</Alert>}
-            <TextField
-              label="New Title"
-              value={renameTitle}
-              onChange={(e) => setRenameTitle(e.target.value)}
-              fullWidth
-              size="small"
-              autoFocus
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRenamingDocument(null)}>Cancel</Button>
-          <Button variant="contained" onClick={handleRenameSubmit} disabled={!renameTitle.trim()}>
-            Save
           </Button>
         </DialogActions>
       </Dialog>

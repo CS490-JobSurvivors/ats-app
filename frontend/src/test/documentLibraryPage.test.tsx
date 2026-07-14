@@ -9,9 +9,9 @@ import {
   getDocumentDownloadUrl,
   listDocumentVersions,
   listDocuments,
-  renameDocument,
   restoreDocument,
   updateJobDocument,
+  updateLibraryDocument,
   uploadDocument,
 } from '../api/jobs';
 
@@ -29,9 +29,9 @@ jest.mock('../api/jobs', () => ({
   getDocumentDownloadUrl: jest.fn(),
   listDocumentVersions: jest.fn(),
   listDocuments: jest.fn(),
-  renameDocument: jest.fn(),
   restoreDocument: jest.fn(),
   updateJobDocument: jest.fn(),
+  updateLibraryDocument: jest.fn(),
   uploadDocument: jest.fn(),
 }));
 
@@ -41,9 +41,9 @@ const mockDuplicateDocument = duplicateDocument as jest.Mock;
 const mockGetDocumentDownloadUrl = getDocumentDownloadUrl as jest.Mock;
 const mockListDocumentVersions = listDocumentVersions as jest.Mock;
 const mockListDocuments = listDocuments as jest.Mock;
-const mockRenameDocument = renameDocument as jest.Mock;
 const mockRestoreDocument = restoreDocument as jest.Mock;
 const mockUpdateJobDocument = updateJobDocument as jest.Mock;
+const mockUpdateLibraryDocument = updateLibraryDocument as jest.Mock;
 const mockUploadDocument = uploadDocument as jest.Mock;
 
 const documents = [
@@ -93,8 +93,8 @@ describe('DocumentLibraryPage', () => {
     mockArchiveDocument.mockResolvedValue({ ...documents[0], status: 'archived' });
     mockRestoreDocument.mockResolvedValue({ ...archivedDocument, status: 'active' });
     mockUpdateJobDocument.mockResolvedValue({ ...documents[0], doc_title: 'Updated Resume' });
+    mockUpdateLibraryDocument.mockResolvedValue({ ...documents[0], doc_title: 'Updated Resume' });
     mockGetDocumentDownloadUrl.mockResolvedValue('https://example.com/signed-download');
-    mockRenameDocument.mockResolvedValue({ ...documents[0] });
     mockDuplicateDocument.mockResolvedValue({ ...documents[0], document_id: 'doc-copy' });
   });
 
@@ -564,33 +564,42 @@ describe('DocumentLibraryPage', () => {
     ).toBeTruthy();
   });
 
-  it('opens the rename dialog pre-filled with the current title and updates the document on submit', async () => {
-    const renamed = { ...documents[0], doc_title: 'New Resume Title' };
-    mockRenameDocument.mockResolvedValueOnce(renamed);
+  it('opens the edit dialog for an unlinked document and saves via updateLibraryDocument', async () => {
+    const unlinkedDoc = {
+      document_id: 'doc-unlinked',
+      user_id: 'user-1',
+      job_id: null,
+      doc_type: 'resume',
+      doc_title: 'Standalone Resume',
+      content: null,
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-07-10T12:00:00Z',
+    };
+    mockListDocuments.mockResolvedValueOnce([unlinkedDoc]);
+    mockUpdateLibraryDocument.mockResolvedValueOnce({
+      ...unlinkedDoc,
+      doc_title: 'Updated Standalone',
+    });
 
     render(<DocumentLibraryPage />);
-    await screen.findByText('Resume - Software Engineer at Acme');
+    await screen.findByText('Standalone Resume');
 
-    // default sort is newest-first; doc-2 (Cover Letter) renders first, doc-1 (Resume) is at [1]
-    await userEvent.click(screen.getAllByRole('button', { name: /^rename$/i })[1]);
-
-    const dialog = screen.getByRole('dialog', { name: /rename document/i });
-    expect(dialog).toBeInTheDocument();
-
-    const titleInput = within(dialog).getByRole('textbox');
-    expect(titleInput).toHaveValue('Resume - Software Engineer at Acme');
-
-    await userEvent.clear(titleInput);
-    await userEvent.type(titleInput, 'New Resume Title');
-    await userEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Updated Standalone' } });
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     await waitFor(() =>
-      expect(mockRenameDocument).toHaveBeenCalledWith('test-token', 'doc-1', 'New Resume Title')
+      expect(mockUpdateLibraryDocument).toHaveBeenCalledWith('test-token', 'doc-unlinked', {
+        doc_title: 'Updated Standalone',
+        status: 'active',
+        tags: [],
+      })
     );
-    expect(await screen.findByText('New Resume Title')).toBeInTheDocument();
-    await waitFor(() =>
-      expect(screen.queryByRole('dialog', { name: /rename document/i })).not.toBeInTheDocument()
-    );
+    expect(await screen.findByText('Updated Standalone')).toBeInTheDocument();
   });
 
   it('calls duplicateDocument and prepends the copy to the document list', async () => {
@@ -614,24 +623,32 @@ describe('DocumentLibraryPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows an error in the rename dialog when rename fails', async () => {
-    mockRenameDocument.mockRejectedValueOnce(new Error('network error'));
+  it('shows an error in the edit dialog when saving an unlinked document fails', async () => {
+    const unlinkedDoc = {
+      document_id: 'doc-unlinked',
+      user_id: 'user-1',
+      job_id: null,
+      doc_type: 'resume',
+      doc_title: 'Standalone Resume',
+      content: null,
+      file_path: null,
+      doc_version: 1,
+      status: 'active',
+      tags: [],
+      updated_at: null,
+      created_at: '2026-07-10T12:00:00Z',
+    };
+    mockListDocuments.mockResolvedValueOnce([unlinkedDoc]);
+    mockUpdateLibraryDocument.mockRejectedValueOnce(new Error('network error'));
 
     render(<DocumentLibraryPage />);
-    await screen.findByText('Resume - Software Engineer at Acme');
+    await screen.findByText('Standalone Resume');
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^rename$/i })[0]);
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
-    const dialog = screen.getByRole('dialog', { name: /rename document/i });
-    const titleInput = within(dialog).getByRole('textbox');
-    await userEvent.clear(titleInput);
-    await userEvent.type(titleInput, 'New Title');
-    await userEvent.click(within(dialog).getByRole('button', { name: /^save$/i }));
-
-    expect(
-      await screen.findByText('Unable to rename document. Please try again.')
-    ).toBeInTheDocument();
-    expect(screen.getByRole('dialog', { name: /rename document/i })).toBeInTheDocument();
+    expect(await screen.findByText('Failed to update document.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /edit document/i })).toBeInTheDocument();
   });
 
   it('shows an error when duplicate fails', async () => {

@@ -285,6 +285,23 @@ def list_user_documents(
     return db.scalars(select(Document).where(*conditions).order_by(order_expr)).all()
 
 
+@router.patch("/documents/{document_id}", response_model=DocumentRead)
+def update_library_document(
+    document_id: UUID,
+    document_update: DocumentUpdate,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+    db_document = get_owned_library_document_or_404(document_id, owner_id, db)
+    for field, value in document_update.model_dump(exclude_unset=True).items():
+        setattr(db_document, field, value)
+    db_document.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(db_document)
+    return db_document
+
+
 @router.patch("/documents/{document_id}/archive", response_model=DocumentRead)
 def archive_user_document(
     document_id: UUID,

@@ -565,6 +565,27 @@ export const deleteJobDocument = async (
   }
 };
 
+export const updateLibraryDocument = async (
+  accessToken: string,
+  documentId: string,
+  payload: DocumentUpdatePayload
+): Promise<DocumentRecord> => {
+  const response = await fetch(`${API_URL}/jobs/documents/${documentId}`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(accessToken),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to update document.');
+  }
+
+  return await response.json();
+};
+
 export const updateJobDocument = async (
   accessToken: string,
   jobId: string,
