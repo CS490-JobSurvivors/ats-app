@@ -85,11 +85,13 @@ const DocumentLibraryPage = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [filterType, setFilterType] = useState<'' | DocType>('');
+  const [filterStatus, setFilterStatus] = useState<'' | DocStatus>('');
   const [filterTag, setFilterTag] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
-  const hasActiveFilters = Boolean(filterType || filterTag);
+  const hasActiveFilters = Boolean(filterType || filterTag || filterStatus);
   const visibleDocuments = documents.filter((d) => {
+    if (filterStatus && d.status !== filterStatus) return false;
     if (filterTag && !d.tags.some((t) => t.toLowerCase().includes(filterTag.toLowerCase())))
       return false;
     return true;
@@ -345,6 +347,24 @@ const DocumentLibraryPage = () => {
             <MenuItem value="cover_letter">Cover Letter</MenuItem>
           </Select>
         </FormControl>
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <InputLabel id="filter-status-label" shrink>
+            Status
+          </InputLabel>
+          <Select
+            labelId="filter-status-label"
+            label="Status"
+            value={filterStatus}
+            displayEmpty
+            notched
+            onChange={(e) => setFilterStatus(e.target.value as '' | DocStatus)}
+          >
+            <MenuItem value="">All</MenuItem>
+            <MenuItem value="active">Active</MenuItem>
+            <MenuItem value="draft">Draft</MenuItem>
+            <MenuItem value="archived">Archived</MenuItem>
+          </Select>
+        </FormControl>
         <FormControl size="small" sx={{ minWidth: 160 }}>
           <InputLabel id="sort-order-label">Sort by Date</InputLabel>
           <Select
@@ -417,6 +437,7 @@ const DocumentLibraryPage = () => {
             size="small"
             onClick={() => {
               setFilterType('');
+              setFilterStatus('');
               setFilterTag('');
             }}
           >

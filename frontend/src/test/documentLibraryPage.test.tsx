@@ -466,6 +466,28 @@ describe('DocumentLibraryPage', () => {
     expect(await screen.findByText('No documents match the selected filters.')).toBeInTheDocument();
   });
 
+  it('filters to only documents matching the selected status', async () => {
+    const draftDoc = {
+      ...documents[0],
+      document_id: 'doc-draft',
+      doc_title: 'Draft Resume',
+      status: 'draft',
+      created_at: '2026-07-03T12:00:00Z',
+    };
+    mockListDocuments.mockResolvedValueOnce([...documents, draftDoc]);
+
+    render(<DocumentLibraryPage />);
+    await screen.findByText('Resume - Software Engineer at Acme');
+
+    const [, statusSelect] = screen.getAllByRole('combobox');
+    fireEvent.mouseDown(statusSelect);
+    await userEvent.click(await screen.findByRole('option', { name: /^active$/i }));
+
+    expect(screen.getByText('Resume - Software Engineer at Acme')).toBeInTheDocument();
+    expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
+    expect(screen.queryByText('Draft Resume')).not.toBeInTheDocument();
+  });
+
   it('filters documents by tag substring match', async () => {
     mockListDocuments.mockResolvedValueOnce([documents[1], documents[0]]);
 
@@ -496,8 +518,8 @@ describe('DocumentLibraryPage', () => {
       coverLetterEl.compareDocumentPosition(resumeEl) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
 
-    // Sort is the second combobox: Type (0), Sort (1)
-    const sortSelect = screen.getAllByRole('combobox')[1];
+    // Sort is the third combobox: Type (0), Status (1), Sort (2)
+    const sortSelect = screen.getAllByRole('combobox')[2];
     fireEvent.mouseDown(sortSelect);
     await userEvent.click(await screen.findByRole('option', { name: /oldest first/i }));
 
