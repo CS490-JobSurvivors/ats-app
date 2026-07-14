@@ -12,7 +12,10 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  IconButton,
+  InputAdornment,
   InputLabel,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -22,6 +25,8 @@ import {
   Typography,
 } from '@mui/material';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import SearchIcon from '@mui/icons-material/Search';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { supabase } from '../utils/supabaseClient';
 import {
@@ -57,7 +62,7 @@ const formatCreatedAt = (value: string) =>
 const statusColor = (status: DocStatus) => {
   if (status === 'archived') return 'error';
   if (status === 'draft') return 'warning';
-  return 'default';
+  return 'success';
 };
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.docx', '.txt'];
@@ -79,18 +84,22 @@ const DocumentLibraryPage = () => {
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [filterType, setFilterType] = useState<'' | DocType>('');
   const [filterStatus, setFilterStatus] = useState<'' | DocStatus>('');
   const [filterTag, setFilterTag] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   const hasActiveFilters = Boolean(filterType || filterTag || filterStatus);
-  const visibleDocuments = filterStatus
-    ? documents.filter((d) => d.status === filterStatus)
-    : documents;
+  const visibleDocuments = documents.filter((d) => {
+    if (filterStatus && d.status !== filterStatus) return false;
+    if (filterTag && !d.tags.some((t) => t.toLowerCase().includes(filterTag.toLowerCase())))
+      return false;
+    return true;
+  });
 
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [menuDocument, setMenuDocument] = useState<DocumentRecord | null>(null);
 
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
   const [editDocForm, setEditDocForm] = useState<{
@@ -121,7 +130,7 @@ const DocumentLibraryPage = () => {
         token,
         includeArchived,
         filterType || undefined,
-        filterTag || undefined,
+        undefined,
         sortOrder
       );
       setDocuments(result);
@@ -130,7 +139,7 @@ const DocumentLibraryPage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [getAccessToken, includeArchived, filterType, filterTag, sortOrder]);
+  }, [getAccessToken, includeArchived, filterType, sortOrder]);
 
   useEffect(() => {
     loadDocuments();
@@ -172,15 +181,20 @@ const DocumentLibraryPage = () => {
   const handleDownload = async (doc: DocumentRecord) => {
     if (!doc.file_path) return;
     setActionErrorMessage('');
-    setDownloadingId(doc.document_id);
     try {
       const token = await getAccessToken();
       const url = await getDocumentDownloadUrl(token, doc.document_id);
-      window.open(url, '_blank', 'noopener,noreferrer');
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const ext = doc.file_path.split('.').pop() ?? '';
+      const a = document.createElement('a');
+      a.href = objectUrl;
+      a.download = ext ? `${doc.doc_title}.${ext}` : doc.doc_title;
+      a.click();
+      URL.revokeObjectURL(objectUrl);
     } catch {
       setActionErrorMessage('Unable to download document. Please try again.');
-    } finally {
-      setDownloadingId(null);
     }
   };
 
@@ -315,7 +329,68 @@ const DocumentLibraryPage = () => {
         </Alert>
       )}
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+      <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap" alignItems="center">
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <InputLabel id="filter-type-label" shrink>
+            Type
+          </InputLabel>
+          <Select
+            labelId="filter-type-label"
+            label="Type"
+            value={filterType}
+            displayEmpty
+            notched
+            onChange={(e) => setFilterType(e.target.value as '' | DocType)}
+          >
+            <MenuItem value="">All</MenuItem>
+            <MenuItem value="resume">Resume</MenuItem>
+            <MenuItem value="cover_letter">Cover Letter</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 140 }}>
+          <InputLabel id="filter-status-label" shrink>
+            Status
+          </InputLabel>
+          <Select
+            labelId="filter-status-label"
+            label="Status"
+            value={filterStatus}
+            displayEmpty
+            notched
+            onChange={(e) => setFilterStatus(e.target.value as '' | DocStatus)}
+          >
+            <MenuItem value="">All</MenuItem>
+            <MenuItem value="active">Active</MenuItem>
+            <MenuItem value="draft">Draft</MenuItem>
+            <MenuItem value="archived">Archived</MenuItem>
+          </Select>
+        </FormControl>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel id="sort-order-label">Sort by Date</InputLabel>
+          <Select
+            labelId="sort-order-label"
+            label="Sort by Date"
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}
+          >
+            <MenuItem value="desc">Newest First</MenuItem>
+            <MenuItem value="asc">Oldest First</MenuItem>
+          </Select>
+        </FormControl>
+        <TextField
+          size="small"
+          label="Search by tag"
+          value={filterTag}
+          onChange={(e) => setFilterTag(e.target.value)}
+          sx={{ minWidth: 180 }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
         <FormControlLabel
           control={
             <Switch
@@ -324,59 +399,9 @@ const DocumentLibraryPage = () => {
             />
           }
           label="Show archived"
+          sx={{ ml: 'auto' }}
         />
-      </Box>
-
-      {!isLoading && documents.length > 0 && (
-        <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="filter-type-label">Type</InputLabel>
-            <Select
-              labelId="filter-type-label"
-              label="Type"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value as '' | DocType)}
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="resume">Resume</MenuItem>
-              <MenuItem value="cover_letter">Cover Letter</MenuItem>
-            </Select>
-          </FormControl>
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="filter-status-label">Status</InputLabel>
-            <Select
-              labelId="filter-status-label"
-              label="Status"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value as '' | DocStatus)}
-            >
-              <MenuItem value="">All</MenuItem>
-              <MenuItem value="active">Active</MenuItem>
-              <MenuItem value="archived">Archived</MenuItem>
-              <MenuItem value="draft">Draft</MenuItem>
-            </Select>
-          </FormControl>
-          <TextField
-            size="small"
-            label="Tag"
-            value={filterTag}
-            onChange={(e) => setFilterTag(e.target.value)}
-            sx={{ minWidth: 140 }}
-          />
-          <FormControl size="small" sx={{ minWidth: 160 }}>
-            <InputLabel id="sort-order-label">Sort by Date</InputLabel>
-            <Select
-              labelId="sort-order-label"
-              label="Sort by Date"
-              value={sortOrder}
-              onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}
-            >
-              <MenuItem value="desc">Newest First</MenuItem>
-              <MenuItem value="asc">Oldest First</MenuItem>
-            </Select>
-          </FormControl>
-        </Stack>
-      )}
+      </Stack>
 
       {isLoading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
@@ -404,7 +429,21 @@ const DocumentLibraryPage = () => {
           </Typography>
         </Paper>
       ) : visibleDocuments.length === 0 ? (
-        <Typography color="text.secondary">No documents match the selected filter.</Typography>
+        <Box sx={{ textAlign: 'center', py: 4 }}>
+          <Typography color="text.secondary" sx={{ mb: 1 }}>
+            No documents match the selected filters.
+          </Typography>
+          <Button
+            size="small"
+            onClick={() => {
+              setFilterType('');
+              setFilterStatus('');
+              setFilterTag('');
+            }}
+          >
+            Clear filters
+          </Button>
+        </Box>
       ) : (
         <Stack spacing={2}>
           {visibleDocuments.map((document) => (
@@ -422,13 +461,23 @@ const DocumentLibraryPage = () => {
               }}
             >
               <Box>
+                <Typography variant="h6" fontWeight={700} mb={0.5}>
+                  {document.doc_title}
+                </Typography>
                 <Box
-                  sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 0.5,
+                    flexWrap: 'wrap',
+                    mb: 0.5,
+                  }}
                 >
-                  <Typography variant="h6" fontWeight={700}>
-                    {document.doc_title}
-                  </Typography>
-                  <Chip size="small" label={documentTypeLabel(document.doc_type)} />
+                  <Chip
+                    size="small"
+                    label={documentTypeLabel(document.doc_type)}
+                    variant="filled"
+                  />
                   {document.file_path && (
                     <Chip size="small" label="Uploaded File" color="primary" variant="outlined" />
                   )}
@@ -440,7 +489,18 @@ const DocumentLibraryPage = () => {
                   />
                 </Box>
                 {document.tags.length > 0 && (
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 0.5 }}>
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 0.5,
+                      mb: 0.5,
+                    }}
+                  >
+                    <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                      Tags:
+                    </Typography>
                     {document.tags.map((tag) => (
                       <Chip key={tag} label={tag} size="small" />
                     ))}
@@ -452,47 +512,73 @@ const DocumentLibraryPage = () => {
                   {document.updated_at ? ` · Updated ${formatCreatedAt(document.updated_at)}` : ''}
                 </Typography>
               </Box>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
-                <Button variant="outlined" size="small" onClick={() => openEditDocument(document)}>
-                  Edit
-                </Button>
-                {document.file_path && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    disabled={downloadingId === document.document_id}
-                    onClick={() => handleDownload(document)}
-                  >
-                    {downloadingId === document.document_id ? 'Loading...' : 'Download'}
-                  </Button>
-                )}
-                {document.content && (
-                  <Button variant="outlined" size="small" onClick={() => openDocument(document)}>
-                    View
-                  </Button>
-                )}
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color={document.status === 'archived' ? 'primary' : 'warning'}
-                  disabled={actionDocumentId === document.document_id}
-                  onClick={() => handleArchiveToggle(document)}
-                >
-                  {document.status === 'archived' ? 'Restore' : 'Archive'}
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  disabled={duplicatingId === document.document_id}
-                  onClick={() => handleDuplicate(document)}
-                >
-                  {duplicatingId === document.document_id ? 'Duplicating...' : 'Duplicate'}
-                </Button>
-              </Stack>
+              <IconButton
+                aria-label="document actions"
+                onClick={(e) => {
+                  setMenuAnchor(e.currentTarget);
+                  setMenuDocument(document);
+                }}
+              >
+                <MoreVertIcon />
+              </IconButton>
             </Paper>
           ))}
         </Stack>
       )}
+
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={() => setMenuAnchor(null)}
+        TransitionProps={{ onExited: () => setMenuDocument(null) }}
+      >
+        <MenuItem
+          onClick={() => {
+            if (menuDocument) openEditDocument(menuDocument);
+            setMenuAnchor(null);
+          }}
+        >
+          Edit
+        </MenuItem>
+        {menuDocument?.file_path && (
+          <MenuItem
+            onClick={() => {
+              if (menuDocument) handleDownload(menuDocument);
+              setMenuAnchor(null);
+            }}
+          >
+            Download
+          </MenuItem>
+        )}
+        {menuDocument?.content && (
+          <MenuItem
+            onClick={() => {
+              if (menuDocument) openDocument(menuDocument);
+              setMenuAnchor(null);
+            }}
+          >
+            View
+          </MenuItem>
+        )}
+        <MenuItem
+          disabled={actionDocumentId === menuDocument?.document_id}
+          onClick={() => {
+            if (menuDocument) handleArchiveToggle(menuDocument);
+            setMenuAnchor(null);
+          }}
+        >
+          {menuDocument?.status === 'archived' ? 'Restore' : 'Archive'}
+        </MenuItem>
+        <MenuItem
+          disabled={duplicatingId === menuDocument?.document_id}
+          onClick={() => {
+            if (menuDocument) handleDuplicate(menuDocument);
+            setMenuAnchor(null);
+          }}
+        >
+          {duplicatingId === menuDocument?.document_id ? 'Duplicating...' : 'Duplicate'}
+        </MenuItem>
+      </Menu>
 
       <Dialog
         open={Boolean(selectedDocument)}

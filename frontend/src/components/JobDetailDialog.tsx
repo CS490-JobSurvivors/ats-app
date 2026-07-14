@@ -10,6 +10,7 @@ import {
   Box,
   Chip,
   Divider,
+  Menu,
   MenuItem,
   Select,
   FormControl,
@@ -22,6 +23,7 @@ import {
   Stack,
 } from '@mui/material';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import AssignmentTurnedInIcon from '@mui/icons-material/AssignmentTurnedIn';
 import CloseIcon from '@mui/icons-material/Close';
@@ -267,6 +269,7 @@ const JobDetailDialog = ({
   const [isLinking, setIsLinking] = useState<string | null>(null);
   const [pendingLinkDoc, setPendingLinkDoc] = useState<DocumentRecord | null>(null);
   const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
+  const [actionMenuAnchor, setActionMenuAnchor] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
     if (job) {
@@ -525,11 +528,30 @@ const JobDetailDialog = ({
         <DialogTitle>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">{isEditing ? 'Edit Job' : job.job_title}</Typography>
-            <Chip
-              label={job.job_stage}
-              size="small"
-              sx={{ color: stageStyle.color, bgcolor: stageStyle.bgcolor, fontWeight: 600 }}
-            />
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Chip
+                label={job.job_stage}
+                size="small"
+                sx={{ color: stageStyle.color, bgcolor: stageStyle.bgcolor, fontWeight: 600 }}
+              />
+              {!isEditing && (
+                <>
+                  <Button size="small" variant="contained" onClick={() => setIsEditing(true)}>
+                    Edit
+                  </Button>
+                  <IconButton
+                    size="small"
+                    aria-label="more options"
+                    onClick={(e) => setActionMenuAnchor(e.currentTarget)}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </IconButton>
+                </>
+              )}
+              <IconButton size="small" aria-label="close" onClick={onClose}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
           </Box>
           {!isEditing && (
             <Typography variant="body2" color="text.secondary">
@@ -1318,79 +1340,92 @@ const JobDetailDialog = ({
           )}
         </DialogContent>
 
-        <DialogActions>
-          <Button onClick={onDelete} color="error" sx={{ mr: 'auto' }}>
-            Delete
-          </Button>
-          {isEditing ? (
-            <>
-              <Button onClick={() => setIsEditing(false)} disabled={isSaving}>
-                Cancel
-              </Button>
-              <Button onClick={handleSave} variant="contained" disabled={isSaving}>
-                {isSaving ? 'Saving...' : 'Save'}
-              </Button>
-            </>
-          ) : (
-            <>
-              {onGenerateResume && (
-                <Button
-                  onClick={() => {
-                    setResumeError('');
-                    setGeneratedResume(null);
-                    setImprovedResume(null);
-                    setShowImproved(false);
-                    setResumeDialogOpen(true);
-                    setIsGenerating(true);
-                    onGenerateResume()
-                      .then((text) => setGeneratedResume(text))
-                      .catch(() => setResumeError('Failed to generate resume. Please try again.'))
-                      .finally(() => setIsGenerating(false));
-                  }}
-                  disabled={isGenerating}
-                >
-                  Generate Resume
-                </Button>
-              )}
-              {onGenerateCoverLetter && (
-                <Button
-                  onClick={async () => {
-                    setCoverLetterError('');
-                    setGeneratedCoverLetter(null);
-                    setCoverLetterDialogOpen(true);
-                    setIsGeneratingCoverLetter(true);
-                    try {
-                      const text = await onGenerateCoverLetter();
-                      setGeneratedCoverLetter(text);
-                    } catch {
-                      setCoverLetterError('Failed to generate cover letter. Please try again.');
-                    } finally {
-                      setIsGeneratingCoverLetter(false);
-                    }
-                  }}
-                  disabled={isGeneratingCoverLetter}
-                  startIcon={isGeneratingCoverLetter ? <CircularProgress size={16} /> : undefined}
-                >
-                  {isGeneratingCoverLetter ? 'Generating...' : 'Cover Letter'}
-                </Button>
-              )}
-              <Button onClick={onClose}>Close</Button>
-              {job.job_stage !== 'Archived' && (
-                <Button onClick={() => handleStageSelect('Archived')} color="secondary">
-                  Archive
-                </Button>
-              )}
-              {canRestoreFromArchive && (
-                <Button onClick={() => setRestoreConfirmOpen(true)} color="secondary">
-                  Restore
-                </Button>
-              )}
-              <Button onClick={() => setIsEditing(true)} variant="contained">
-                Edit
-              </Button>
-            </>
+        {isEditing && (
+          <DialogActions>
+            <Button onClick={() => setIsEditing(false)} disabled={isSaving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} variant="contained" disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Save'}
+            </Button>
+          </DialogActions>
+        )}
+
+        <Menu
+          anchorEl={actionMenuAnchor}
+          open={Boolean(actionMenuAnchor)}
+          onClose={() => setActionMenuAnchor(null)}
+        >
+          {onGenerateResume && (
+            <MenuItem
+              onClick={() => {
+                setActionMenuAnchor(null);
+                setResumeError('');
+                setGeneratedResume(null);
+                setImprovedResume(null);
+                setShowImproved(false);
+                setResumeDialogOpen(true);
+                setIsGenerating(true);
+                onGenerateResume()
+                  .then((text) => setGeneratedResume(text))
+                  .catch(() => setResumeError('Failed to generate resume. Please try again.'))
+                  .finally(() => setIsGenerating(false));
+              }}
+            >
+              Generate Resume
+            </MenuItem>
           )}
-        </DialogActions>
+          {onGenerateCoverLetter && (
+            <MenuItem
+              onClick={async () => {
+                setActionMenuAnchor(null);
+                setCoverLetterError('');
+                setGeneratedCoverLetter(null);
+                setCoverLetterDialogOpen(true);
+                setIsGeneratingCoverLetter(true);
+                try {
+                  const text = await onGenerateCoverLetter();
+                  setGeneratedCoverLetter(text);
+                } catch {
+                  setCoverLetterError('Failed to generate cover letter. Please try again.');
+                } finally {
+                  setIsGeneratingCoverLetter(false);
+                }
+              }}
+            >
+              Cover Letter
+            </MenuItem>
+          )}
+          {job.job_stage !== 'Archived' && (
+            <MenuItem
+              onClick={() => {
+                setActionMenuAnchor(null);
+                handleStageSelect('Archived');
+              }}
+            >
+              Archive
+            </MenuItem>
+          )}
+          {canRestoreFromArchive && (
+            <MenuItem
+              onClick={() => {
+                setActionMenuAnchor(null);
+                setRestoreConfirmOpen(true);
+              }}
+            >
+              Restore
+            </MenuItem>
+          )}
+          <MenuItem
+            onClick={() => {
+              setActionMenuAnchor(null);
+              onDelete();
+            }}
+            sx={{ color: 'error.main' }}
+          >
+            Delete
+          </MenuItem>
+        </Menu>
       </Dialog>
 
       <Dialog open={restoreConfirmOpen} onClose={() => setRestoreConfirmOpen(false)}>

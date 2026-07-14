@@ -284,7 +284,8 @@ describe('DashboardPage', () => {
     mockListJobs.mockResolvedValue([sampleJob]);
     render(<DashboardPage />);
     await userEvent.click(await screen.findByText('Software Engineer'));
-    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }));
     expect(screen.getByText(/are you sure you want to delete/i)).toBeInTheDocument();
   });
 
@@ -410,7 +411,7 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByText('Software Engineer'));
     expect(await screen.findByText('Phone screen')).toBeInTheDocument();
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Final' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-10' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '18:00' } });
@@ -508,7 +509,7 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByText('Software Engineer'));
     expect(await screen.findByText('Email recruiter.')).toBeInTheDocument();
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-12' } });
     fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Followed up.' } });
     await userEvent.click(screen.getByLabelText(/completed/i));
@@ -604,7 +605,8 @@ describe('DashboardPage', () => {
     await userEvent.click(await screen.findByText('Software Engineer'));
     expect(await screen.findByText('No saved drafts yet.')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
     await screen.findByText('Generated Resume');
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
@@ -717,9 +719,9 @@ describe('DashboardPage', () => {
     mockDeleteJob.mockResolvedValue(undefined);
     render(<DashboardPage />);
     await userEvent.click(await screen.findByText('Software Engineer'));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }));
     await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
-    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i });
-    await userEvent.click(deleteButtons[deleteButtons.length - 1]);
     await waitFor(() => {
       expect(mockDeleteJob).toHaveBeenCalledWith('test-token', 'job-1');
     });
@@ -732,7 +734,8 @@ describe('DashboardPage', () => {
     mockListJobs.mockResolvedValue([sampleJob]);
     render(<DashboardPage />);
     await userEvent.click(await screen.findByText('Software Engineer'));
-    await userEvent.click(screen.getByRole('button', { name: /^delete$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }));
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(mockDeleteJob).not.toHaveBeenCalled();
     await waitFor(() => {

@@ -156,7 +156,8 @@ describe('DocumentLibraryPage', () => {
 
     await screen.findByText('Resume - Software Engineer at Acme');
     // default sort is newest-first; doc-2 (Jul 2) renders before doc-1 (Jul 1)
-    await userEvent.click(screen.getAllByRole('button', { name: /view/i })[1]);
+    await userEvent.click(screen.getAllByRole('button', { name: /document actions/i })[1]);
+    await userEvent.click(screen.getByRole('menuitem', { name: /^view$/i }));
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     expect(screen.getByDisplayValue('# Resume')).toBeInTheDocument();
@@ -249,8 +250,9 @@ describe('DocumentLibraryPage', () => {
     await screen.findByText('Uploaded Cover Letter');
 
     expect(screen.getByText('Uploaded File')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /download/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /view/i })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /document actions/i }));
+    expect(screen.getByRole('menuitem', { name: /download/i })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /^view$/i })).not.toBeInTheDocument();
   });
 
   it('shows an error when a document download fails', async () => {
@@ -274,7 +276,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
     await screen.findByText('Uploaded Cover Letter');
 
-    await userEvent.click(screen.getByRole('button', { name: /download/i }));
+    await userEvent.click(screen.getByRole('button', { name: /document actions/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /download/i }));
 
     expect(
       await screen.findByText('Unable to download document. Please try again.')
@@ -307,7 +310,8 @@ describe('DocumentLibraryPage', () => {
 
     await screen.findByText('Resume - Software Engineer at Acme');
     // default sort is newest-first; doc-2 (Jul 2) renders before doc-1 (Jul 1)
-    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[1]);
+    await userEvent.click(screen.getAllByRole('button', { name: /document actions/i })[1]);
+    await userEvent.click(screen.getByRole('menuitem', { name: /archive/i }));
 
     await waitFor(() => expect(mockArchiveDocument).toHaveBeenCalledWith('test-token', 'doc-1'));
     expect(mockListDocuments).toHaveBeenLastCalledWith(
@@ -325,7 +329,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
 
     await screen.findByText('Archived Resume');
-    await userEvent.click(screen.getByRole('button', { name: /restore/i }));
+    await userEvent.click(screen.getByRole('button', { name: /document actions/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /restore/i }));
 
     await waitFor(() =>
       expect(mockRestoreDocument).toHaveBeenCalledWith('test-token', 'doc-archived')
@@ -344,7 +349,8 @@ describe('DocumentLibraryPage', () => {
 
     await screen.findByText('Resume - Software Engineer at Acme');
     // default sort is newest-first; doc-2 (Jul 2) renders before doc-1 (Jul 1)
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
+    await userEvent.click(screen.getAllByRole('button', { name: /document actions/i })[1]);
+    await userEvent.click(screen.getByRole('menuitem', { name: /^edit$/i }));
     fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Updated Resume' } });
     fireEvent.change(screen.getByLabelText(/tags/i), { target: { value: 'backend, remote' } });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
@@ -364,7 +370,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
 
     await screen.findByText('Resume - Software Engineer at Acme');
-    await userEvent.click(screen.getAllByRole('button', { name: /archive/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /document actions/i })[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: /archive/i }));
 
     expect(
       await screen.findByText('Unable to update document status. Please try again.')
@@ -381,7 +388,8 @@ describe('DocumentLibraryPage', () => {
     await screen.findByText('Resume - Software Engineer at Acme');
 
     // default sort is newest-first; doc-2 (Jul 2) is first, doc-1 (Jul 1) is second
-    await userEvent.click(screen.getAllByRole('button', { name: /^view$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /document actions/i })[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: /^view$/i }));
 
     const dialog = screen.getByRole('dialog');
     expect(dialog).toBeInTheDocument();
@@ -455,7 +463,7 @@ describe('DocumentLibraryPage', () => {
     fireEvent.mouseDown(typeSelect);
     await userEvent.click(await screen.findByRole('option', { name: /cover letter/i }));
 
-    expect(await screen.findByText('No documents match the selected filter.')).toBeInTheDocument();
+    expect(await screen.findByText('No documents match the selected filters.')).toBeInTheDocument();
   });
 
   it('filters to only documents matching the selected status', async () => {
@@ -481,9 +489,7 @@ describe('DocumentLibraryPage', () => {
   });
 
   it('filters documents by tag substring match', async () => {
-    mockListDocuments
-      .mockResolvedValueOnce([documents[1], documents[0]])
-      .mockResolvedValueOnce([documents[1]]);
+    mockListDocuments.mockResolvedValueOnce([documents[1], documents[0]]);
 
     render(<DocumentLibraryPage />);
     await screen.findByText('Cover Letter - Designer at Studio');
@@ -491,16 +497,7 @@ describe('DocumentLibraryPage', () => {
     const tagInput = screen.getByRole('textbox', { name: /tag/i });
     fireEvent.change(tagInput, { target: { value: 'design' } });
 
-    await waitFor(() =>
-      expect(mockListDocuments).toHaveBeenLastCalledWith(
-        'test-token',
-        false,
-        undefined,
-        'design',
-        'desc'
-      )
-    );
-    expect(await screen.findByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
+    expect(screen.getByText('Cover Letter - Designer at Studio')).toBeInTheDocument();
     expect(screen.queryByText('Resume - Software Engineer at Acme')).not.toBeInTheDocument();
   });
 
@@ -588,7 +585,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
     await screen.findByText('Standalone Resume');
 
-    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /document actions/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^edit$/i }));
     fireEvent.change(screen.getByLabelText(/title/i), { target: { value: 'Updated Standalone' } });
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
@@ -615,7 +613,8 @@ describe('DocumentLibraryPage', () => {
     await screen.findByText('Resume - Software Engineer at Acme');
 
     // default sort is newest-first; doc-2 (Cover Letter) is at [0], doc-1 (Resume) is at [1]
-    await userEvent.click(screen.getAllByRole('button', { name: /^duplicate$/i })[1]);
+    await userEvent.click(screen.getAllByRole('button', { name: /document actions/i })[1]);
+    await userEvent.click(screen.getByRole('menuitem', { name: /^duplicate$/i }));
 
     await waitFor(() => expect(mockDuplicateDocument).toHaveBeenCalledWith('test-token', 'doc-1'));
     expect(
@@ -644,7 +643,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
     await screen.findByText('Standalone Resume');
 
-    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+    await userEvent.click(screen.getByRole('button', { name: /document actions/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^edit$/i }));
     await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     expect(await screen.findByText('Failed to update document.')).toBeInTheDocument();
@@ -657,7 +657,8 @@ describe('DocumentLibraryPage', () => {
     render(<DocumentLibraryPage />);
     await screen.findByText('Resume - Software Engineer at Acme');
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^duplicate$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /document actions/i })[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: /^duplicate$/i }));
 
     expect(
       await screen.findByText('Unable to duplicate document. Please try again.')

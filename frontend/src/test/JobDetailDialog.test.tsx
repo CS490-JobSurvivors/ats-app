@@ -294,7 +294,7 @@ describe('JobDetailDialog', () => {
       />
     );
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/due date/i), { target: { value: '2026-07-12' } });
     fireEvent.change(screen.getByLabelText(/notes/i), { target: { value: 'Followed up.' } });
     await userEvent.click(screen.getByLabelText(/completed/i));
@@ -436,7 +436,7 @@ describe('JobDetailDialog', () => {
       />
     );
 
-    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^edit$/i })[1]);
     fireEvent.change(screen.getByLabelText(/round type/i), { target: { value: 'Final' } });
     fireEvent.change(screen.getByLabelText(/^date$/i), { target: { value: '2026-07-10' } });
     fireEvent.change(screen.getByLabelText(/^time$/i), { target: { value: '18:00' } });
@@ -612,13 +612,14 @@ describe('JobDetailDialog', () => {
 
   it('calls onClose when Close button is clicked', () => {
     renderDialog();
-    fireEvent.click(screen.getByText('Close'));
+    fireEvent.click(screen.getByRole('button', { name: /^close$/i }));
     expect(mockOnClose).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onDelete when Delete button is clicked', () => {
+  it('calls onDelete when Delete button is clicked', async () => {
     renderDialog();
-    fireEvent.click(screen.getByText('Delete'));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }));
     expect(mockOnDelete).toHaveBeenCalledTimes(1);
   });
 
@@ -788,15 +789,17 @@ describe('JobDetailDialog', () => {
     },
   ];
 
-  it('shows an Archive button for jobs that are not archived', () => {
+  it('shows an Archive button for jobs that are not archived', async () => {
     renderDialog();
-    expect(screen.getByRole('button', { name: 'Archive' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    expect(screen.getByRole('menuitem', { name: 'Archive' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Restore' })).not.toBeInTheDocument();
   });
 
   it('opens the non-forward warning when archiving from a non-Offer stage', async () => {
     renderDialog();
-    await userEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Archive' }));
     expect(screen.getByText(/non-standard transition/i)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /confirm/i }));
     expect(mockOnStageChange).toHaveBeenCalledWith('Archived');
@@ -816,8 +819,9 @@ describe('JobDetailDialog', () => {
       />
     );
 
-    expect(screen.queryByRole('button', { name: 'Archive' })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    expect(screen.queryByRole('menuitem', { name: 'Archive' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Restore' }));
     expect(screen.getByText(/restore job/i)).toBeInTheDocument();
     expect(screen.getByText('Offer')).toBeInTheDocument();
 
@@ -839,7 +843,8 @@ describe('JobDetailDialog', () => {
       />
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Restore' }));
     await userEvent.click(screen.getByRole('button', { name: /cancel/i }));
     expect(mockOnDeleteStageHistory).not.toHaveBeenCalled();
   });
@@ -884,7 +889,8 @@ describe('JobDetailDialog', () => {
 
     it('does not show Improve Draft button when onImproveResume is not provided', async () => {
       renderWithResume(jest.fn().mockResolvedValue(GENERATED));
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       expect(screen.queryByRole('button', { name: /improve draft/i })).not.toBeInTheDocument();
     });
@@ -894,7 +900,8 @@ describe('JobDetailDialog', () => {
         jest.fn().mockResolvedValue(GENERATED),
         jest.fn().mockResolvedValue(IMPROVED)
       );
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       expect(screen.getByRole('button', { name: /improve draft/i })).toBeInTheDocument();
     });
@@ -903,7 +910,8 @@ describe('JobDetailDialog', () => {
       const mockImprove = jest.fn().mockResolvedValue(IMPROVED);
       renderWithResume(jest.fn().mockResolvedValue(GENERATED), mockImprove);
 
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       fireEvent.click(screen.getByRole('button', { name: /improve draft/i }));
 
@@ -918,7 +926,8 @@ describe('JobDetailDialog', () => {
       const mockImprove = jest.fn().mockResolvedValue(IMPROVED);
       renderWithResume(jest.fn().mockResolvedValue(GENERATED), mockImprove);
 
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       fireEvent.click(screen.getByRole('button', { name: /improve draft/i }));
       await screen.findByRole('button', { name: /^original$/i });
@@ -970,7 +979,8 @@ describe('JobDetailDialog', () => {
           onGenerateResume={jest.fn().mockResolvedValue('# Resume draft')}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument();
     });
@@ -988,7 +998,8 @@ describe('JobDetailDialog', () => {
           onSaveDocument={mockOnSaveDocument}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
@@ -1013,7 +1024,8 @@ describe('JobDetailDialog', () => {
           onSaveDocument={mockOnSaveDocument}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /generate resume/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /generate resume/i }));
       await screen.findByText('Generated Resume');
       await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
@@ -1035,7 +1047,8 @@ describe('JobDetailDialog', () => {
           onSaveDocument={mockOnSaveDocument}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /^cover letter$/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /^cover letter$/i }));
       await screen.findByText('Generated Cover Letter');
       await userEvent.click(await screen.findByRole('button', { name: /^save$/i }));
 
@@ -1060,7 +1073,8 @@ describe('JobDetailDialog', () => {
           onSaveDocument={mockOnSaveDocument}
         />
       );
-      fireEvent.click(screen.getByRole('button', { name: /^cover letter$/i }));
+      await userEvent.click(screen.getByRole('button', { name: /more options/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /^cover letter$/i }));
       await screen.findByText('Generated Cover Letter');
       await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
