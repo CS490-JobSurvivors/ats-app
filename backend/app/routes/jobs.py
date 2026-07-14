@@ -281,18 +281,36 @@ def get_job_analytics(
         .order_by(JobStageHistory.job_id, JobStageHistory.changed_at)
     ).all()
 
-    transition_counts: Counter = Counter((h.from_stage, h.to_stage) for h in history)
-    from_totals: Counter = Counter(h.from_stage for h in history)
+    # S3-BR-014: Applied -> Interview conversions within 14 days
+    applied_total = 0
+    applied_to_interview_within_14 = 0
+    for _, job_history in groupby(history, key=lambda h: h.job_id):
+        records = list(job_history)
+        for i, record in enumerate(records):
+            if record.to_stage == "Applied":
+                applied_total += 1
+                for j in range(i + 1, len(records)):
+                    if records[j].from_stage == "Applied":
+                        if records[j].to_stage == "Interview":
+                            days = (
+                                records[j].changed_at - record.changed_at
+                            ).total_seconds() / 86400
+                            if days <= 14:
+                                applied_to_interview_within_14 += 1
+                        break
 
-    conversion_rates = [
-        StageConversionRate(
-            from_stage=from_s,
-            to_stage=to_s,
-            count=count,
-            rate=round(count / from_totals[from_s], 2) if from_totals[from_s] else 0.0,
-        )
-        for (from_s, to_s), count in sorted(transition_counts.items())
-    ]
+    conversion_rates = (
+        [
+            StageConversionRate(
+                from_stage="Applied",
+                to_stage="Interview",
+                count=applied_to_interview_within_14,
+                rate=round(applied_to_interview_within_14 / applied_total, 2),
+            )
+        ]
+        if applied_total > 0
+        else []
+    )
 
     time_in_stage_data: dict = defaultdict(list)
     for _, job_history in groupby(history, key=lambda h: h.job_id):
@@ -311,13 +329,11 @@ def get_job_analytics(
         for stage, durations in sorted(time_in_stage_data.items())
     ]
 
-    user_jobs = db.scalars(select(Job).where(Job.job_poster_id == owner_id)).all()
+    # S3-BR-013: Interested -> Applied transitions grouped into weekly buckets
     weekly_counts: Counter = Counter()
-    for job in user_jobs:
-        if job.created_at:
-            week_start = (
-                job.created_at.date() - timedelta(days=job.created_at.weekday())
-            )
+    for h in history:
+        if h.from_stage == "Interested" and h.to_stage == "Applied":
+            week_start = h.changed_at.date() - timedelta(days=h.changed_at.weekday())
             weekly_counts[week_start] += 1
 
     weekly_velocity = [
