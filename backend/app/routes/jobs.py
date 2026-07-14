@@ -1,4 +1,6 @@
-from datetime import date, datetime, time, timezone
+from collections import Counter, defaultdict
+from datetime import date, datetime, time, timedelta, timezone
+from itertools import groupby
 from typing import cast
 from uuid import UUID
 
@@ -24,11 +26,15 @@ from app.schemas.jobs import (
     InterviewRead,
     InterviewUpdate,
     JobActivityEvent,
+    JobAnalytics,
     JobCreate,
     JobMetrics,
     JobRead,
     JobUpdate,
+    StageConversionRate,
     StageCounts,
+    TimeInStage,
+    WeeklyVelocity,
 )
 from app.services.auth.dependencies import get_current_user
 
@@ -258,6 +264,87 @@ def get_job_metrics(
         awaiting_response=stage_counts["Applied"],
         responded=sum(count for stage, count in stage_counts.items() if stage in RESPONDED_STAGES),
         stage_counts=StageCounts(**stage_counts),
+    )
+
+
+@router.get("/analytics", response_model=JobAnalytics)
+def get_job_analytics(
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    owner_id = get_current_user_id(current_user)
+
+    history = db.scalars(
+        select(JobStageHistory)
+        .join(Job, JobStageHistory.job_id == Job.job_id)
+        .where(Job.job_poster_id == owner_id)
+        .order_by(JobStageHistory.job_id, JobStageHistory.changed_at)
+    ).all()
+
+    # S3-BR-014: Applied -> Interview conversions within 14 days
+    applied_total = 0
+    applied_to_interview_within_14 = 0
+    for _, job_history in groupby(history, key=lambda h: h.job_id):
+        records = list(job_history)
+        for i, record in enumerate(records):
+            if record.to_stage == "Applied":
+                applied_total += 1
+                for j in range(i + 1, len(records)):
+                    if records[j].from_stage == "Applied":
+                        if records[j].to_stage == "Interview":
+                            days = (
+                                records[j].changed_at - record.changed_at
+                            ).total_seconds() / 86400
+                            if days <= 14:
+                                applied_to_interview_within_14 += 1
+                        break
+
+    conversion_rates = (
+        [
+            StageConversionRate(
+                from_stage="Applied",
+                to_stage="Interview",
+                count=applied_to_interview_within_14,
+                rate=round(applied_to_interview_within_14 / applied_total, 2),
+            )
+        ]
+        if applied_total > 0
+        else []
+    )
+
+    time_in_stage_data: dict = defaultdict(list)
+    for _, job_history in groupby(history, key=lambda h: h.job_id):
+        records = list(job_history)
+        for i in range(1, len(records)):
+            stage = records[i].from_stage
+            days = (records[i].changed_at - records[i - 1].changed_at).total_seconds() / 86400
+            time_in_stage_data[stage].append(days)
+
+    time_in_stage = [
+        TimeInStage(
+            stage=stage,
+            avg_days=round(sum(durations) / len(durations), 1),
+            count=len(durations),
+        )
+        for stage, durations in sorted(time_in_stage_data.items())
+    ]
+
+    # S3-BR-013: Interested -> Applied transitions grouped into weekly buckets
+    weekly_counts: Counter = Counter()
+    for h in history:
+        if h.from_stage == "Interested" and h.to_stage == "Applied":
+            week_start = h.changed_at.date() - timedelta(days=h.changed_at.weekday())
+            weekly_counts[week_start] += 1
+
+    weekly_velocity = [
+        WeeklyVelocity(week_start=week, count=count)
+        for week, count in sorted(weekly_counts.items(), reverse=True)
+    ][:12]
+
+    return JobAnalytics(
+        conversion_rates=conversion_rates,
+        time_in_stage=time_in_stage,
+        weekly_velocity=weekly_velocity,
     )
 
 
