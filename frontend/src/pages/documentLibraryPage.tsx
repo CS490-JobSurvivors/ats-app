@@ -12,8 +12,10 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  IconButton,
   InputAdornment,
   InputLabel,
+  Menu,
   MenuItem,
   Paper,
   Select,
@@ -23,6 +25,7 @@ import {
   Typography,
 } from '@mui/material';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import SearchIcon from '@mui/icons-material/Search';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { supabase } from '../utils/supabaseClient';
@@ -94,6 +97,8 @@ const DocumentLibraryPage = () => {
   });
 
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [menuDocument, setMenuDocument] = useState<DocumentRecord | null>(null);
 
   const [editingDocument, setEditingDocument] = useState<DocumentRecord | null>(null);
   const [editDocForm, setEditDocForm] = useState<{
@@ -461,47 +466,76 @@ const DocumentLibraryPage = () => {
                   {document.updated_at ? ` · Updated ${formatCreatedAt(document.updated_at)}` : ''}
                 </Typography>
               </Box>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent="flex-end">
-                <Button variant="outlined" size="small" onClick={() => openEditDocument(document)}>
-                  Edit
-                </Button>
-                {document.file_path && (
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    disabled={downloadingId === document.document_id}
-                    onClick={() => handleDownload(document)}
-                  >
-                    {downloadingId === document.document_id ? 'Loading...' : 'Download'}
-                  </Button>
-                )}
-                {document.content && (
-                  <Button variant="outlined" size="small" onClick={() => openDocument(document)}>
-                    View
-                  </Button>
-                )}
-                <Button
-                  variant="outlined"
-                  size="small"
-                  color={document.status === 'archived' ? 'primary' : 'warning'}
-                  disabled={actionDocumentId === document.document_id}
-                  onClick={() => handleArchiveToggle(document)}
-                >
-                  {document.status === 'archived' ? 'Restore' : 'Archive'}
-                </Button>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  disabled={duplicatingId === document.document_id}
-                  onClick={() => handleDuplicate(document)}
-                >
-                  {duplicatingId === document.document_id ? 'Duplicating...' : 'Duplicate'}
-                </Button>
-              </Stack>
+              <IconButton
+                aria-label="document actions"
+                onClick={(e) => {
+                  setMenuAnchor(e.currentTarget);
+                  setMenuDocument(document);
+                }}
+              >
+                <MoreVertIcon />
+              </IconButton>
             </Paper>
           ))}
         </Stack>
       )}
+
+      <Menu
+        anchorEl={menuAnchor}
+        open={Boolean(menuAnchor)}
+        onClose={() => setMenuAnchor(null)}
+        TransitionProps={{ onExited: () => setMenuDocument(null) }}
+      >
+        <MenuItem
+          onClick={() => {
+            if (menuDocument) openEditDocument(menuDocument);
+            setMenuAnchor(null);
+          }}
+        >
+          Edit
+        </MenuItem>
+        {menuDocument?.file_path && (
+          <MenuItem
+            disabled={downloadingId === menuDocument.document_id}
+            onClick={() => {
+              if (menuDocument) handleDownload(menuDocument);
+              setMenuAnchor(null);
+              setMenuDocument(null);
+            }}
+          >
+            {downloadingId === menuDocument.document_id ? 'Downloading...' : 'Download'}
+          </MenuItem>
+        )}
+        {menuDocument?.content && (
+          <MenuItem
+            onClick={() => {
+              if (menuDocument) openDocument(menuDocument);
+              setMenuAnchor(null);
+              setMenuDocument(null);
+            }}
+          >
+            View
+          </MenuItem>
+        )}
+        <MenuItem
+          disabled={actionDocumentId === menuDocument?.document_id}
+          onClick={() => {
+            if (menuDocument) handleArchiveToggle(menuDocument);
+            setMenuAnchor(null);
+          }}
+        >
+          {menuDocument?.status === 'archived' ? 'Restore' : 'Archive'}
+        </MenuItem>
+        <MenuItem
+          disabled={duplicatingId === menuDocument?.document_id}
+          onClick={() => {
+            if (menuDocument) handleDuplicate(menuDocument);
+            setMenuAnchor(null);
+          }}
+        >
+          {duplicatingId === menuDocument?.document_id ? 'Duplicating...' : 'Duplicate'}
+        </MenuItem>
+      </Menu>
 
       <Dialog
         open={Boolean(selectedDocument)}
