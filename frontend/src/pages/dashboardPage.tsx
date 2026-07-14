@@ -46,6 +46,7 @@ import {
   listDocuments,
   linkDocumentToJob,
   unlinkDocumentFromJob,
+  getDocumentDownloadUrl,
   generateCompanyResearch,
   DocumentVersion,
   InterviewPayload,
@@ -560,6 +561,18 @@ const DashboardPage = () => {
     }
   };
 
+  const handleDownloadDocument = async (documentId: string) => {
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return;
+    try {
+      const url = await getDocumentDownloadUrl(token, documentId);
+      window.open(url, '_blank');
+    } catch {
+      // signed URL failure — nothing actionable to show
+    }
+  };
+
   const handleUnlinkDocument = async (documentId: string) => {
     if (!selectedJob) return;
     const { data } = await supabase.auth.getSession();
@@ -985,6 +998,7 @@ const DashboardPage = () => {
         libraryDocuments={libraryDocuments}
         onLinkDocument={handleLinkDocument}
         onUnlinkDocument={handleUnlinkDocument}
+        onDownloadDocument={handleDownloadDocument}
         onGenerateResearch={async (userContext: string) => {
           const { data } = await supabase.auth.getSession();
           const token = data.session?.access_token;

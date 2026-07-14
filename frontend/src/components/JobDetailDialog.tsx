@@ -92,6 +92,7 @@ interface JobDetailDialogProps {
   libraryDocuments?: DocumentRecord[];
   onLinkDocument?: (documentId: string, existingDocumentId?: string) => Promise<void>;
   onUnlinkDocument?: (documentId: string) => Promise<void>;
+  onDownloadDocument?: (documentId: string) => Promise<void>;
 }
 
 const emptyInterviewForm = {
@@ -207,6 +208,7 @@ const JobDetailDialog = ({
   libraryDocuments,
   onLinkDocument,
   onUnlinkDocument,
+  onDownloadDocument,
 }: JobDetailDialogProps) => {
   const [pendingStage, setPendingStage] = useState<JobStage | null>(null);
   const [pendingDeleteEvent, setPendingDeleteEvent] = useState<JobActivityEvent | null>(null);
@@ -1096,24 +1098,33 @@ const JobDetailDialog = ({
                           )}
                         </Box>
                         <Box sx={{ display: 'flex', gap: 0.5 }}>
-                          <Button
-                            size="small"
-                            onClick={async () => {
-                              setViewingDocument(document);
-                              setDocumentVersions([]);
-                              if (onLoadVersions) {
-                                setVersionsLoading(true);
-                                try {
-                                  const versions = await onLoadVersions(document.document_id);
-                                  setDocumentVersions(versions);
-                                } finally {
-                                  setVersionsLoading(false);
+                          {document.file_path ? (
+                            <Button
+                              size="small"
+                              onClick={() => onDownloadDocument?.(document.document_id)}
+                            >
+                              Download
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              onClick={async () => {
+                                setViewingDocument(document);
+                                setDocumentVersions([]);
+                                if (onLoadVersions) {
+                                  setVersionsLoading(true);
+                                  try {
+                                    const versions = await onLoadVersions(document.document_id);
+                                    setDocumentVersions(versions);
+                                  } finally {
+                                    setVersionsLoading(false);
+                                  }
                                 }
-                              }
-                            }}
-                          >
-                            View
-                          </Button>
+                              }}
+                            >
+                              View
+                            </Button>
+                          )}
                           {onUpdateDocument && (
                             <Button size="small" onClick={() => openEditDocument(document)}>
                               Edit
