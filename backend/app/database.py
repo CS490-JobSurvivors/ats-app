@@ -3,6 +3,7 @@ from collections.abc import Generator
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from app.config import DATABASE_URL
 
@@ -31,7 +32,7 @@ def get_session_local() -> sessionmaker[Session]:
     global engine, SessionLocal
 
     if SessionLocal is None:
-        engine = create_engine(get_database_url())
+        engine = create_engine(get_database_url(), poolclass=NullPool)
         SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
     return SessionLocal
