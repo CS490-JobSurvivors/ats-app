@@ -1412,7 +1412,7 @@ const JobDetailDialog = ({
                 }
               }}
             >
-              Cover Letter
+              Generate Cover Letter
             </MenuItem>
           )}
           {job.job_stage !== 'Archived' && (

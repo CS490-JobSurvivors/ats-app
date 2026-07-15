@@ -1045,7 +1045,7 @@ describe('JobDetailDialog', () => {
         />
       );
       await userEvent.click(screen.getByRole('button', { name: /more options/i }));
-      await userEvent.click(screen.getByRole('menuitem', { name: /^cover letter$/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /^generate cover letter$/i }));
       await screen.findByText('Generated Cover Letter');
       await userEvent.click(await screen.findByRole('button', { name: /^save$/i }));
 
@@ -1071,7 +1071,7 @@ describe('JobDetailDialog', () => {
         />
       );
       await userEvent.click(screen.getByRole('button', { name: /more options/i }));
-      await userEvent.click(screen.getByRole('menuitem', { name: /^cover letter$/i }));
+      await userEvent.click(screen.getByRole('menuitem', { name: /^generate cover letter$/i }));
       await screen.findByText('Generated Cover Letter');
       await userEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
